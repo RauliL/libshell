@@ -47,10 +47,10 @@
 #error Arithmetic tokens are out of order.
 #endif
 
-extern const char *arith_buf;
+
 
 int
-yylex()
+ShellContext::yylex()
 {
 	int value;
 	const char *buf = arith_buf;

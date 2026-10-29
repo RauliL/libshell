@@ -100,17 +100,17 @@ struct synstack {
 
 
 
-struct heredoc *heredoclist;	/* list of here documents to read */
-int doprompt;			/* if set, prompt the user */
-int needprompt;			/* true if interactive and at start of line */
-int lasttoken;			/* last token read */
-int tokpushback;		/* last token pushed back */
-char *wordtext;			/* text of last word returned by readtoken */
-int checkkwd;
-struct nodelist *backquotelist;
-union node *redirnode;
-struct heredoc *heredoc;
-int quoteflag;			/* set if (part of) last token was quoted */
+	/* list of here documents to read */
+			/* if set, prompt the user */
+			/* true if interactive and at start of line */
+			/* last token read */
+		/* last token pushed back */
+			/* text of last word returned by readtoken */
+
+
+
+
+			/* set if (part of) last token was quoted */
 
 
 STATIC union node *list(int);
@@ -130,7 +130,7 @@ STATIC void synerror(const char *) __attribute__((__noreturn__));
 STATIC void setprompt(int);
 
 
-int isassignment(const char *p)
+int ShellContext::isassignment(const char *p)
 {
 	const char *q = endofname(p);
 	if (p == q)
@@ -138,13 +138,13 @@ int isassignment(const char *p)
 	return *q == '=';
 }
 
-int issimplecmd(union node *n, const char *name)
+int ShellContext::issimplecmd(union node *n, const char *name)
 {
 	return n && n->type == NCMD && n->ncmd.args &&
 	       equal(n->ncmd.args->narg.text, name);
 }
 
-static inline int realeofmark(const char *eofmark)
+ inline int ShellContext::realeofmark(const char *eofmark)
 {
 	return eofmark && eofmark != FAKEEOFMARK;
 }
@@ -156,7 +156,7 @@ static inline int realeofmark(const char *eofmark)
  */
 
 union node *
-parsecmd(int interact)
+ShellContext::parsecmd(int interact)
 {
 	tokpushback = 0;
 	checkkwd = 0;
@@ -169,8 +169,8 @@ parsecmd(int interact)
 }
 
 
-STATIC union node *
-list(int nlflag)
+ union node *
+ShellContext::list(int nlflag)
 {
 	int chknl = nlflag & 1 ? 0 : CHKNL;
 	union node *n1, *n2, *n3;
@@ -245,8 +245,8 @@ out_eof:
 
 
 
-STATIC union node *
-andor(void)
+ union node *
+ShellContext::andor(void)
 {
 	union node *n1, *n2, *n3;
 	int t;
@@ -273,8 +273,8 @@ andor(void)
 
 
 
-STATIC union node *
-pipeline(void)
+ union node *
+ShellContext::pipeline(void)
 {
 	union node *n1, *n2, *pipenode;
 	struct nodelist *lp, *prev;
@@ -317,8 +317,8 @@ pipeline(void)
 
 
 
-STATIC union node *
-command(void)
+ union node *
+ShellContext::command(void)
 {
 	union node *n1, *n2;
 	union node *ap, **app;
@@ -518,8 +518,8 @@ redir:
 }
 
 
-STATIC union node *
-simplecmd(void) {
+ union node *
+ShellContext::simplecmd(void) {
 	union node *args, **app;
 	union node *n = NULL;
 	union node *vars, **vpp;
@@ -603,8 +603,8 @@ out:
 	return n;
 }
 
-STATIC union node *
-makename(void)
+ union node *
+ShellContext::makename(void)
 {
 	union node *n;
 
@@ -616,7 +616,7 @@ makename(void)
 	return n;
 }
 
-void fixredir(union node *n, const char *text, int err)
+void ShellContext::fixredir(union node *n, const char *text, int err)
 	{
 	TRACE(("Fix redir %s %d\n", text, err));
 	if (!err)
@@ -636,8 +636,8 @@ void fixredir(union node *n, const char *text, int err)
 }
 
 
-STATIC void
-parsefname(void)
+ void
+ShellContext::parsefname(void)
 {
 	union node *n = redirnode;
 
@@ -674,8 +674,8 @@ parsefname(void)
  * Input any here documents.
  */
 
-STATIC void
-parseheredoc(void)
+ void
+ShellContext::parseheredoc(void)
 {
 	struct heredoc *here;
 	union node *n;
@@ -701,8 +701,8 @@ parseheredoc(void)
 	}
 }
 
-STATIC int
-readtoken(void)
+ int
+ShellContext::readtoken(void)
 {
 	int t;
 	int kwd = checkkwd;
@@ -763,14 +763,14 @@ out:
 	return (t);
 }
 
-static void nlprompt(void)
+ void ShellContext::nlprompt(void)
 {
 	plinno++;
 	if (doprompt)
 		setprompt(2);
 }
 
-static void nlnoprompt(void)
+ void ShellContext::nlnoprompt(void)
 {
 	plinno++;
 	needprompt = doprompt;
@@ -795,8 +795,8 @@ static void nlnoprompt(void)
 
 #define RETURN(token)	return lasttoken = token
 
-STATIC int
-xxreadtoken(void)
+ int
+ShellContext::xxreadtoken(void)
 {
 	int c;
 
@@ -850,7 +850,7 @@ xxreadtoken(void)
 #undef RETURN
 }
 
-static int pgetc_eatbnl(void)
+ int ShellContext::pgetc_eatbnl(void)
 {
 	int c;
 
@@ -866,12 +866,12 @@ static int pgetc_eatbnl(void)
 	return c;
 }
 
-static int pgetc_top(struct synstack *stack)
+ int ShellContext::pgetc_top(struct synstack *stack)
 {
 	return stack->syntax == SQSYNTAX ? pgetc() : pgetc_eatbnl();
 }
 
-static void synstack_push(struct synstack **stack, struct synstack *next,
+ void ShellContext::synstack_push(struct synstack **stack, struct synstack *next,
 			  const char *syntax)
 {
 	memset(next, 0, sizeof(*next));
@@ -881,12 +881,12 @@ static void synstack_push(struct synstack **stack, struct synstack *next,
 	*stack = next;
 }
 
-static void synstack_pop(struct synstack **stack)
+ void ShellContext::synstack_pop(struct synstack **stack)
 {
 	*stack = (*stack)->next;
 }
 
-unsigned getmbc(int c, char *out, int mode)
+unsigned ShellContext::getmbc(int c, char *out, int mode)
 {
 	char *const start = out;
 	mbstate_t mbst = {};
@@ -934,7 +934,7 @@ unsigned getmbc(int c, char *out, int mode)
 	return 0;
 }
 
-static char *dollarsq_escape(char *out)
+ char *ShellContext::dollarsq_escape(char *out)
 {
 	/* 10 = length of UXXXXXXXX + NUL */
 	char str[10];
@@ -996,8 +996,8 @@ static char *dollarsq_escape(char *out)
 #define PARSEBACKQNEW()	{oldstyle = 0; goto parsebackq; parsebackq_newreturn:;}
 #define	PARSEARITH()	{goto parsearith; parsearith_return:;}
 
-STATIC int
-readtoken1(int firstc, char const *syntax, char *eofmark, int striptabs)
+ int
+ShellContext::readtoken1(int firstc, char const *syntax, char *eofmark, int striptabs)
 {
 	struct synstack synbase = {
 		.syntax = syntax,
@@ -1668,7 +1668,7 @@ INCLUDE "parser.h"
  */
 
 char *
-endofname(const char *name)
+ShellContext::endofname(const char *name)
 	{
 	char *p;
 
@@ -1689,8 +1689,8 @@ endofname(const char *name)
  * occur at this point.
  */
 
-STATIC void
-synexpect(int token)
+ void
+ShellContext::synexpect(int token)
 {
 	char msg[64];
 
@@ -1705,15 +1705,15 @@ synexpect(int token)
 }
 
 
-STATIC void
-synerror(const char *msg)
+ void
+ShellContext::synerror(const char *msg)
 {
 	errlinno = plinno;
 	sh_error("Syntax error: %s", msg);
 	/* NOTREACHED */
 }
 
-static void __attribute__((noinline)) setprompt(int which)
+ void __attribute__((noinline)) ShellContext::setprompt(int which)
 {
 	struct stackmark smark;
 	int show;
@@ -1734,7 +1734,7 @@ static void __attribute__((noinline)) setprompt(int which)
 }
 
 const char *
-expandstr(const char *ps)
+ShellContext::expandstr(const char *ps)
 {
 	struct parsefile *file_stop;
 	struct jmploc *volatile savehandler;
@@ -1786,7 +1786,7 @@ out:
  *    should be added here.
  */
 const char *
-getprompt(void *unused)
+ShellContext::getprompt(void *unused)
 {
 	const char *prompt;
 
@@ -1809,7 +1809,7 @@ getprompt(void *unused)
 }
 
 const char *const *
-findkwd(const char *s)
+ShellContext::findkwd(const char *s)
 {
 	return findstring(
 		s, parsekwd, sizeof(parsekwd) / sizeof(const char *)

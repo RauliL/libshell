@@ -394,7 +394,8 @@ output(void)
 	for (ep = event ; ep->name ; ep++) {
 		fputs("\n\n\n", fp);
 		fputs(ep->comment, fp);
-		fprintf(fp, "\nvoid\n%s(%s) {\n", ep->routine, ep->args ?: "");
+		fprintf(fp, "\nvoid\nShellContext::%s(%s) {\n", ep->routine,
+			ep->args ? ep->args : "");
 		writetext(&ep->code, fp);
 		fprintf(fp, "}\n");
 	}

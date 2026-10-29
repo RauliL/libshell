@@ -46,15 +46,15 @@
 
 #define ATABSIZE 39
 
-struct alias *atab[ATABSIZE];
+
 
 STATIC void setalias(const char *, const char *);
 STATIC struct alias *freealias(struct alias *);
 STATIC struct alias **__lookupalias(const char *);
 
-STATIC
+
 void
-setalias(const char *name, const char *val)
+ShellContext::setalias(const char *name, const char *val)
 {
 	struct alias *ap, **app;
 	const char *p = name;
@@ -86,7 +86,7 @@ setalias(const char *name, const char *val)
 }
 
 int
-unalias(const char *name)
+ShellContext::unalias(const char *name)
 {
 	struct alias **app;
 
@@ -103,7 +103,7 @@ unalias(const char *name)
 }
 
 void
-rmaliases(void)
+ShellContext::rmaliases(void)
 {
 	struct alias *ap, **app;
 	int i;
@@ -122,7 +122,7 @@ rmaliases(void)
 }
 
 struct alias *
-lookupalias(const char *name, int check)
+ShellContext::lookupalias(const char *name, int check)
 {
 	struct alias *ap = *__lookupalias(name);
 
@@ -135,7 +135,7 @@ lookupalias(const char *name, int check)
  * TODO - sort output
  */
 int
-aliascmd(int argc, char **argv)
+ShellContext::aliascmd(int argc, char **argv)
 {
 	char *n, *v;
 	int ret = 0;
@@ -167,7 +167,7 @@ aliascmd(int argc, char **argv)
 }
 
 int
-unaliascmd(int argc, char **argv)
+ShellContext::unaliascmd(int argc, char **argv)
 {
 	int i;
 
@@ -187,8 +187,8 @@ unaliascmd(int argc, char **argv)
 	return (i);
 }
 
-STATIC struct alias *
-freealias(struct alias *ap) {
+ struct alias *
+ShellContext::freealias(struct alias *ap) {
 	struct alias *next;
 
 	if (ap->flag & ALIASINUSE) {
@@ -202,12 +202,12 @@ freealias(struct alias *ap) {
 	return next;
 }
 
-void __attribute__((noinline)) printalias(const struct alias *ap) {
+void __attribute__((noinline)) ShellContext::printalias(const struct alias *ap) {
 	out1fmt(snlfmt, single_quote(ap->name));
 }
 
-STATIC struct alias **
-__lookupalias(const char *name) {
+ struct alias **
+ShellContext::__lookupalias(const char *name) {
 	struct alias **app;
 
 	app = &atab[hashval(name) % ATABSIZE];

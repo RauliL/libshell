@@ -70,7 +70,6 @@ cat <<\!
 
 !
 < $builtins sed '/^#/d; /^ *$/d' > $temp
-awk '{	printf "int %s(int, char **);\n", $1}' $temp
 echo '
 const struct builtincmd builtincmd[] = {'
 awk '{	for (i = 2 ; i <= NF ; i++) {
@@ -86,7 +85,8 @@ awk '{	for (i = 2 ; i <= NF ; i++) {
 		}
 		mask = 0
 		cmd = $2
-		if (opt ~ /n/) { cmd = "NULL" }
+		if (opt ~ /n/) { cmd = "nullptr" }
+		else { cmd = "&ShellContext::" cmd }
 		if (opt ~ /s/) { mask += 1 }
 		if (opt ~ /[su]/) { mask += 2 }
 		if (opt ~ /a/) { mask += 4 }
@@ -111,9 +111,11 @@ echo '
 #define BUILTIN_REGULAR 0x2
 #define BUILTIN_ASSIGN 0x4
 
+struct ShellContext;
+
 struct builtincmd {
 	const char *name;
-	int (*builtin)(int, char **);
+	int (ShellContext::*builtin)(int, char **);
 	unsigned flags;
 };
 

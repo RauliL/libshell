@@ -1,3 +1,5 @@
+#ifndef MEMALLOC_H
+#define MEMALLOC_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -37,6 +39,14 @@
 #include <cstddef>
 #include <cstdlib>
 #include <type_traits>
+#include "machdep.h"
+
+#define MINSIZE SHELL_ALIGN(504)
+
+struct stack_block {
+	struct stack_block *prev;
+	char space[MINSIZE];
+};
 
 struct stackmark {
 	struct stack_block *stackp;
@@ -76,18 +86,6 @@ char *stnputs(const char *, size_t, char *);
 char *stputs(const char *, char *);
 
 
-static inline void grabstackblock(size_t len)
-{
-	stalloc(len);
-}
-
-static inline char *_STPUTC(int c, char *p) {
-	if (p == sstrend)
-		p = growstackstr();
-	*p++ = c;
-	return p;
-}
-
 #define stackblock() (stacknxt)
 #define stackblocksize() stacknleft
 #define STARTSTACKSTR(p) ((p) = static_cast<std::remove_reference_t<decltype(p)>>( \
@@ -113,3 +111,4 @@ static inline char *_STPUTC(int c, char *p) {
 #define stackstrend() (static_cast<void *>(sstrend))
 
 #define ckfree(p)	std::free(const_cast<void *>(static_cast<const void *>(p)))
+#endif

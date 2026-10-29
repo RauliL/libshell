@@ -1,3 +1,5 @@
+#ifndef ALIAS_H
+#define ALIAS_H
 /*-
  * Copyright (c) 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -50,3 +52,4 @@ int unaliascmd(int, char **);
 void rmaliases(void);
 int unalias(const char *);
 void printalias(const struct alias *);
+#endif

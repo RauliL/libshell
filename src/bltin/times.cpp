@@ -12,7 +12,7 @@
 #include "bltin.h"
 #endif
 
-int timescmd(int argc, char *argv[]) {
+int ShellContext::timescmd(int argc, char *argv[]) {
 	struct tms buf;
 	long int clk_tck = sysconf(_SC_CLK_TCK);
 	int mutime, mstime, mcutime, mcstime;

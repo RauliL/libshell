@@ -125,4 +125,6 @@ static inline int max_int_length(int bytes)
 	return (bytes * 8 - 1) * 0.30102999566398119521 + 14;
 }
 
+#include "shell_context.h"
+
 #endif

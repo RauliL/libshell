@@ -78,10 +78,10 @@ struct redirtab {
 };
 
 
-MKINIT struct redirtab *redirlist;
+
 
 /* Bit map of currently closed file descriptors. */
-static unsigned closed_redirs;
+
 
 STATIC int openredirect(union node *);
 #ifdef notyet
@@ -92,7 +92,7 @@ STATIC void dupredirect(union node *, int);
 STATIC int openhere(union node *);
 
 
-static unsigned update_closed_redirs(int fd, int nfd)
+ unsigned ShellContext::update_closed_redirs(int fd, int nfd)
 {
 	unsigned val = closed_redirs;
 	unsigned bit = 1 << fd;
@@ -115,7 +115,7 @@ static unsigned update_closed_redirs(int fd, int nfd)
  */
 
 void
-redirect(union node *redir, int flags)
+ShellContext::redirect(union node *redir, int flags)
 {
 	union node *n;
 	struct redirtab *sv;
@@ -187,7 +187,7 @@ redirect(union node *redir, int flags)
 
 
 static int sh_open_fail(const char *, int, int) __attribute__((__noreturn__));
-static int sh_open_fail(const char *pathname, int flags, int e)
+ int ShellContext::sh_open_fail(const char *pathname, int flags, int e)
 {
 	const char *word;
 	int action;
@@ -203,7 +203,7 @@ static int sh_open_fail(const char *pathname, int flags, int e)
 }
 
 
-int sh_open(const char *pathname, int flags, int mayfail)
+int ShellContext::sh_open(const char *pathname, int flags, int mayfail)
 {
 	int fd;
 	int e;
@@ -220,8 +220,8 @@ int sh_open(const char *pathname, int flags, int mayfail)
 }
 
 
-STATIC int
-openredirect(union node *redir)
+ int
+ShellContext::openredirect(union node *redir)
 {
 	struct stat64 sb;
 	char *fname;
@@ -285,7 +285,7 @@ ecreate:
 	sh_open_fail(fname, O_CREAT, EEXIST);
 }
 
-static int sh_dup2(int ofd, int nfd, int cfd)
+ int ShellContext::sh_dup2(int ofd, int nfd, int cfd)
 {
 	if (nfd < 0) {
 		nfd = dup(ofd);
@@ -302,9 +302,9 @@ static int sh_dup2(int ofd, int nfd, int cfd)
 }
 
 #ifdef notyet
-static void dupredirect(union node *redir, int f, char memory[10])
+ void dupredirect(union node *redir, int f, char memory[10])
 #else
-static void dupredirect(union node *redir, int f)
+void ShellContext::dupredirect(union node *redir, int f)
 #endif
 {
 	int fd = redir->nfile.fd;
@@ -328,7 +328,7 @@ static void dupredirect(union node *redir, int f)
 		sh_dup2(f, fd, f);
 }
 
-int sh_pipe(int pip[2], int memfd)
+int ShellContext::sh_pipe(int pip[2], int memfd)
 {
 	if (memfd) {
 		pip[0] = USE_MEMFD_CREATE ? memfd_create("dash", 0) : -1;
@@ -350,8 +350,8 @@ int sh_pipe(int pip[2], int memfd)
  * the pipe without forking.
  */
 
-STATIC int
-openhere(union node *redir)
+ int
+ShellContext::openhere(union node *redir)
 {
 	size_t len = 0;
 	int pip[2];
@@ -397,7 +397,7 @@ out:
  */
 
 void
-popredir(int drop)
+ShellContext::popredir(int drop)
 {
 	struct redirtab *rp;
 	int i;
@@ -461,7 +461,7 @@ FORKRESET {
  */
 
 int
-savefd(int from, int ofd)
+ShellContext::savefd(int from, int ofd)
 {
 	int newfd;
 	int err;
@@ -486,7 +486,7 @@ savefd(int from, int ofd)
 
 
 int
-redirectsafe(union node *redir, int flags)
+ShellContext::redirectsafe(union node *redir, int flags)
 {
 	int err;
 	volatile int saveint;
@@ -504,14 +504,14 @@ redirectsafe(union node *redir, int flags)
 }
 
 
-void unwindredir(struct redirtab *stop)
+void ShellContext::unwindredir(struct redirtab *stop)
 {
 	while (redirlist != stop)
 		popredir(0);
 }
 
 
-struct redirtab *pushredir(union node *redir)
+struct redirtab *ShellContext::pushredir(union node *redir)
 {
 	struct redirtab *sv;
 	struct redirtab *q;

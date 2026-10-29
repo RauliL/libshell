@@ -1,3 +1,5 @@
+#ifndef TRAP_H
+#define TRAP_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -51,7 +53,4 @@ void exitshell(void) __attribute__((__noreturn__));
 int decode_signal(const char *, int);
 void sigblockall(sigset_t *oldmask);
 
-static inline int have_traps(void)
-{
-	return trapcnt;
-}
+#endif

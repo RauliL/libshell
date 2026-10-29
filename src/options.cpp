@@ -55,13 +55,13 @@
 #endif
 #include "show.h"
 
-char *arg0;			/* value of $0 */
-struct shparam shellparam;	/* current positional parameters */
-char **argptr;			/* argument list for builtin commands */
-char *optionarg;		/* set by nextopt (like getopt) */
-char *optptr;			/* used by nextopt */
+			/* value of $0 */
+	/* current positional parameters */
+			/* argument list for builtin commands */
+		/* set by nextopt (like getopt) */
+			/* used by nextopt */
 
-char *minusc;			/* argument to -c option */
+			/* argument to -c option */
 
 static const char *const optnames[NOPTS] = {
 	"errexit",
@@ -105,7 +105,7 @@ const char optletters[NOPTS] = {
 	0,
 };
 
-char optlist[NOPTS];
+
 
 
 static int options(int);
@@ -119,7 +119,7 @@ STATIC int getopts(char *, char *, char **);
  */
 
 int
-procargs(char **xargv)
+ShellContext::procargs(char **xargv)
 {
 	int i;
 	int login;
@@ -177,7 +177,7 @@ setarg0:
 
 
 void
-optschanged(void)
+ShellContext::optschanged(void)
 {
 #ifdef DEBUG
 	opentrace();
@@ -194,8 +194,8 @@ optschanged(void)
  * to the argument list; we advance it past the options.
  */
 
-STATIC int
-options(int cmdline)
+ int
+ShellContext::options(int cmdline)
 {
 	char *p;
 	int val;
@@ -243,8 +243,8 @@ options(int cmdline)
 	return login;
 }
 
-STATIC void
-minus_o(char *name, int val)
+ void
+ShellContext::minus_o(char *name, int val)
 {
 	int i;
 
@@ -272,8 +272,8 @@ minus_o(char *name, int val)
 }
 
 
-STATIC void
-setoption(int flag, int val)
+ void
+ShellContext::setoption(int flag, int val)
 {
 	int i;
 
@@ -300,7 +300,7 @@ setoption(int flag, int val)
  */
 
 void
-setparam(char **argv)
+ShellContext::setparam(char **argv)
 {
 	char **newparam;
 	char **ap;
@@ -326,7 +326,7 @@ setparam(char **argv)
  */
 
 void
-freeparam(volatile struct shparam *param)
+ShellContext::freeparam(volatile struct shparam *param)
 {
 	char **ap;
 
@@ -344,7 +344,7 @@ freeparam(volatile struct shparam *param)
  */
 
 int
-shiftcmd(int argc, char **argv)
+ShellContext::shiftcmd(int argc, char **argv)
 {
 	int n;
 	char **ap1, **ap2;
@@ -375,7 +375,7 @@ shiftcmd(int argc, char **argv)
  */
 
 int
-setcmd(int argc, char **argv)
+ShellContext::setcmd(int argc, char **argv)
 {
 	if (argc == 1)
 		return showvars(nullstr, 0, VUNSET);
@@ -390,7 +390,7 @@ setcmd(int argc, char **argv)
 }
 
 
-void getoptsreset(const char *value)
+void ShellContext::getoptsreset(const char *value)
 {
 	shellparam.optind = 1;
 	shellparam.optoff = -1;
@@ -404,7 +404,7 @@ void getoptsreset(const char *value)
  */
 
 int
-getoptscmd(int argc, char **argv)
+ShellContext::getoptscmd(int argc, char **argv)
 {
 	char **optbase;
 
@@ -431,8 +431,8 @@ getoptscmd(int argc, char **argv)
 	return getopts(argv[1], argv[2], optbase);
 }
 
-STATIC int
-getopts(char *optstr, char *optvar, char **optfirst)
+ int
+ShellContext::getopts(char *optstr, char *optvar, char **optfirst)
 {
 	char *p, *q;
 	char c = '?';
@@ -528,7 +528,7 @@ out:
  */
 
 int
-nextopt(const char *optstring)
+ShellContext::nextopt(const char *optstring)
 {
 	char *p;
 	const char *q;

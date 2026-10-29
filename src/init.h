@@ -1,3 +1,5 @@
+#ifndef INIT_H
+#define INIT_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -41,3 +43,4 @@ void exitreset(void);
 void forkreset(union node *);
 void postexitreset(void);
 void reset(void);
+#endif

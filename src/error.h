@@ -1,3 +1,5 @@
+#ifndef ERROR_H
+#define ERROR_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -123,3 +125,4 @@ void exerror(int, const char *, ...) __attribute__((__noreturn__));
 const char *errmsg(int, int);
 
 void sh_warnx(const char *, ...);
+#endif

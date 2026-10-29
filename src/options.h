@@ -1,3 +1,5 @@
+#ifndef OPTIONS_H
+#define OPTIONS_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -85,3 +87,4 @@ int setcmd(int, char **);
 int getoptscmd(int, char **);
 int nextopt(const char *);
 void getoptsreset(const char *);
+#endif

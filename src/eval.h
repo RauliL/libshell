@@ -1,3 +1,5 @@
+#ifndef EVAL_H
+#define EVAL_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -47,13 +49,95 @@ struct backcmd {		/* result of evalbackcmd */
 	struct job *jp;		/* job structure for command */
 };
 
-/* flags in argument to evaltree */
-#define EV_EXIT 01		/* exit after evaluating tree */
-#define EV_TESTED 02		/* exit status is checked; ignore -e flag */
+#include <bitset>
+#include <cstddef>
+#include <type_traits>
 
-int evalstring(char *, int);
+/*
+ * How to evaluate a command tree. Passed to execute(), evalstring(), and
+ * evaltree().
+ *
+ * exit:   this tree is the last action of the shell. After it runs, exit
+ *         instead of returning. Also lets a subshell or external command
+ *         replace the current process.
+ * tested: the caller inspects the status (if, while, &&, ||, !, a function
+ *         body). A failing command does not trigger set -e.
+ */
+enum class EvalFlag : std::size_t {
+	exit,
+	tested,
+};
+
+class EvalFlags {
+	static constexpr std::size_t nbits =
+		static_cast<std::size_t>(EvalFlag::tested) + 1;
+	std::bitset<nbits> bits{};
+
+	static constexpr std::size_t index(EvalFlag flag)
+	{
+		return static_cast<std::size_t>(flag);
+	}
+
+public:
+	EvalFlags() = default;
+	EvalFlags(EvalFlag flag) { bits.set(index(flag)); }
+
+	bool test(EvalFlag flag) const { return bits.test(index(flag)); }
+
+	EvalFlags &set(EvalFlag flag)
+	{
+		bits.set(index(flag));
+		return *this;
+	}
+
+	EvalFlags &reset(EvalFlag flag)
+	{
+		bits.reset(index(flag));
+		return *this;
+	}
+
+	/* Keep only this flag, and only when it was already set. */
+	EvalFlags &operator&=(EvalFlag flag)
+	{
+		bool on = test(flag);
+		bits.reset();
+		if (on)
+			bits.set(index(flag));
+		return *this;
+	}
+
+	EvalFlags operator&(EvalFlag flag) const
+	{
+		EvalFlags out = *this;
+		out &= flag;
+		return out;
+	}
+
+	EvalFlags &operator|=(EvalFlag flag) { return set(flag); }
+
+	EvalFlags operator|(EvalFlag flag) const
+	{
+		EvalFlags out = *this;
+		out.set(flag);
+		return out;
+	}
+
+	unsigned long to_ulong() const { return bits.to_ulong(); }
+};
+
+inline EvalFlags operator|(EvalFlag a, EvalFlag b)
+{
+	EvalFlags flags(a);
+	flags.set(b);
+	return flags;
+}
+
+static_assert(std::is_trivially_copyable_v<EvalFlags>);
+static_assert(std::is_trivially_destructible_v<EvalFlags>);
+
+int evalstring(char *, EvalFlags);
 union node;	/* BLETCH for ansi C */
-int evaltree(union node *, int);
+int evaltree(union node *, EvalFlags);
 void evalbackcmd(union node *, struct backcmd *);
 
 extern int evalskip;
@@ -63,3 +147,4 @@ extern int evalskip;
 #define SKIPCONT	(1 << 1)
 #define SKIPFUNC	(1 << 2)
 #define SKIPFUNCDEF	(1 << 3)
+#endif

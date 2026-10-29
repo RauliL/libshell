@@ -72,50 +72,26 @@ struct localvar_list {
 	struct localvar *lv;
 };
 
-MKINIT struct localvar_list *localvar_stack;
+
 
 const char defpathvar[] =
 	"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-char defifsvar[] = "IFS= \t\n";
-MKINIT char defoptindvar[] = "OPTIND=1";
 
-int lineno;
-char linenovar[sizeof("LINENO=")+sizeof(int)*CHAR_BIT/3+1] = "LINENO=";
 
-static void changelocale(const char *val)
+
+
+
+
+ void ShellContext::changelocale(const char *val)
 {
 	putenv((char *)val);
 	setlocale(LC_ALL, nullstr);
 }
 
 /* Some macros in var.h depend on the order, add new variables to the end. */
-struct var varinit[] = {
-#if ATTY
-	{ 0,	VSTRFIXED|VTEXTFIXED|VUNSET,	"ATTY\0",	0 },
-#endif
-	{ 0,	VSTRFIXED|VTEXTFIXED,		defifsvar,	changeifs },
-	{ 0,	VSTRFIXED|VTEXTFIXED|VUNSET,	"MAIL\0",	changemail },
-	{ 0,	VSTRFIXED|VTEXTFIXED|VUNSET,	"MAILPATH\0",	changemail },
-	{ 0,	VSTRFIXED|VTEXTFIXED,		defpathvar,	changepath },
-	{ 0,	VSTRFIXED|VTEXTFIXED,		"PS1=$ ",	0 },
-	{ 0,	VSTRFIXED|VTEXTFIXED,		"PS2=> ",	0 },
-	{ 0,	VSTRFIXED|VTEXTFIXED,		"PS4=+ ",	0 },
-	{ 0,	VSTRFIXED|VTEXTFIXED|VNOFUNC,	defoptindvar,	getoptsreset },
-#ifdef WITH_LINENO
-	{ 0,	VSTRFIXED|VTEXTFIXED,		linenovar,	0 },
-#endif
-#ifndef SMALL
-	{ 0,	VSTRFIXED|VTEXTFIXED|VUNSET,	"TERM\0",	0 },
-	{ 0,	VSTRFIXED|VTEXTFIXED|VUNSET,	"HISTSIZE\0",	sethistsize },
-#endif
-	{ 0,	VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_ALL\0",	changelocale },
-	{ 0,	VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_COLLATE\0", changelocale },
-	{ 0,	VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_CTYPE\0", changelocale },
-	{ 0,	VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_NUMERIC\0", changelocale },
-	{ 0,	VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LANG\0",	changelocale },
-};
 
-STATIC struct var *vartab[VTABSIZE];
+
+
 
 STATIC struct var **hashvar(const char *);
 STATIC int vpcmp(const void *, const void *);
@@ -132,10 +108,9 @@ INCLUDE <sys/stat.h>
 INCLUDE "cd.h"
 INCLUDE "output.h"
 INCLUDE "var.h"
-MKINIT char **environ;
+
 INIT {
 	char **envp;
-	static char ppid[32] = "PPID=";
 	const char *p;
 	struct stat64 st1, st2;
 
@@ -150,8 +125,8 @@ INIT {
 	setvareq(defifsvar, VTEXTFIXED);
 	setvareq(defoptindvar, VTEXTFIXED);
 
-	fmtstr(ppid + 5, sizeof(ppid) - 5, "%ld", (long) getppid());
-	setvareq(ppid, VTEXTFIXED);
+	fmtstr(ppidbuf + 5, sizeof(ppidbuf) - 5, "%ld", (long) getppid());
+	setvareq(ppidbuf, VTEXTFIXED);
 
 	p = lookupvar("PWD");
 	if (p)
@@ -166,13 +141,13 @@ RESET {
 }
 #endif
 
-static char *varnull(const char *s)
+ char *ShellContext::varnull(const char *s)
 {
 	/* Unset variables always end with two NUL chars. */
 	return const_cast<char *>(strchrnul(s, '=')) + 1;
 }
 
-static void varfunc(struct var *vp)
+ void ShellContext::varfunc(struct var *vp)
 {
 	const char *s;
 
@@ -182,7 +157,7 @@ static void varfunc(struct var *vp)
 	s = vp->text;
 	if (!(vp->flags & VFULL))
 		s = varnull(s);
-	(*vp->func)(s);
+	(this->*vp->func)(s);
 }
 
 /*
@@ -191,7 +166,7 @@ static void varfunc(struct var *vp)
  */
 
 void
-initvar(void)
+ShellContext::initvar(void)
 {
 	struct var *vp;
 	struct var *end;
@@ -216,7 +191,7 @@ initvar(void)
  * flags of the variable.  If val is NULL, the variable is unset.
  */
 
-struct var *setvar(const char *name, const char *val, int flags)
+struct var *ShellContext::setvar(const char *name, const char *val, int flags)
 {
 	char *p, *q;
 	size_t namelen;
@@ -253,7 +228,7 @@ struct var *setvar(const char *name, const char *val, int flags)
  * ored with the flags of the variable.
  */
 
-intmax_t setvarint(const char *name, intmax_t val, int flags)
+intmax_t ShellContext::setvarint(const char *name, intmax_t val, int flags)
 {
 	int len = max_int_length(sizeof(val));
 	char buf[len];
@@ -273,7 +248,7 @@ intmax_t setvarint(const char *name, intmax_t val, int flags)
  * Called with interrupts off.
  */
 
-struct var *setvareq(char *s, int flags)
+struct var *ShellContext::setvareq(char *s, int flags)
 {
 	struct var *vp, **vpp;
 
@@ -336,7 +311,7 @@ out:
  */
 
 char *
-lookupvar(const char *name)
+ShellContext::lookupvar(const char *name)
 {
 	struct var *v;
 
@@ -351,7 +326,7 @@ lookupvar(const char *name)
 	return NULL;
 }
 
-intmax_t lookupvarint(const char *name)
+intmax_t ShellContext::lookupvarint(const char *name)
 {
 	return atomax(lookupvar(name) ?: nullstr, 0);
 }
@@ -363,7 +338,7 @@ intmax_t lookupvarint(const char *name)
  */
 
 char **
-listvars(int on, int off, char ***end)
+ShellContext::listvars(int on, int off, char ***end)
 {
 	struct var **vpp;
 	struct var *vp;
@@ -400,7 +375,7 @@ listvars(int on, int off, char ***end)
  */
 
 int
-showvars(const char *prefix, int on, int off)
+ShellContext::showvars(const char *prefix, int on, int off)
 {
 	const char *sep;
 	char **ep, **epend;
@@ -432,7 +407,7 @@ showvars(const char *prefix, int on, int off)
  */
 
 int
-exportcmd(int argc, char **argv)
+ShellContext::exportcmd(int argc, char **argv)
 {
 	struct var *vp;
 	char *name;
@@ -466,7 +441,7 @@ exportcmd(int argc, char **argv)
  */
 
 int
-localcmd(int argc, char **argv)
+ShellContext::localcmd(int argc, char **argv)
 {
 	char *name;
 
@@ -488,7 +463,7 @@ localcmd(int argc, char **argv)
  * "-" as a special case.
  */
 
-void mklocal(char *name, int flags)
+void ShellContext::mklocal(char *name, int flags)
 {
 	struct localvar *lvp;
 	struct var *vp;
@@ -531,8 +506,8 @@ void mklocal(char *name, int flags)
  * Interrupts must be off.
  */
 
-static void
-poplocalvars(void)
+ void
+ShellContext::poplocalvars(void)
 {
 	struct localvar_list *ll;
 	struct localvar *lvp, *next;
@@ -573,7 +548,7 @@ poplocalvars(void)
 /*
  * Create a new localvar environment.
  */
-struct localvar_list *pushlocalvars(int push)
+struct localvar_list *ShellContext::pushlocalvars(int push)
 {
 	struct localvar_list *ll;
 	struct localvar_list *top;
@@ -594,7 +569,7 @@ out:
 }
 
 
-void unwindlocalvars(struct localvar_list *stop)
+void ShellContext::unwindlocalvars(struct localvar_list *stop)
 {
 	while (localvar_stack != stop)
 		poplocalvars();
@@ -608,7 +583,7 @@ void unwindlocalvars(struct localvar_list *stop)
  */
 
 int
-unsetcmd(int argc, char **argv)
+ShellContext::unsetcmd(int argc, char **argv)
 {
 	char **ap;
 	int i;
@@ -634,7 +609,7 @@ unsetcmd(int argc, char **argv)
  * Unset the specified variable.
  */
 
-void unsetvar(const char *s)
+void ShellContext::unsetvar(const char *s)
 {
 	setvar(s, 0, 0);
 }
@@ -645,8 +620,8 @@ void unsetvar(const char *s)
  * Find the appropriate entry in the hash table from the name.
  */
 
-STATIC struct var **
-hashvar(const char *p)
+ struct var **
+ShellContext::hashvar(const char *p)
 {
 	return &vartab[hashval(p) % VTABSIZE];
 }
@@ -684,8 +659,8 @@ vpcmp(const void *a, const void *b)
 	return varcmp(*(const char **)a, *(const char **)b);
 }
 
-STATIC struct var **
-findvar(const char *name)
+ struct var **
+ShellContext::findvar(const char *name)
 {
 	struct var **vpp;
 

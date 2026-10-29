@@ -46,12 +46,12 @@
 #error Arithmetic tokens are out of order.
 #endif
 
-static const char *arith_startbuf;
 
-const char *arith_buf;
-union yystype yylval;
 
-static int last_token;
+
+
+
+
 
 constexpr char arith_precedence(int op)
 {
@@ -96,23 +96,23 @@ constexpr auto prec = [] {
 #define ARITH_MAX_PREC 8
 
 static void yyerror(const char *s) __attribute__ ((noreturn));
-static void yyerror(const char *s)
+ void ShellContext::yyerror(const char *s)
 {
 	sh_error("arithmetic expression: %s: \"%s\"", s, arith_startbuf);
 	/* NOTREACHED */
 }
 
-static inline int arith_prec(int op)
+ inline int ShellContext::arith_prec(int op)
 {
 	return prec[op - ARITH_BINOP_MIN];
 }
 
-static inline int higher_prec(int op1, int op2)
+ inline int ShellContext::higher_prec(int op1, int op2)
 {
 	return arith_prec(op1) < arith_prec(op2);
 }
 
-static intmax_t do_binop(int op, intmax_t a, intmax_t b)
+ intmax_t ShellContext::do_binop(int op, intmax_t a, intmax_t b)
 {
 	switch (op) {
 	default:
@@ -154,7 +154,7 @@ static intmax_t do_binop(int op, intmax_t a, intmax_t b)
 
 static intmax_t assignment(int var, int noeval);
 
-static intmax_t primary(int token, union yystype *val, int op, int noeval)
+ intmax_t ShellContext::primary(int token, union yystype *val, int op, int noeval)
 {
 	intmax_t result;
 
@@ -191,7 +191,7 @@ again:
 	}
 }
 
-static intmax_t binop2(intmax_t a, int op, int prec, int noeval)
+ intmax_t ShellContext::binop2(intmax_t a, int op, int prec, int noeval)
 {
 	for (;;) {
 		union yystype val;
@@ -221,7 +221,7 @@ static intmax_t binop2(intmax_t a, int op, int prec, int noeval)
 	}
 }
 
-static intmax_t binop(int token, union yystype *val, int op, int noeval)
+ intmax_t ShellContext::binop(int token, union yystype *val, int op, int noeval)
 {
 	intmax_t a = primary(token, val, op, noeval);
 
@@ -232,7 +232,7 @@ static intmax_t binop(int token, union yystype *val, int op, int noeval)
 	return binop2(a, op, ARITH_MAX_PREC, noeval);
 }
 
-static intmax_t arith_and(int token, union yystype *val, int op, int noeval)
+ intmax_t ShellContext::arith_and(int token, union yystype *val, int op, int noeval)
 {
 	intmax_t a = binop(token, val, op, noeval);
 	intmax_t b;
@@ -249,7 +249,7 @@ static intmax_t arith_and(int token, union yystype *val, int op, int noeval)
 	return a && b;
 }
 
-static intmax_t arith_or(int token, union yystype *val, int op, int noeval)
+ intmax_t ShellContext::arith_or(int token, union yystype *val, int op, int noeval)
 {
 	intmax_t a = arith_and(token, val, op, noeval);
 	intmax_t b;
@@ -266,7 +266,7 @@ static intmax_t arith_or(int token, union yystype *val, int op, int noeval)
 	return a || b;
 }
 
-static intmax_t cond(int token, union yystype *val, int op, int noeval)
+ intmax_t ShellContext::cond(int token, union yystype *val, int op, int noeval)
 {
 	intmax_t a = arith_or(token, val, op, noeval);
 	intmax_t b;
@@ -288,7 +288,7 @@ static intmax_t cond(int token, union yystype *val, int op, int noeval)
 	return a ? b : c;
 }
 
-static intmax_t assignment(int var, int noeval)
+ intmax_t ShellContext::assignment(int var, int noeval)
 {
 	union yystype val = yylval;
 	int op = yylex();
@@ -309,7 +309,7 @@ static intmax_t assignment(int var, int noeval)
 			 do_binop(op - 11, lookupvarint(val.name), result), 0);
 }
 
-intmax_t arith(const char *s)
+intmax_t ShellContext::arith(const char *s)
 {
 	intmax_t result;
 

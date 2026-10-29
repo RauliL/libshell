@@ -89,31 +89,10 @@ int __closememout(void);
 #endif
 #endif
 
-static inline void
-freestdout()
-{
-	output.nextc = output.buf;
-	output.flags = 0;
-}
-
 #define OUTPUT_ERR 01		/* error occurred on output */
 
 #ifdef USE_GLIBC_STDIO
-static inline void outc(int ch, struct output *file)
-{
-	putc(ch, file->stream);
-}
 #define doformat(d, f, a)	vfprintf((d)->stream, (f), (a))
-#else
-static inline void outc(int ch, struct output *file)
-{
-	if (file->nextc == file->end)
-		outcslow(ch, file);
-	else {
-		*file->nextc = ch;
-		file->nextc++;
-	}
-}
 #endif
 #define out1c(c)	outc((c), out1)
 #define out2c(c)	outcslow((c), out2)

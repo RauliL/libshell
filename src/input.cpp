@@ -60,25 +60,15 @@
 #include "system.h"
 #include "trap.h"
 
-#define IBUFSIZ (BUFSIZ + PUNGETC_MAX + 1)
+	/* top level input file */
+	/* buffer for top level input file */
 
-MKINIT
-struct stdin_state {
-	off_t seekable;
-	int pip[2];
-	int pending;
-	tcflag_t bufferable;
-};
 
-MKINIT struct parsefile basepf;	/* top level input file */
-MKINIT char basebuf[IBUFSIZ];	/* buffer for top level input file */
-MKINIT struct parsefile *toppf = &basepf;
-MKINIT struct stdin_state stdin_state;
-struct parsefile *parsefile = &basepf;	/* current input file */
-int whichprompt;		/* 1 == PS1, 2 == PS2 */
-int stdin_istty = -1;
+	/* current input file */
+		/* 1 == PS1, 2 == PS2 */
 
-STATIC void pushfile(void);
+
+ void pushfile(void);
 static void popstring(void);
 static int preadfd(void);
 static void setinputfd(int fd, int push);
@@ -129,7 +119,7 @@ POSTEXITRESET {
 }
 #endif
 
-void input_init(void)
+void ShellContext::input_init(void)
 {
 	struct stdin_state *st = &stdin_state;
 	struct termios tios;
@@ -145,7 +135,7 @@ void input_init(void)
 	}
 }
 
-static bool stdin_bufferable(void)
+bool ShellContext::stdin_bufferable(void)
 {
 	struct stdin_state *st = &stdin_state;
 
@@ -155,7 +145,7 @@ static bool stdin_bufferable(void)
 	return st->bufferable;
 }
 
-static void flush_tee(void *buf, int nr, int pending)
+void ShellContext::flush_tee(void *buf, int nr, int pending)
 {
 	while (pending > 0) {
 		int err;
@@ -166,7 +156,7 @@ static void flush_tee(void *buf, int nr, int pending)
 	}
 }
 
-static int stdin_tee(void *buf, int nr)
+int ShellContext::stdin_tee(void *buf, int nr)
 {
 	int err;
 
@@ -192,7 +182,7 @@ static int stdin_tee(void *buf, int nr)
 	return err;
 }
 
-static void freestrings(struct strpush *sp)
+void ShellContext::freestrings(struct strpush *sp)
 {
 	INTOFF;
 	do {
@@ -222,7 +212,7 @@ static void freestrings(struct strpush *sp)
  * Nul characters in the input are silently discarded.
  */
 
-int __attribute__((noinline)) pgetc(void)
+int __attribute__((noinline)) ShellContext::pgetc(void)
 {
 	struct strpush *sp = parsefile->spfree;
 	int c;
@@ -260,13 +250,13 @@ nextc:
 	return c;
 }
 
-int pgetc_eoa(void)
+int ShellContext::pgetc_eoa(void)
 {
 	return parsefile->strpush && parsefile->nleft == -1 &&
 	       parsefile->strpush->ap ? PEOA : pgetc();
 }
 
-static int stdin_clear_nonblock(void)
+int ShellContext::stdin_clear_nonblock(void)
 {
 	int flags = fcntl(0, F_GETFL, 0);
 
@@ -278,8 +268,8 @@ static int stdin_clear_nonblock(void)
 	return flags;
 }
 
-static int
-preadfd(void)
+int
+ShellContext::preadfd(void)
 {
 	char *buf = parsefile->buf;
 	int fd = parsefile->fd;
@@ -314,8 +304,6 @@ retry:
 	nr = pnr;
 #ifndef SMALL
 	if (fd == 0 && el) {
-		static const char *rl_cp;
-		static int el_len;
 
 		if (rl_cp == NULL) {
 			struct stackmark smark;
@@ -374,7 +362,7 @@ retry:
  * 4) Process input up to the next newline, deleting nul characters.
  */
 
-static int preadbuffer(void)
+int ShellContext::preadbuffer(void)
 {
 	int first = whichprompt == 1;
 	int something;
@@ -478,7 +466,7 @@ save:
 	return (signed char)*parsefile->nextc++;
 }
 
-void pungetn(int n)
+void ShellContext::pungetn(int n)
 {
 	parsefile->unget += n;
 }
@@ -489,7 +477,7 @@ void pungetn(int n)
  */
 
 void
-pungetc(void)
+ShellContext::pungetc(void)
 {
 	pungetn(1 - (parsefile->eof & 1));
 	parsefile->eof &= ~1;
@@ -500,7 +488,7 @@ pungetc(void)
  * We handle aliases this way.
  */
 void
-pushstring(char *s, void *ap)
+ShellContext::pushstring(char *s, void *ap)
 {
 	struct strpush *sp;
 	size_t len;
@@ -531,7 +519,7 @@ pushstring(char *s, void *ap)
 	INTON;
 }
 
-static void popstring(void)
+ void ShellContext::popstring(void)
 {
 	struct strpush *sp = parsefile->strpush;
 
@@ -560,7 +548,7 @@ static void popstring(void)
  */
 
 int
-setinputfile(const char *fname, int flags)
+ShellContext::setinputfile(const char *fname, int flags)
 {
 	int fd;
 
@@ -582,8 +570,8 @@ out:
  * interrupts off.
  */
 
-static void
-setinputfd(int fd, int push)
+ void
+ShellContext::setinputfd(int fd, int push)
 {
 	pushfile();
 	if (!push)
@@ -598,7 +586,7 @@ setinputfd(int fd, int push)
  */
 
 void
-setinputstring(char *string)
+ShellContext::setinputstring(char *string)
 {
 	INTOFF;
 	pushfile();
@@ -615,8 +603,8 @@ setinputstring(char *string)
  * adds a new entry to the stack and popfile restores the previous level.
  */
 
-STATIC void
-pushfile(void)
+ void
+ShellContext::pushfile(void)
 {
 	struct parsefile *pf;
 
@@ -628,7 +616,7 @@ pushfile(void)
 	parsefile = pf;
 }
 
-void pushstdin(void)
+void ShellContext::pushstdin(void)
 {
 	INTOFF;
 	basepf.prev = parsefile;
@@ -637,7 +625,7 @@ void pushstdin(void)
 }
 
 void
-popfile(void)
+ShellContext::popfile(void)
 {
 	struct parsefile *pf = parsefile;
 
@@ -663,7 +651,7 @@ out:
 }
 
 
-void __attribute__((noinline)) unwindfiles(struct parsefile *stop)
+void __attribute__((noinline)) ShellContext::unwindfiles(struct parsefile *stop)
 {
 	while (basepf.prev || parsefile != stop)
 		popfile();
@@ -675,12 +663,12 @@ void __attribute__((noinline)) unwindfiles(struct parsefile *stop)
  */
 
 void
-popallfiles(void)
+ShellContext::popallfiles(void)
 {
 	unwindfiles(toppf);
 }
 
-void __attribute__((noinline)) flush_input(void)
+void __attribute__((noinline)) ShellContext::flush_input(void)
 {
 	int left = basepf.nleft + input_get_lleft(&basepf);
 
@@ -695,7 +683,7 @@ void __attribute__((noinline)) flush_input(void)
 	INTON;
 }
 
-void reset_input(void)
+void ShellContext::reset_input(void)
 {
 	stdin_istty = -1;
 	basepf.eof = 0;

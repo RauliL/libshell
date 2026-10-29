@@ -68,21 +68,27 @@
 
 
 /* trap handler commands */
-static char *trap[NSIG];
+
 /* traps have not been fully cleared */
-static int ptrap;
+
 /* number of non-null traps */
-int trapcnt;
+
 /* current value of signal */
-char sigmode[NSIG - 1];
+
 /* indicates specified signal received */
-static char gotsig[NSIG - 1];
+
 /* last pending signal */
-volatile sig_atomic_t pending_sig;
+
 /* received SIGCHLD */
-volatile sig_atomic_t gotsigchld;
+
 
 extern const char *const signal_names[];
+
+static void signal_entry(int signo)
+{
+	if (ShellContext::signaled)
+		ShellContext::signaled->onsig(signo);
+}
 
 static int decode_signum(const char *);
 MKINIT void clear_traps(union node *);
@@ -106,7 +112,7 @@ FORKRESET {
  */
 
 int
-trapcmd(int argc, char **argv)
+ShellContext::trapcmd(int argc, char **argv)
 {
 	char *action;
 	char **ap;
@@ -167,7 +173,7 @@ trapcmd(int argc, char **argv)
  * Clear traps on a fork.
  */
 
-void clear_traps(union node *n)
+void ShellContext::clear_traps(union node *n)
 {
 	int simplecmd;
 	char **tp;
@@ -202,7 +208,7 @@ void clear_traps(union node *n)
  */
 
 void
-setsignal(int signo)
+ShellContext::setsignal(int signo)
 {
 	int action;
 	int lvforked;
@@ -274,7 +280,7 @@ setsignal(int signo)
 		return;
 	switch (action) {
 	case S_CATCH:
-		act.sa_handler = onsig;
+		act.sa_handler = signal_entry;
 		break;
 	case S_IGN:
 		act.sa_handler = SIG_IGN;
@@ -294,7 +300,7 @@ setsignal(int signo)
  */
 
 void
-ignoresig(int signo)
+ShellContext::ignoresig(int signo)
 {
 	if (sigmode[signo - 1] == S_IGN || sigmode[signo - 1] == S_HARD_IGN)
 		return;
@@ -310,7 +316,7 @@ ignoresig(int signo)
  */
 
 void
-onsig(int signo)
+ShellContext::onsig(int signo)
 {
 	if (vforked && getpid() != vforked)
 		return;
@@ -338,7 +344,7 @@ onsig(int signo)
  * handlers while we are executing a trap handler.
  */
 
-void dotrap(void)
+void ShellContext::dotrap(void)
 {
 	char *p;
 	char *q;
@@ -371,7 +377,7 @@ void dotrap(void)
 		p = trap[i + 1];
 		if (!p)
 			continue;
-		evalstring(p, 0);
+		evalstring(p, {});
 		if (evalskip != SKIPFUNC)
 			exitstatus = status;
 	}
@@ -387,9 +393,8 @@ void dotrap(void)
 
 
 void
-setinteractive(int on)
+ShellContext::setinteractive(int on)
 {
-	static int is_interactive;
 
 	if (++on == is_interactive)
 		return;
@@ -406,7 +411,7 @@ setinteractive(int on)
  */
 
 void
-exitshell(void)
+ShellContext::exitshell(void)
 {
 	struct jmploc loc;
 	char *p;
@@ -421,7 +426,7 @@ exitshell(void)
 		if (ptrap)
 			goto out;
 		evalskip = 0;
-		evalstring(p, 0);
+		evalstring(p, {});
 		evalskip = SKIPFUNCDEF;
 	}
 out:
@@ -438,7 +443,7 @@ out:
 	/* NOTREACHED */
 }
 
-static int decode_signum(const char *string)
+ int ShellContext::decode_signum(const char *string)
 {
 	int signo = -1;
 
@@ -451,7 +456,7 @@ static int decode_signum(const char *string)
 	return signo;
 }
 
-int decode_signal(const char *string, int minsig)
+int ShellContext::decode_signal(const char *string, int minsig)
 {
 	int signo;
 
@@ -468,7 +473,7 @@ int decode_signal(const char *string, int minsig)
 	return -1;
 }
 
-void sigblockall(sigset_t *oldmask)
+void ShellContext::sigblockall(sigset_t *oldmask)
 {
 	sigset_t mask;
 

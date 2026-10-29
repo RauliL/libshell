@@ -48,8 +48,8 @@ static char	*getstr(void);
 static char	*mklong(const char *, const char *);
 static void      check_conversion(const char *, const char *);
 
-static int	rval;
-static char  **gargv;
+
+
 
 #define isodigit(c)	((c) >= '0' && (c) <= '7')
 #define octtobin(c)	((c) - '0')
@@ -90,7 +90,7 @@ static char  **gargv;
 })
 
 
-static int print_escape_str(const char *f, int *param, int *array, char *s)
+ int ShellContext::print_escape_str(const char *f, int *param, int *array, char *s)
 {
 	struct stackmark smark;
 	char *p, *q;
@@ -127,7 +127,7 @@ easy:
 }
 
 
-int printfcmd(int argc, char *argv[])
+int ShellContext::printfcmd(int argc, char *argv[])
 {
 	char *fmt;
 	char *format;
@@ -277,8 +277,8 @@ out:
  * Print SysV echo(1) style escape string 
  *	Halts processing string if a \c escape is encountered.
  */
-static int
-conv_escape_str(char *str, char **sp)
+ int
+ShellContext::conv_escape_str(char *str, char **sp)
 {
 	char *cp;
 	int c;
@@ -328,7 +328,7 @@ putchar:
 /*
  * Print "standard" escape characters 
  */
-unsigned conv_escape(char *str0, char *out0, bool mbchar)
+unsigned ShellContext::conv_escape(char *str0, char *out0, bool mbchar)
 {
 	char *out = out0;
 	char *str = str0;
@@ -468,8 +468,8 @@ out_noput:
 	return (out - out0) | (str - str0) << 4;
 }
 
-static char *
-mklong(const char *str, const char *ch)
+ char *
+ShellContext::mklong(const char *str, const char *ch)
 {
 	/*
 	 * Replace a string like "%92.3u" with "%92.3"PRIuMAX.
@@ -492,8 +492,8 @@ mklong(const char *str, const char *ch)
 	return (copy);	
 }
 
-static int
-getchr(void)
+ int
+ShellContext::getchr(void)
 {
 	int val = 0;
 
@@ -502,8 +502,8 @@ getchr(void)
 	return val;
 }
 
-static char *
-getstr(void)
+ char *
+ShellContext::getstr(void)
 {
 	char *val = nullstr;
 
@@ -512,8 +512,8 @@ getstr(void)
 	return val;
 }
 
-static uintmax_t
-getuintmax(int sign)
+ uintmax_t
+ShellContext::getuintmax(int sign)
 {
 	uintmax_t val = 0;
 	char *cp, *ep;
@@ -534,8 +534,8 @@ out:
 	return val;
 }
 
-static double
-getdouble(void)
+ double
+ShellContext::getdouble(void)
 {
 	double val;
 	char *cp, *ep;
@@ -554,8 +554,8 @@ getdouble(void)
 	return val;
 }
 
-static void
-check_conversion(const char *s, const char *ep)
+ void
+ShellContext::check_conversion(const char *s, const char *ep)
 {
 	if (*ep) {
 		if (ep == s)
@@ -570,7 +570,7 @@ check_conversion(const char *s, const char *ep)
 }
 
 int
-echocmd(int argc, char **argv)
+ShellContext::echocmd(int argc, char **argv)
 {
 	const char *lastfmt = snlfmt;
 	int nonl;

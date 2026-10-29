@@ -1,3 +1,5 @@
+#ifndef PARSER_H
+#define PARSER_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -97,13 +99,4 @@ char *endofname(const char *);
 const char *expandstr(const char *);
 unsigned getmbc(int c, char *out, int mode);
 
-static inline int
-goodname(const char *p)
-{
-	return !*endofname(p);
-}
-
-static inline int parser_eof(void)
-{
-	return tokpushback && lasttoken == TEOF;
-}
+#endif

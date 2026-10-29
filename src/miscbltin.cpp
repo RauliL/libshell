@@ -74,8 +74,8 @@
  *  @param ap argument (variable) list
  *  @param len length of line including trailing '\0'
  */
-static void
-readcmd_handle_line(char *s, int ac, char **ap)
+ void
+ShellContext::readcmd_handle_line(char *s, int ac, char **ap)
 {
 	struct arglist arglist;
 	struct strlist *sl;
@@ -116,7 +116,7 @@ readcmd_handle_line(char *s, int ac, char **ap)
  */
 
 int
-readcmd(int argc, char **argv)
+ShellContext::readcmd(int argc, char **argv)
 {
 	char *prompt;
 	int startloc;
@@ -211,7 +211,7 @@ start:
  */
 
 int
-umaskcmd(int argc, char **argv)
+ShellContext::umaskcmd(int argc, char **argv)
 {
 	char *ap;
 	int mask;
@@ -386,9 +386,9 @@ static const struct limits limits[] = {
 	{ (char *) 0,			0,		   0,  '\0' }
 };
 
-enum limtype { SOFT = 0x1, HARD = 0x2 };
+enum limtype : int { SOFT = 0x1, HARD = 0x2 };
 
-static void printlim(enum limtype how, const struct rlimit *limit,
+ void ShellContext::printlim(enum limtype how, const struct rlimit *limit,
 		     const struct limits *l)
 {
 	rlim_t val;
@@ -406,7 +406,7 @@ static void printlim(enum limtype how, const struct rlimit *limit,
 }
 
 int
-ulimitcmd(int argc, char **argv)
+ShellContext::ulimitcmd(int argc, char **argv)
 {
 	int	c;
 	rlim_t val = 0;

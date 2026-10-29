@@ -1,3 +1,5 @@
+#ifndef JOBS_H
+#define JOBS_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -36,6 +38,10 @@
 
 #include <inttypes.h>
 #include <sys/types.h>
+
+#ifndef JOBS
+#define JOBS 1
+#endif
 
 /* Mode argument to forkshell.  Don't change FORK_FG or FORK_BG. */
 #define FORK_FG 0
@@ -110,4 +116,5 @@ int stoppedjobs(void);
 
 #if ! JOBS
 #define setjobctl(on) ((void)(on))	/* do nothing */
+#endif
 #endif

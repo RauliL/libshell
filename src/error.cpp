@@ -59,11 +59,11 @@
  * Code to handle exceptions in C.
  */
 
-struct jmploc *handler;
-int exception;
-int suppressint;
-volatile sig_atomic_t intpending;
-int errlinno;
+
+
+
+
+
 
 
 static void exverror(int, const char *, va_list)
@@ -76,7 +76,7 @@ static void exverror(int, const char *, va_list)
  */
 
 void
-exraise(int e)
+ShellContext::exraise(int e)
 {
 #ifdef DEBUG
 	if (handler == NULL)
@@ -102,7 +102,7 @@ exraise(int e)
  */
 
 void
-onint(void) {
+ShellContext::onint(void) {
 
 	intpending = 0;
 	sigclearmask();
@@ -115,8 +115,8 @@ onint(void) {
 	/* NOTREACHED */
 }
 
-static void
-exvwarning2(const char *msg, va_list ap)
+ void
+ShellContext::exvwarning2(const char *msg, va_list ap)
 {
 	struct output *errs;
 	const char *name;
@@ -144,8 +144,8 @@ exvwarning2(const char *msg, va_list ap)
  * is not NULL then error prints an error message using printf style
  * formatting.  It then raises the error exception.
  */
-static void
-exverror(int cond, const char *msg, va_list ap)
+ void
+ShellContext::exverror(int cond, const char *msg, va_list ap)
 {
 #ifdef DEBUG
 	if (msg) {
@@ -168,7 +168,7 @@ exverror(int cond, const char *msg, va_list ap)
 
 
 void
-sh_error(const char *msg, ...)
+ShellContext::sh_error(const char *msg, ...)
 {
 	va_list ap;
 
@@ -182,7 +182,7 @@ sh_error(const char *msg, ...)
 
 
 void
-exerror(int cond, const char *msg, ...)
+ShellContext::exerror(int cond, const char *msg, ...)
 {
 	va_list ap;
 
@@ -197,7 +197,7 @@ exerror(int cond, const char *msg, ...)
  */
 
 void
-sh_warnx(const char *fmt, ...)
+ShellContext::sh_warnx(const char *fmt, ...)
 {
 	va_list ap;
 
@@ -214,7 +214,7 @@ sh_warnx(const char *fmt, ...)
  */
 
 const char *
-errmsg(int e, int action)
+ShellContext::errmsg(int e, int action)
 {
 	if (e != ENOENT && e != ENOTDIR)
 		return strerror(e);
@@ -230,7 +230,7 @@ errmsg(int e, int action)
 
 #ifdef REALLY_SMALL
 void
-__inton() {
+ShellContext::__inton() {
 	if (--suppressint == 0 && intpending) {
 		onint();
 	}

@@ -67,26 +67,26 @@
 #endif
 
 
-int evalskip;			/* set if we are skipping commands */
-STATIC int skipcount;		/* number of levels to skip */
-MKINIT int loopnest;		/* current loop nesting level */
-static int funcline;		/* starting line number of current function, or 0 if not in a function */
+			/* set if we are skipping commands */
+		/* number of levels to skip */
+		/* current loop nesting level */
+		/* starting line number of current function, or 0 if not in a function */
 
 
-char *commandname;
-int exitstatus;			/* exit status of last command */
-int back_exitstatus;		/* exit status of backquoted command */
-int savestatus = -1;		/* exit status of last command outside traps */
+
+			/* exit status of last command */
+		/* exit status of backquoted command */
+		/* exit status of last command outside traps */
 
 /* Prevent PS4 nesting. */
-MKINIT int inps4;
 
-MKINIT int tpip[2] = { -1 };
+
+
 
 #if !defined(__alpha__) || (defined(__GNUC__) && __GNUC__ >= 3)
 STATIC
 #endif
-void evaltreenr(union node *, int) __attribute__ ((__noreturn__));
+void evaltreenr(union node *, EvalFlags) __attribute__ ((__noreturn__));
 STATIC int evalloop(union node *, int);
 STATIC int evalfor(union node *, int);
 STATIC int evalcase(union node *, int);
@@ -107,7 +107,7 @@ STATIC int bltincmd(int, char **);
 
 STATIC const struct builtincmd bltin = {
 	.name = nullstr,
-	.builtin = bltincmd,
+	.builtin = &ShellContext::bltincmd,
 	.flags = BUILTIN_REGULAR,
 };
 
@@ -142,7 +142,7 @@ EXITRESET {
  * The eval commmand.
  */
 
-static int evalcmd(int argc, char **argv, int flags)
+ int ShellContext::evalcmd(int argc, char **argv, EvalFlags flags)
 {
         char *p;
         char *concat;
@@ -162,7 +162,7 @@ static int evalcmd(int argc, char **argv, int flags)
                         STPUTC('\0', concat);
                         p = grabstackstr(concat);
                 }
-                return evalstring(p, flags & EV_TESTED);
+                return evalstring(p, flags & EvalFlag::tested);
         }
         return 0;
 }
@@ -173,7 +173,7 @@ static int evalcmd(int argc, char **argv, int flags)
  */
 
 int
-evalstring(char *s, int flags)
+ShellContext::evalstring(char *s, EvalFlags flags)
 {
 	union node *n;
 	struct stackmark smark;
@@ -187,7 +187,10 @@ evalstring(char *s, int flags)
 	for (; (n = parsecmd(0)) != NEOF; popstackmark(&smark)) {
 		int i;
 
-		i = evaltree(n, flags & ~(parser_eof() ? 0 : EV_EXIT));
+		EvalFlags child = flags;
+		if (!parser_eof())
+			child.reset(EvalFlag::exit);
+		i = evaltree(n, child);
 		if (n)
 			status = i;
 
@@ -209,10 +212,10 @@ evalstring(char *s, int flags)
  */
 
 int
-evaltree(union node *n, int flags)
+ShellContext::evaltree(union node *n, EvalFlags flags)
 {
-	int checkexit = 0;
-	int (*evalfn)(union node *, int);
+	bool checkexit = false;
+	int (ShellContext::*evalfn)(union node *, EvalFlags);
 	struct stackmark smark;
 	unsigned isor;
 	int status = 0;
@@ -232,8 +235,8 @@ evaltree(union node *n, int flags)
 #ifndef SMALL
 	displayhist = 1;	/* show history substitutions done with fc */
 #endif
-	TRACE(("pid %d, evaltree(%p: %d, %d) called\n",
-	    getpid(), n, n->type, flags));
+	TRACE(("pid %d, evaltree(%p: %d, %lu) called\n",
+	    getpid(), n, n->type, flags.to_ulong()));
 	switch (n->type) {
 	default:
 #ifdef DEBUG
@@ -244,7 +247,7 @@ evaltree(union node *n, int flags)
 		break;
 #endif
 	case NNOT:
-		status = evaltree(n->nnot.com, EV_TESTED);
+		status = evaltree(n->nnot.com, EvalFlag::tested);
 		if (!evalskip)
 			status = !status;
 		break;
@@ -256,37 +259,37 @@ evaltree(union node *n, int flags)
 		pushredir(n->nredir.redirect);
 		status = redirectsafe(n->nredir.redirect, REDIR_PUSH);
 		if (status)
-			checkexit = EV_TESTED;
+			checkexit = true;
 		else
-			status = evaltree(n->nredir.n, flags & EV_TESTED);
+			status = evaltree(n->nredir.n, flags & EvalFlag::tested);
 		if (n->nredir.redirect)
 			popredir(0);
 		break;
 	case NCMD:
-		evalfn = evalcommand;
+		evalfn = &ShellContext::evalcommand;
 checkexit:
-		checkexit = EV_TESTED;
+		checkexit = true;
 		goto calleval;
 	case NFOR:
-		evalfn = evalfor;
+		evalfn = &ShellContext::evalfor;
 		goto calleval;
 	case NWHILE:
 	case NUNTIL:
-		evalfn = evalloop;
+		evalfn = &ShellContext::evalloop;
 		goto calleval;
 	case NSUBSHELL:
 	case NBACKGND:
-		evalfn = evalsubshell;
+		evalfn = &ShellContext::evalsubshell;
 		goto checkexit;
 	case NPIPE:
-		evalfn = evalpipe;
+		evalfn = &ShellContext::evalpipe;
 		goto checkexit;
 	case NCASE:
-		evalfn = evalcase;
+		evalfn = &ShellContext::evalcase;
 		goto calleval;
 	case NAND:
 	case NOR:
-	case NSEMI:
+	case NSEMI: {
 #if NAND + 1 != NOR
 #error NAND + 1 != NOR
 #endif
@@ -294,18 +297,22 @@ checkexit:
 #error NOR + 1 != NSEMI
 #endif
 		isor = n->type - NAND;
-		status = evaltree(n->nbinary.ch1,
-				  (flags | ((isor >> 1) - 1)) & EV_TESTED);
+		EvalFlags left;
+		if (n->type != NSEMI || flags.test(EvalFlag::tested))
+			left.set(EvalFlag::tested);
+		status = evaltree(n->nbinary.ch1, left);
 		if ((!status) == isor || evalskip)
 			break;
 		n = n->nbinary.ch2;
+		goto evaln;
+	}
 evaln:
-		evalfn = evaltree;
+		evalfn = &ShellContext::evaltree;
 calleval:
-		status = evalfn(n, flags);
+		status = (this->*evalfn)(n, flags);
 		break;
 	case NIF:
-		status = evaltree(n->nif.test, EV_TESTED);
+		status = evaltree(n->nif.test, EvalFlag::tested);
 		if (evalskip)
 			break;
 		if (!status) {
@@ -327,10 +334,10 @@ calleval:
 out:
 	dotrap();
 
-	if (eflag && (~flags & checkexit) && status)
+	if (eflag && checkexit && !flags.test(EvalFlag::tested) && status)
 		goto exexit;
 
-	if (flags & EV_EXIT) {
+	if (flags.test(EvalFlag::exit)) {
 exexit:
 		exraise(EXEND);
 	}
@@ -341,10 +348,7 @@ exexit:
 }
 
 
-#if !defined(__alpha__) || (defined(__GNUC__) && __GNUC__ >= 3)
-STATIC
-#endif
-void evaltreenr(union node *n, int flags)
+void ShellContext::evaltreenr(union node *n, EvalFlags flags)
 #ifdef HAVE_ATTRIBUTE_ALIAS
 	__attribute__ ((alias("evaltree")));
 #else
@@ -355,7 +359,7 @@ void evaltreenr(union node *n, int flags)
 #endif
 
 
-static int skiploop(void)
+ int ShellContext::skiploop(void)
 {
 	int skip = evalskip;
 
@@ -378,19 +382,19 @@ static int skiploop(void)
 }
 
 
-STATIC int
-evalloop(union node *n, int flags)
+ int
+ShellContext::evalloop(union node *n, EvalFlags flags)
 {
 	int skip;
 	int status;
 
 	loopnest++;
 	status = 0;
-	flags &= EV_TESTED;
+	flags &= EvalFlag::tested;
 	do {
 		int i;
 
-		i = evaltree(n->nbinary.ch1, EV_TESTED);
+		i = evaltree(n->nbinary.ch1, EvalFlag::tested);
 		skip = skiploop();
 		if (skip == SKIPFUNC)
 			status = i;
@@ -410,8 +414,8 @@ evalloop(union node *n, int flags)
 
 
 
-STATIC int
-evalfor(union node *n, int flags)
+ int
+ShellContext::evalfor(union node *n, EvalFlags flags)
 {
 	struct arglist arglist;
 	union node *argp;
@@ -430,7 +434,7 @@ evalfor(union node *n, int flags)
 
 	status = 0;
 	loopnest++;
-	flags &= EV_TESTED;
+	flags &= EvalFlag::tested;
 	for (sp = arglist.list ; sp ; sp = sp->next) {
 		setvar(n->nfor.var, sp->text, 0);
 		status = evaltree(n->nfor.body, flags);
@@ -444,8 +448,8 @@ evalfor(union node *n, int flags)
 
 
 
-STATIC int
-evalcase(union node *n, int flags)
+ int
+ShellContext::evalcase(union node *n, EvalFlags flags)
 {
 	union node *cp;
 	union node *patp;
@@ -463,7 +467,7 @@ evalcase(union node *n, int flags)
 		for (patp = cp->nclist.pattern ; patp ; patp = patp->narg.next) {
 			if (casematch(patp, arglist.list->text)) {
 				/* Ensure body is non-empty as otherwise
-				 * EV_EXIT may prevent us from setting the
+				 * EvalFlag::exit may prevent us from setting the
 				 * exit status.
 				 */
 				if (evalskip == 0 && cp->nclist.body) {
@@ -484,8 +488,8 @@ out:
  * Kick off a subshell to evaluate a tree.
  */
 
-STATIC int
-evalsubshell(union node *n, int flags)
+ int
+ShellContext::evalsubshell(union node *n, EvalFlags flags)
 {
 	struct job *jp;
 	int backgnd = (n->type == NBACKGND);
@@ -497,15 +501,15 @@ evalsubshell(union node *n, int flags)
 
 	expredir(n->nredir.redirect);
 	INTOFF;
-	if (!backgnd && flags & EV_EXIT && !have_traps()) {
+	if (!backgnd && flags.test(EvalFlag::exit) && !have_traps()) {
 		forkreset(NULL);
 		goto nofork;
 	}
 	jp = makejob(1);
 	if (forkshell(jp, n->nredir.n, backgnd) == 0) {
-		flags |= EV_EXIT;
+		flags.set(EvalFlag::exit);
 		if (backgnd)
-			flags &=~ EV_TESTED;
+			flags.reset(EvalFlag::tested);
 nofork:
 		INTON;
 		redirect(n->nredir.redirect, 0);
@@ -525,8 +529,8 @@ nofork:
  * Compute the names of the files in a redirection list.
  */
 
-STATIC void
-expredir(union node *n)
+ void
+ShellContext::expredir(union node *n)
 {
 	union node *redir;
 
@@ -562,8 +566,8 @@ expredir(union node *n)
  * of all the rest.)
  */
 
-STATIC int
-evalpipe(union node *n, int flags)
+ int
+ShellContext::evalpipe(union node *n, EvalFlags flags)
 {
 	struct job *jp;
 	struct nodelist *lp;
@@ -576,7 +580,7 @@ evalpipe(union node *n, int flags)
 	pipelen = 0;
 	for (lp = n->npipe.cmdlist ; lp ; lp = lp->next)
 		pipelen++;
-	flags |= EV_EXIT;
+	flags.set(EvalFlag::exit);
 	INTOFF;
 	jp = makejob(pipelen);
 	prevfd = -1;
@@ -630,7 +634,7 @@ evalpipe(union node *n, int flags)
  */
 
 void
-evalbackcmd(union node *n, struct backcmd *result)
+ShellContext::evalbackcmd(union node *n, struct backcmd *result)
 {
 	struct job *jp;
 	int pip[2];
@@ -658,7 +662,7 @@ evalbackcmd(union node *n, struct backcmd *result)
 			close(pip[1]);
 		}
 		ifsfree();
-		evaltreenr(n, EV_EXIT);
+		evaltreenr(n, EvalFlag::exit);
 		/* NOTREACHED */
 	}
 	close(pip[1]);
@@ -670,7 +674,7 @@ out:
 		result->fd, result->buf, result->nleft, result->jp));
 }
 
-static struct strlist *fill_arglist(struct arglist *arglist,
+ struct strlist *ShellContext::fill_arglist(struct arglist *arglist,
 				    union node **argpp)
 {
 	struct strlist **lastp = arglist->lastp;
@@ -686,7 +690,7 @@ static struct strlist *fill_arglist(struct arglist *arglist,
 	return *lastp;
 }
 
-static int parse_command_args(struct arglist *arglist, union node **argpp,
+ int ShellContext::parse_command_args(struct arglist *arglist, union node **argpp,
 			      const char **path)
 {
 	struct strlist *sp = arglist->list;
@@ -728,11 +732,11 @@ static int parse_command_args(struct arglist *arglist, union node **argpp,
  * Execute a simple command.
  */
 
-STATIC int
+ int
 #ifdef notyet
 evalcommand(union node *cmd, int flags, struct backcmd *backcmd)
 #else
-evalcommand(union node *cmd, int flags)
+ShellContext::evalcommand(union node *cmd, EvalFlags flags)
 #endif
 {
 	struct localvar_list *localvar_stop;
@@ -911,7 +915,7 @@ bail:
 		flush_input();
 
 		/* Fork off a child process if necessary. */
-		if (!(flags & EV_EXIT) || have_traps()) {
+		if (!flags.test(EvalFlag::exit) || have_traps()) {
 			INTOFF;
 			jp = vforkexec(cmd, argv, path, cmdentry.u.index);
 			break;
@@ -952,8 +956,8 @@ out:
 	return status;
 }
 
-STATIC int
-evalbltin(const struct builtincmd *cmd, int argc, char **argv, int flags)
+ int
+ShellContext::evalbltin(const struct builtincmd *cmd, int argc, char **argv, EvalFlags flags)
 {
 	char *volatile savecmdname;
 	struct jmploc *volatile savehandler;
@@ -972,7 +976,7 @@ evalbltin(const struct builtincmd *cmd, int argc, char **argv, int flags)
 	if (cmd == EVALCMD)
 		status = evalcmd(argc, argv, flags);
 	else
-		status = (*cmd->builtin)(argc, argv);
+		status = (this->*cmd->builtin)(argc, argv);
 	flushall();
 	if (outerr(out1))
 		sh_warnx("%s: I/O error", commandname);
@@ -986,8 +990,8 @@ cmddone:
 	return i;
 }
 
-STATIC int
-evalfun(struct funcnode *func, int argc, char **argv, int flags)
+ int
+ShellContext::evalfun(struct funcnode *func, int argc, char **argv, EvalFlags flags)
 {
 	volatile struct shparam saveparam;
 	struct jmploc *volatile savehandler;
@@ -1014,7 +1018,7 @@ evalfun(struct funcnode *func, int argc, char **argv, int flags)
 	shellparam.p = argv + 1;
 	shellparam.optind = 1;
 	shellparam.optoff = -1;
-	evaltree(func->n.ndefun.body, flags & EV_TESTED);
+	evaltree(func->n.ndefun.body, flags & EvalFlag::tested);
 funcdone:
 	INTOFF;
 	loopnest = saveloopnest;
@@ -1036,8 +1040,8 @@ funcdone:
  * check that the name will not be subject to expansion.
  */
 
-STATIC void
-prehash(union node *n)
+ void
+ShellContext::prehash(union node *n)
 {
 	struct cmdentry entry;
 
@@ -1058,8 +1062,8 @@ prehash(union node *n)
  * No command given.
  */
 
-STATIC int
-bltincmd(int argc, char **argv)
+ int
+ShellContext::bltincmd(int argc, char **argv)
 {
 	/*
 	 * Preserve exitstatus of a previous possible redirection
@@ -1081,7 +1085,7 @@ bltincmd(int argc, char **argv)
  */
 
 int
-breakcmd(int argc, char **argv)
+ShellContext::breakcmd(int argc, char **argv)
 {
 	int n = argc > 1 ? number(argv[1]) : 1;
 
@@ -1102,7 +1106,7 @@ breakcmd(int argc, char **argv)
  */
 
 int
-returncmd(int argc, char **argv)
+ShellContext::returncmd(int argc, char **argv)
 {
 	int skip;
 	int status;
@@ -1125,21 +1129,21 @@ returncmd(int argc, char **argv)
 
 
 int
-falsecmd(int argc, char **argv)
+ShellContext::falsecmd(int argc, char **argv)
 {
 	return 1;
 }
 
 
 int
-truecmd(int argc, char **argv)
+ShellContext::truecmd(int argc, char **argv)
 {
 	return 0;
 }
 
 
 int
-execcmd(int argc, char **argv)
+ShellContext::execcmd(int argc, char **argv)
 {
 	if (argc > 1) {
 		iflag = 0;		/* exit on error */
@@ -1152,8 +1156,8 @@ execcmd(int argc, char **argv)
 }
 
 
-STATIC int
-eprintlist(struct output *out, struct strlist *sp, int sep)
+ int
+ShellContext::eprintlist(struct output *out, struct strlist *sp, int sep)
 {
 	while (sp) {
 		const char *p;

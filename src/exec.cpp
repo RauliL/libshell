@@ -87,8 +87,8 @@ struct tblentry {
 };
 
 
-STATIC struct tblentry *cmdtable[CMDTABLESIZE];
-STATIC int builtinloc = -1;		/* index in path of %builtin, or -1 */
+
+		/* index in path of %builtin, or -1 */
 
 
 STATIC void tryexec(char *, char **, char **);
@@ -106,7 +106,7 @@ STATIC int describe_command(struct output *, char *, const char *, int);
  */
 
 void
-shellexec(char **argv, const char *path, int idx)
+ShellContext::shellexec(char **argv, const char *path, int idx)
 {
 	char *cmdname;
 	int e;
@@ -149,8 +149,8 @@ shellexec(char **argv, const char *path, int idx)
 }
 
 
-STATIC void
-tryexec(char *cmd, char **argv, char **envp)
+ void
+ShellContext::tryexec(char *cmd, char **argv, char **envp)
 {
 	char *const path_bshell = _PATH_BSHELL;
 
@@ -169,7 +169,7 @@ repeat:
 	}
 }
 
-static const char *legal_pathopt(const char *opt, const char *term, int magic)
+ const char *ShellContext::legal_pathopt(const char *opt, const char *term, int magic)
 {
 	switch (magic) {
 	case 0:
@@ -205,9 +205,9 @@ static const char *legal_pathopt(const char *opt, const char *term, int magic)
  * pathopt.
  */
 
-const char *pathopt;
 
-int padvance_magic(const char **path, const char *name, int magic)
+
+int ShellContext::padvance_magic(const char **path, const char *name, int magic)
 {
 	const char *term = "%:";
 	const char *lpathopt;
@@ -265,7 +265,7 @@ int padvance_magic(const char **path, const char *name, int magic)
 
 
 int
-hashcmd(int argc, char **argv)
+ShellContext::hashcmd(int argc, char **argv)
 {
 	struct tblentry **pp;
 	struct tblentry *cmdp;
@@ -308,8 +308,8 @@ hashcmd(int argc, char **argv)
 }
 
 
-STATIC void
-printentry(struct tblentry *cmdp)
+ void
+ShellContext::printentry(struct tblentry *cmdp)
 {
 	int idx;
 	const char *path;
@@ -325,7 +325,7 @@ printentry(struct tblentry *cmdp)
 	out1fmt(snlfmt, cmdp->rehash ? "*" : nullstr);
 }
 
-static int test_exec(const char *fullname, struct stat64 *statb)
+ int ShellContext::test_exec(const char *fullname, struct stat64 *statb)
 {
 	if (!S_ISREG(statb->st_mode))
 		return 0;
@@ -348,7 +348,7 @@ static int test_exec(const char *fullname, struct stat64 *statb)
  */
 
 void
-find_command(char *name, struct cmdentry *entry, int act, const char *path)
+ShellContext::find_command(char *name, struct cmdentry *entry, int act, const char *path)
 {
 	struct tblentry *cmdp;
 	int idx;
@@ -529,7 +529,7 @@ success:
  */
 
 struct builtincmd *
-find_builtin(const char *name)
+ShellContext::find_builtin(const char *name)
 {
 	struct builtincmd *bp;
 
@@ -548,7 +548,7 @@ find_builtin(const char *name)
  */
 
 void
-hashcd(void)
+ShellContext::hashcd(void)
 {
 	struct tblentry **pp;
 	struct tblentry *cmdp;
@@ -575,7 +575,7 @@ hashcd(void)
  */
 
 void
-changepath(const char *newval)
+ShellContext::changepath(const char *newval)
 {
 	const char *scan;
 	int idx;
@@ -605,8 +605,8 @@ changepath(const char *newval)
  * PATH which has changed.
  */
 
-STATIC void
-clearcmdentry(void)
+ void
+ShellContext::clearcmdentry(void)
 {
 	struct tblentry **tblp;
 	struct tblentry **pp;
@@ -642,11 +642,11 @@ clearcmdentry(void)
  * Interrupts must be off if called with add != 0.
  */
 
-struct tblentry **lastcmdentry;
 
 
-STATIC struct tblentry *
-cmdlookup(const char *name, int add)
+
+ struct tblentry *
+ShellContext::cmdlookup(const char *name, int add)
 {
 	unsigned int hashval;
 	const char *p;
@@ -679,8 +679,8 @@ cmdlookup(const char *name, int add)
  * Delete the command entry returned on the last lookup.
  */
 
-STATIC void
-delete_cmd_entry(void)
+ void
+ShellContext::delete_cmd_entry(void)
 {
 	struct tblentry *cmdp;
 
@@ -697,7 +697,7 @@ delete_cmd_entry(void)
 
 #ifdef notdef
 void
-getcmdentry(char *name, struct cmdentry *entry)
+ShellContext::getcmdentry(char *name, struct cmdentry *entry)
 {
 	struct tblentry *cmdp = cmdlookup(name, 0);
 
@@ -717,8 +717,8 @@ getcmdentry(char *name, struct cmdentry *entry)
  * the same name - except special builtins.
  */
 
-STATIC void
-addcmdentry(char *name, struct cmdentry *entry)
+ void
+ShellContext::addcmdentry(char *name, struct cmdentry *entry)
 {
 	struct tblentry *cmdp;
 
@@ -737,7 +737,7 @@ addcmdentry(char *name, struct cmdentry *entry)
  */
 
 void
-defun(union node *func)
+ShellContext::defun(union node *func)
 {
 	struct cmdentry entry;
 
@@ -754,7 +754,7 @@ defun(union node *func)
  */
 
 void
-unsetfunc(const char *name)
+ShellContext::unsetfunc(const char *name)
 {
 	struct tblentry *cmdp;
 
@@ -768,7 +768,7 @@ unsetfunc(const char *name)
  */
 
 int
-typecmd(int argc, char **argv)
+ShellContext::typecmd(int argc, char **argv)
 {
 	int err = 0;
 
@@ -779,7 +779,7 @@ typecmd(int argc, char **argv)
 	return err;
 }
 
-static int describe_command(struct output *out, char *command,
+ int ShellContext::describe_command(struct output *out, char *command,
                             const char *path, int verbose)
 {
 	struct cmdentry entry;
@@ -881,7 +881,7 @@ out:
 	return 0;
 }
 
-int commandcmd(int argc, char **argv)
+int ShellContext::commandcmd(int argc, char **argv)
 {
 	char *cmd;
 	int c;

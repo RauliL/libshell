@@ -85,24 +85,24 @@
 #define DOWAIT_WAITCMD_ALL 4
 
 /* array of jobs */
-static struct job *jobtab;
+
 /* size of array */
-static unsigned njobs;
+
 /* pid of last background process */
-pid_t backgndpid;
+
 
 #if JOBS
 /* pgrp of shell on invocation */
-static int initialpgrp;
+
 /* control terminal */
-static int ttyfd = -1;
+
 #endif
 
 /* current job */
-static struct job *curjob;
+
 
 /* Set if we are in the vforked child */
-int vforked;
+
 
 STATIC void set_curjob(struct job *, unsigned);
 STATIC int jobno(const struct job *);
@@ -129,8 +129,8 @@ static int restartjob(struct job *, int);
 static void xtcsetpgrp(int, pid_t);
 #endif
 
-STATIC void
-set_curjob(struct job *jp, unsigned mode)
+ void
+ShellContext::set_curjob(struct job *jp, unsigned mode)
 {
 	struct job *jp1;
 	struct job **jpp, **curp;
@@ -186,9 +186,9 @@ set_curjob(struct job *jp, unsigned mode)
  * Called with interrupts off.
  */
 
-int jobctl;
 
-static void xxtcsetpgrp(pid_t pgrp)
+
+ void ShellContext::xxtcsetpgrp(pid_t pgrp)
 {
 	int fd = ttyfd;
 
@@ -199,7 +199,7 @@ static void xxtcsetpgrp(pid_t pgrp)
 }
 
 void
-setjobctl(int on)
+ShellContext::setjobctl(int on)
 {
 	int pgrp = -1;
 	int fd;
@@ -261,7 +261,7 @@ out:
 #endif
 
 
-int killcmd(int argc, char **argv)
+int ShellContext::killcmd(int argc, char **argv)
 {
 	extern const char *const signal_names[];
 	int signo = -1;
@@ -353,15 +353,15 @@ usage:
 	return i;
 }
 
-STATIC int
-jobno(const struct job *jp)
+ int
+ShellContext::jobno(const struct job *jp)
 {
 	return jp - jobtab + 1;
 }
 
 #if JOBS
 int
-fgcmd(int argc, char **argv)
+ShellContext::fgcmd(int argc, char **argv)
 {
 	struct job *jp;
 	struct output *out;
@@ -385,7 +385,7 @@ fgcmd(int argc, char **argv)
 	return retval;
 }
 
-int bgcmd(int argc, char **argv)
+int ShellContext::bgcmd(int argc, char **argv)
 #ifdef HAVE_ALIAS_ATTRIBUTE
 	__attribute__((__alias__("fgcmd")));
 #else
@@ -395,8 +395,8 @@ int bgcmd(int argc, char **argv)
 #endif
 
 
-STATIC int
-restartjob(struct job *jp, int mode)
+ int
+ShellContext::restartjob(struct job *jp, int mode)
 {
 	struct procstat *ps;
 	int i;
@@ -425,8 +425,8 @@ out:
 }
 #endif
 
-STATIC int
-sprint_status(char *os, int status, int sigonly)
+ int
+ShellContext::sprint_status(char *os, int status, int sigonly)
 {
 	char *s = os;
 	int st;
@@ -463,8 +463,8 @@ out:
 	return s - os;
 }
 
-static void
-showjob(struct output *out, struct job *jp, int mode)
+ void
+ShellContext::showjob(struct output *out, struct job *jp, int mode)
 {
 	struct procstat *ps;
 	struct procstat *psend;
@@ -536,7 +536,7 @@ start:
 
 
 int
-jobscmd(int argc, char **argv)
+ShellContext::jobscmd(int argc, char **argv)
 {
 	int mode, m;
 	struct output *out;
@@ -567,7 +567,7 @@ jobscmd(int argc, char **argv)
  */
 
 void
-showjobs(struct output *out, int mode)
+ShellContext::showjobs(struct output *out, int mode)
 {
 	struct job *jp;
 
@@ -586,8 +586,8 @@ showjobs(struct output *out, int mode)
  * Mark a job structure as unused.
  */
 
-STATIC void
-freejob(struct job *jp)
+ void
+ShellContext::freejob(struct job *jp)
 {
 	struct procstat *ps;
 	int i;
@@ -607,7 +607,7 @@ freejob(struct job *jp)
 
 
 int
-waitcmd(int argc, char **argv)
+ShellContext::waitcmd(int argc, char **argv)
 {
 	struct job *job;
 	int retval;
@@ -675,8 +675,8 @@ sigout:
  * Convert a job name to a job structure.
  */
 
-STATIC struct job *
-getjob(const char *name, int getctl)
+ struct job *
+ShellContext::getjob(const char *name, int getctl)
 {
 	struct job *jp;
 	struct job *found;
@@ -765,7 +765,7 @@ err:
  * Called with interrupts off.
  */
 
-struct job *makejob(int nprocs)
+struct job *ShellContext::makejob(int nprocs)
 {
 	struct procstat *ps;
 	struct job *jp;
@@ -802,8 +802,8 @@ struct job *makejob(int nprocs)
 	return jp;
 }
 
-STATIC struct job *
-growjobtab(void)
+ struct job *
+ShellContext::growjobtab(void)
 {
 	size_t len;
 	ptrdiff_t offset;
@@ -864,7 +864,7 @@ growjobtab(void)
  * Called with interrupts off.
  */
 
-static void forkchild(struct job *jp, union node *n, int mode)
+ void ShellContext::forkchild(struct job *jp, union node *n, int mode)
 {
 	int lvforked;
 	int oldlvl;
@@ -934,7 +934,7 @@ static void forkchild(struct job *jp, union node *n, int mode)
 		freejob(jp);
 }
 
-static void forkparent(struct job *jp, union node *n, int mode, pid_t pid)
+ void ShellContext::forkparent(struct job *jp, union node *n, int mode, pid_t pid)
 {
 	if (pid < 0) {
 		TRACE(("Fork failed, errno=%d", errno));
@@ -974,7 +974,7 @@ static void forkparent(struct job *jp, union node *n, int mode, pid_t pid)
 }
 
 int
-forkshell(struct job *jp, union node *n, int mode)
+ShellContext::forkshell(struct job *jp, union node *n, int mode)
 {
 	int pid;
 
@@ -991,7 +991,7 @@ forkshell(struct job *jp, union node *n, int mode)
 	return pid;
 }
 
-struct job *vforkexec(union node *n, char **argv, const char *path, int idx)
+struct job *ShellContext::vforkexec(union node *n, char **argv, const char *path, int idx)
 {
 	struct job *jp;
 	int pid;
@@ -1038,7 +1038,7 @@ struct job *vforkexec(union node *n, char **argv, const char *path, int idx)
  */
 
 int
-waitforjob(struct job *jp)
+ShellContext::waitforjob(struct job *jp)
 {
 	int st;
 
@@ -1074,7 +1074,7 @@ waitforjob(struct job *jp)
  * Wait for a process to terminate.
  */
 
-static int waitone(int block, struct job *job)
+ int ShellContext::waitone(int block, struct job *job)
 {
 	int pid;
 	int status;
@@ -1151,7 +1151,7 @@ out:
 	return pid;
 }
 
-static int dowait(int block, struct job *jp)
+ int ShellContext::dowait(int block, struct job *jp)
 {
 	int gotchld = *(volatile int *)&gotsigchld;
 	int rpid;
@@ -1193,8 +1193,8 @@ static int dowait(int block, struct job *jp)
  */
 
 
-STATIC int
-waitproc(int block, int *status)
+ int
+ShellContext::waitproc(int block, int *status)
 {
 	sigset_t oldmask;
 	int flags = block == DOWAIT_BLOCK ? 0 : WNOHANG;
@@ -1232,9 +1232,9 @@ waitproc(int block, int *status)
 /*
  * return 1 if there are stopped jobs, otherwise 0
  */
-int job_warning;
+
 int
-stoppedjobs(void)
+ShellContext::stoppedjobs(void)
 {
 	struct job *jp;
 	int retval;
@@ -1260,10 +1260,10 @@ out:
  * jobs command).
  */
 
-STATIC char *cmdnextc;
 
-STATIC char *
-commandtext(union node *n)
+
+ char *
+ShellContext::commandtext(union node *n)
 {
 	char *name;
 
@@ -1274,8 +1274,8 @@ commandtext(union node *n)
 	return savestr(name);
 }
 
-STATIC void
-cmdtxt(union node *n)
+ void
+ShellContext::cmdtxt(union node *n)
 {
 	union node *np;
 	struct nodelist *lp;
@@ -1428,8 +1428,8 @@ redir:
 	}
 }
 
-STATIC void
-cmdlist(union node *np, int sep)
+ void
+ShellContext::cmdlist(union node *np, int sep)
 {
 	for (; np; np = np->narg.next) {
 		if (!sep)
@@ -1441,8 +1441,8 @@ cmdlist(union node *np, int sep)
 }
 
 
-STATIC void
-cmdputs(const char *s)
+ void
+ShellContext::cmdputs(const char *s)
 {
 	const char *p, *str;
 	char cc[2] = " ";
@@ -1529,8 +1529,8 @@ dostr:
 }
 
 
-STATIC void
-showpipe(struct job *jp, struct output *out)
+ void
+ShellContext::showpipe(struct job *jp, struct output *out)
 {
 	struct procstat *sp;
 	struct procstat *spend;
@@ -1544,8 +1544,8 @@ showpipe(struct job *jp, struct output *out)
 
 
 #if JOBS
-STATIC void
-xtcsetpgrp(int fd, pid_t pgrp)
+ void
+ShellContext::xtcsetpgrp(int fd, pid_t pgrp)
 {
 	int err;
 
@@ -1559,8 +1559,8 @@ xtcsetpgrp(int fd, pid_t pgrp)
 #endif
 
 
-STATIC int
-getstatus(struct job *job) {
+ int
+ShellContext::getstatus(struct job *job) {
 	int status;
 	int retval;
 	struct procstat *ps;

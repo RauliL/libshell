@@ -1,3 +1,5 @@
+#ifndef MACHDEP_H
+#define MACHDEP_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -50,3 +52,4 @@ union shell_align {
  * because stalloc() will return a string allocated in a new stackblock.
  */
 #define SHELL_ALIGN(nbytes) (((nbytes) + SHELL_SIZE) & ~SHELL_SIZE)
+#endif

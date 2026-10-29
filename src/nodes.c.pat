@@ -47,10 +47,10 @@
 #include "system.h"
 
 
-int     funcblocksize;		/* size of structures in function */
-int     funcstringsize;		/* size of strings in node */
-pointer funcblock;		/* block to allocate function from */
-char   *funcstring;		/* block to allocate strings from */
+		/* size of structures in function */
+		/* size of strings in node */
+		/* block to allocate function from */
+		/* block to allocate strings from */
 
 %SIZES
 
@@ -68,7 +68,7 @@ STATIC char *nodesavestr(char *);
  */
 
 struct funcnode *
-copyfunc(union node *n)
+ShellContext::copyfunc(union node *n)
 {
 	struct funcnode *f;
 	size_t blocksize;
@@ -87,14 +87,14 @@ copyfunc(union node *n)
 
 
 
-static void calcsize(union node *n)
+ void ShellContext::calcsize(union node *n)
 {
 	%CALCSIZE
 }
 
 
 
-static void sizenodelist(struct nodelist *lp)
+ void ShellContext::sizenodelist(struct nodelist *lp)
 {
 	while (lp) {
 		funcblocksize += SHELL_ALIGN(sizeof(struct nodelist));
@@ -105,7 +105,7 @@ static void sizenodelist(struct nodelist *lp)
 
 
 
-static union node *copynode(union node *n)
+ union node *ShellContext::copynode(union node *n)
 {
 	union node *copied;
 
@@ -114,7 +114,7 @@ static union node *copynode(union node *n)
 }
 
 
-static struct nodelist *copynodelist(struct nodelist *lp)
+ struct nodelist *ShellContext::copynodelist(struct nodelist *lp)
 {
 	struct nodelist *start;
 	struct nodelist **lpp;
@@ -134,7 +134,7 @@ static struct nodelist *copynodelist(struct nodelist *lp)
 
 
 
-static char *nodesavestr(char *s)
+ char *ShellContext::nodesavestr(char *s)
 {
 	char   *rtn = funcstring;
 
@@ -149,7 +149,7 @@ static char *nodesavestr(char *s)
  */
 
 void
-freefunc(struct funcnode *f)
+ShellContext::freefunc(struct funcnode *f)
 {
 	if (f && --f->count < 0)
 		ckfree(f);

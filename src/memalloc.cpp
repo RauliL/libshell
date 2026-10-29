@@ -44,12 +44,12 @@
 #include "mystring.h"
 #include "system.h"
 
-static __attribute__((__always_inline__)) inline void outofspace(void)
+ __attribute__((__always_inline__)) inline void ShellContext::outofspace(void)
 {
 	sh_error("Out of space");
 }
 
-static rawmem checknull(void *p)
+ rawmem ShellContext::checknull(void *p)
 {
 	if (!p)
 		outofspace();
@@ -60,7 +60,7 @@ static rawmem checknull(void *p)
  * Like malloc, but returns an error when out of space.
  */
 
-__attribute__((__noinline__)) rawmem ckmalloc(std::size_t nbytes)
+__attribute__((__noinline__)) rawmem ShellContext::ckmalloc(std::size_t nbytes)
 {
 	return checknull(std::malloc(nbytes));
 }
@@ -70,7 +70,7 @@ __attribute__((__noinline__)) rawmem ckmalloc(std::size_t nbytes)
  * Same for realloc.
  */
 
-__attribute__((__noinline__)) rawmem ckrealloc(void *p, std::size_t nbytes)
+__attribute__((__noinline__)) rawmem ShellContext::ckrealloc(void *p, std::size_t nbytes)
 {
 	return checknull(std::realloc(p, nbytes));
 }
@@ -81,7 +81,7 @@ __attribute__((__noinline__)) rawmem ckrealloc(void *p, std::size_t nbytes)
  */
 
 char *
-savestr(const char *s)
+ShellContext::savestr(const char *s)
 {
 	return checknull(::strdup(s));
 }
@@ -96,21 +96,13 @@ savestr(const char *s)
  * well.
  */
 
-/* minimum size of a block */
-#define MINSIZE SHELL_ALIGN(504)
 
-struct stack_block {
-	struct stack_block *prev;
-	char space[MINSIZE];
-};
 
-struct stack_block stackbase;
-struct stack_block *stackp = &stackbase;
-char *stacknxt = stackbase.space;
-size_t stacknleft = MINSIZE;
-char *sstrend = stackbase.space + MINSIZE;
 
-rawmem stalloc(std::size_t nbytes)
+
+
+
+rawmem ShellContext::stalloc(std::size_t nbytes)
 {
 	char *p;
 	size_t aligned;
@@ -143,7 +135,7 @@ rawmem stalloc(std::size_t nbytes)
 }
 
 
-void stunalloc(void *p)
+void ShellContext::stunalloc(void *p)
 {
 #ifdef DEBUG
 	if (!p || (stacknxt < (char *)p) || ((char *)p < stackp->space)) {
@@ -157,7 +149,7 @@ void stunalloc(void *p)
 
 
 
-__attribute__((__noinline__)) void pushstackmark(struct stackmark *mark,
+__attribute__((__noinline__)) void ShellContext::pushstackmark(struct stackmark *mark,
 						 size_t len)
 {
 	mark->stackp = stackp;
@@ -166,14 +158,14 @@ __attribute__((__noinline__)) void pushstackmark(struct stackmark *mark,
 	grabstackblock(len);
 }
 
-void setstackmark(struct stackmark *mark)
+void ShellContext::setstackmark(struct stackmark *mark)
 {
 	pushstackmark(mark, stacknxt == stackp->space && stackp != &stackbase);
 }
 
 
 void
-popstackmark(struct stackmark *mark)
+ShellContext::popstackmark(struct stackmark *mark)
 {
 	struct stack_block *sp;
 
@@ -200,7 +192,7 @@ popstackmark(struct stackmark *mark)
  * part of the block that has been used.
  */
 
-static char *growstackblock(size_t min)
+ char *ShellContext::growstackblock(size_t min)
 {
 	size_t newlen;
 	char *p;
@@ -261,14 +253,14 @@ static char *growstackblock(size_t min)
  */
 
 rawmem
-growstackstr()
+ShellContext::growstackstr()
 {
 	size_t len = stackblocksize();
 
 	return {growstackblock(0) + len};
 }
 
-__attribute__((__noinline__)) char *growstackto(size_t len)
+__attribute__((__noinline__)) char *ShellContext::growstackto(size_t len)
 {
 	if (stackblocksize() < len)
 		return growstackblock(len);
@@ -279,14 +271,14 @@ __attribute__((__noinline__)) char *growstackto(size_t len)
  * Called from CHECKSTRSPACE.
  */
 
-__attribute__((__noinline__)) char *makestrspace(size_t newlen, char *p)
+__attribute__((__noinline__)) char *ShellContext::makestrspace(size_t newlen, char *p)
 {
 	size_t len = p - stacknxt;
 
 	return growstackto(len + newlen) + len;
 }
 
-__attribute__((__noinline__)) char *stnputs(const char *s, size_t n, char *p)
+__attribute__((__noinline__)) char *ShellContext::stnputs(const char *s, size_t n, char *p)
 {
 	p = makestrspace(n, p);
 	p = static_cast<char *>(mempcpy(p, s, n));
@@ -294,7 +286,7 @@ __attribute__((__noinline__)) char *stnputs(const char *s, size_t n, char *p)
 }
 
 char *
-stputs(const char *s, char *p)
+ShellContext::stputs(const char *s, char *p)
 {
 	return stnputs(s, strlen(s), p);
 }

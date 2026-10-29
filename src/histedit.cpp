@@ -59,15 +59,15 @@
 #define MAXHISTLOOPS	4	/* max recursions through fc */
 #define DEFEDITOR	"ed"	/* default editor *should* be $EDITOR */
 
-History *hist;	/* history cookie */
-EditLine *el;	/* editline cookie */
-int displayhist;
-static FILE *el_in, *el_out;
+	/* history cookie */
+	/* editline cookie */
+
+
 
 STATIC const char *fc_replace(const char *, char *, char *);
 
 #ifdef DEBUG
-extern FILE *tracefile;
+
 #endif
 
 /*
@@ -75,7 +75,7 @@ extern FILE *tracefile;
  * have changed (figures out what to do).
  */
 void
-histedit(void)
+ShellContext::histedit(void)
 {
 	FILE *el_err;
 
@@ -115,7 +115,9 @@ histedit(void)
 			if (el != NULL) {
 				if (hist)
 					el_set(el, EL_HIST, history, hist);
-				el_set(el, EL_PROMPT_ESC, getprompt, '\1');
+				el_set(el, EL_PROMPT_ESC, [](void *p) -> const char * {
+				return ShellContext::signaled->getprompt(p);
+			}, '\1');
 			} else {
 bad:
 				out2str("sh: can't initialize editing\n");
@@ -150,7 +152,7 @@ bad:
 
 
 void
-sethistsize(const char *hs)
+ShellContext::sethistsize(const char *hs)
 {
 	int histsize;
 	HistEvent he;
@@ -164,7 +166,7 @@ sethistsize(const char *hs)
 }
 
 void
-setterm(const char *term)
+ShellContext::setterm(const char *term)
 {
 	if (el != NULL && term != NULL)
 		if (el_set(el, EL_TERMINAL, term) != 0) {
@@ -178,7 +180,7 @@ setterm(const char *term)
  *  the Korn shell fc command.  Oh well...
  */
 int
-histcmd(int argc, char **argv)
+ShellContext::histcmd(int argc, char **argv)
 {
 	int ch;
 	const char *editor = NULL;
@@ -188,7 +190,6 @@ histcmd(int argc, char **argv)
 	const char *firststr, *laststr;
 	int first, last, direction;
 	char *pat = NULL, *repl;	/* ksh "fc old=new" crap */
-	static int active = 0;
 	struct jmploc jmploc;
 	struct jmploc *volatile savehandler;
 	char editfile[MAXPATHLEN + 1];
@@ -257,7 +258,7 @@ histcmd(int argc, char **argv)
 		 * cleanup temp files.
 		 */
 		if (setjmp(jmploc.loc)) {
-			active = 0;
+			fc_active = 0;
 			if (*editfile)
 				unlink(editfile);
 			handler = savehandler;
@@ -265,8 +266,8 @@ histcmd(int argc, char **argv)
 		}
 		savehandler = handler;
 		handler = &jmploc;
-		if (++active > MAXHISTLOOPS) {
-			active = 0;
+		if (++fc_active > MAXHISTLOOPS) {
+			fc_active = 0;
 			displayhist = 0;
 			sh_error("called recursively too many times");
 		}
@@ -375,7 +376,7 @@ histcmd(int argc, char **argv)
 					out2str(s);
 				}
 
-				evalstring(s, 0);
+				evalstring(s, {});
 				if (displayhist && hist) {
 					history(hist, &he, H_ENTER, s);
 				}
@@ -398,21 +399,21 @@ histcmd(int argc, char **argv)
 		editcmd = stalloc(strlen(editor) + strlen(editfile) + 2);
 		sprintf(editcmd, "%s %s", editor, editfile);
 		/* XXX - should use no JC command */
-		evalstring(editcmd, 0);
+		evalstring(editcmd, {});
 		INTON;
 		readcmdfile(editfile);	/* XXX - should read back - quick tst */
 		unlink(editfile);
 	}
 
-	if (lflg == 0 && active > 0)
-		--active;
+	if (lflg == 0 && fc_active > 0)
+		--fc_active;
 	if (displayhist)
 		displayhist = 0;
 	return 0;
 }
 
-STATIC const char *
-fc_replace(const char *s, char *p, char *r)
+ const char *
+ShellContext::fc_replace(const char *s, char *p, char *r)
 {
 	char *dest;
 	int plen = strlen(p);
@@ -434,7 +435,7 @@ fc_replace(const char *s, char *p, char *r)
 }
 
 int
-not_fcnumber(char *s)
+ShellContext::not_fcnumber(char *s)
 {
 	if (s == NULL)
 		return 0;
@@ -444,7 +445,7 @@ not_fcnumber(char *s)
 }
 
 int
-str_to_event(const char *str, int last)
+ShellContext::str_to_event(const char *str, int last)
 {
 	HistEvent he;
 	const char *s = str;

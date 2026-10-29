@@ -69,11 +69,11 @@ STATIC const char *updatepwd(const char *);
 STATIC char *getpwd(void);
 STATIC int cdopt(void);
 
-STATIC char *curdir = nullstr;		/* current working directory */
-STATIC char *physdir = nullstr;		/* physical working directory */
+		/* current working directory */
+		/* physical working directory */
 
-STATIC int
-cdopt()
+ int
+ShellContext::cdopt()
 {
 	int flags = 0;
 	int i, j;
@@ -90,7 +90,7 @@ cdopt()
 }
 
 int
-cdcmd(int argc, char **argv)
+ShellContext::cdcmd(int argc, char **argv)
 {
 	const char *dest;
 	const char *path;
@@ -161,8 +161,8 @@ out:
  * know that the current directory has changed.
  */
 
-STATIC int
-docd(const char *dest, int flags)
+ int
+ShellContext::docd(const char *dest, int flags)
 {
 	const char *dir = 0;
 	int err;
@@ -191,8 +191,8 @@ out:
  * cd command.
  */
 
-STATIC const char *
-updatepwd(const char *dir)
+ const char *
+ShellContext::updatepwd(const char *dir)
 {
 	char *updated;
 	char *p;
@@ -265,8 +265,8 @@ updatepwd(const char *dir)
  * directory, this routine returns immediately.
  */
 inline
-STATIC char *
-getpwd()
+ char *
+ShellContext::getpwd()
 {
 #ifdef __GLIBC__
 	char *dir = getcwd(0, 0);
@@ -285,7 +285,7 @@ getpwd()
 }
 
 int
-pwdcmd(int argc, char **argv)
+ShellContext::pwdcmd(int argc, char **argv)
 {
 	int flags;
 	const char *dir = curdir;
@@ -301,7 +301,7 @@ pwdcmd(int argc, char **argv)
 }
 
 void
-setpwd(const char *val, int setold)
+ShellContext::setpwd(const char *val, int setold)
 {
 	char *oldcur, *dir;
 

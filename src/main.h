@@ -1,3 +1,5 @@
+#ifndef MAIN_H
+#define MAIN_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -54,3 +56,4 @@ extern int *dash_errno;
 void readcmdfile(char *);
 int dotcmd(int, char **);
 int exitcmd(int, char **);
+#endif

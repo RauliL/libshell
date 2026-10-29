@@ -1,3 +1,5 @@
+#ifndef EXEC_H
+#define EXEC_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -88,7 +90,4 @@ int commandcmd(int, char **);
 int test_file_access(const char *path, int mode);
 int test_access(const struct stat64 *sp, int stmode);
 
-static inline int padvance(const char **path, const char *name)
-{
-	return padvance_magic(path, name, 1);
-}
+#endif

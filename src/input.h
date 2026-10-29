@@ -1,3 +1,5 @@
+#ifndef INPUT_H
+#define INPUT_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -44,6 +46,7 @@
 #endif
 
 #define PUNGETC_MAX (MB_LEN_MAX > 16 ? MB_LEN_MAX : 16)
+#define IBUFSIZ (BUFSIZ + PUNGETC_MAX + 1)
 
 /* PEOF (the end of file marker) is defined in syntax.h */
 #define PEOA ((PEOF) - 1)
@@ -136,3 +139,4 @@ static inline void input_set_lleft(struct parsefile *pf, int len)
 	pf->lleft = len;
 #endif
 }
+#endif

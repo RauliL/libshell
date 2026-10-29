@@ -1,3 +1,5 @@
+#ifndef ARITH_YACC_H
+#define ARITH_YACC_H
 /*-
  * Copyright (c) 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -87,3 +89,4 @@ union yystype {
 extern union yystype yylval;
 
 int yylex(void);
+#endif

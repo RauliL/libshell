@@ -1,3 +1,5 @@
+#ifndef MYHISTEDIT_H
+#define MYHISTEDIT_H
 /*-
  * Copyright (c) 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -62,3 +64,4 @@ int histcmd(int, char **);
 int not_fcnumber(char *);
 int str_to_event(const char *, int);
 
+#endif

@@ -69,36 +69,6 @@
 #define MEM_OUT -3		/* output to dynamically allocated memory */
 
 
-#ifdef USE_GLIBC_STDIO
-struct output output = {
-	.stream = 0, .nextc = 0, .end = 0, .buf = 0, .bufsize = 0, .fd = 1, .flags = 0
-};
-struct output errout = {
-	.stream = 0, .nextc = 0, .end = 0, .buf = 0, .bufsize = 0, .fd = 2, .flags = 0
-}
-#ifdef notyet
-struct output memout = {
-	.stream = 0, .nextc = 0, .end = 0, .buf = 0, .bufsize = 0, .fd = MEM_OUT, .flags = 0
-};
-#endif
-#else
-struct output output = {
-	.nextc = 0, .end = 0, .buf = 0, .bufsize = OUTBUFSIZ, .fd = 1, .flags = 0
-};
-struct output errout = {
-	.nextc = 0, .end = 0, .buf = 0, .bufsize = 0, .fd = 2, .flags = 0
-};
-struct output preverrout;
-#ifdef notyet
-struct output memout = {
-	.nextc = 0, .end = 0, .buf = 0, .bufsize = 0, .fd = MEM_OUT, .flags = 0
-};
-#endif
-#endif
-struct output *out1 = &output;
-struct output *out2 = &errout;
-
-
 static int xvsnprintf(char *, size_t, const char *, va_list);
 
 
@@ -132,7 +102,7 @@ RESET {
 
 
 void
-outmem(const char *p, size_t len, struct output *dest)
+ShellContext::outmem(const char *p, size_t len, struct output *dest)
 {
 #ifdef USE_GLIBC_STDIO
 	INTOFF;
@@ -198,7 +168,7 @@ err:
 
 
 void
-outstr(const char *p, struct output *file)
+ShellContext::outstr(const char *p, struct output *file)
 {
 #ifdef USE_GLIBC_STDIO
 	INTOFF;
@@ -217,7 +187,7 @@ outstr(const char *p, struct output *file)
 
 
 void
-outcslow(int c, struct output *dest)
+ShellContext::outcslow(int c, struct output *dest)
 {
 	char buf = c;
 	outmem(&buf, 1, dest);
@@ -226,7 +196,7 @@ outcslow(int c, struct output *dest)
 
 
 void
-flushall(void)
+ShellContext::flushall(void)
 {
 	flushout(&output);
 #ifdef FLUSHERR
@@ -236,7 +206,7 @@ flushall(void)
 
 
 void
-flushout(struct output *dest)
+ShellContext::flushout(struct output *dest)
 {
 #ifdef USE_GLIBC_STDIO
 	INTOFF;
@@ -256,7 +226,7 @@ flushout(struct output *dest)
 
 
 void
-outfmt(struct output *file, const char *fmt, ...)
+ShellContext::outfmt(struct output *file, const char *fmt, ...)
 {
 	va_list ap;
 
@@ -267,7 +237,7 @@ outfmt(struct output *file, const char *fmt, ...)
 
 
 void
-out1fmt(const char *fmt, ...)
+ShellContext::out1fmt(const char *fmt, ...)
 {
 	va_list ap;
 
@@ -278,7 +248,7 @@ out1fmt(const char *fmt, ...)
 
 
 int
-fmtstr(char *outbuf, size_t length, const char *fmt, ...)
+ShellContext::fmtstr(char *outbuf, size_t length, const char *fmt, ...)
 {
 	va_list ap;
 	int ret;
@@ -290,7 +260,7 @@ fmtstr(char *outbuf, size_t length, const char *fmt, ...)
 }
 
 
-static int xvasprintf(char **sp, size_t size, const char *f, va_list ap)
+ int ShellContext::xvasprintf(char **sp, size_t size, const char *f, va_list ap)
 {
 	char *s;
 	int len;
@@ -311,7 +281,7 @@ static int xvasprintf(char **sp, size_t size, const char *f, va_list ap)
 }
 
 
-int xasprintf(char **sp, const char *f, ...)
+int ShellContext::xasprintf(char **sp, const char *f, ...)
 {
 	va_list ap;
 	int ret;
@@ -325,7 +295,7 @@ int xasprintf(char **sp, const char *f, ...)
 
 #ifndef USE_GLIBC_STDIO
 void
-doformat(struct output *dest, const char *f, va_list ap)
+ShellContext::doformat(struct output *dest, const char *f, va_list ap)
 {
 	struct stackmark smark;
 	char *s;
@@ -353,7 +323,7 @@ out:
  */
 
 int
-xwrite(int fd, const void *p, size_t n)
+ShellContext::xwrite(int fd, const void *p, size_t n)
 {
 	const char *buf = static_cast<const char *>(p);
 
@@ -378,14 +348,14 @@ xwrite(int fd, const void *p, size_t n)
 
 #ifdef notyet
 #ifdef USE_GLIBC_STDIO
-void initstreams() {
+void ShellContext::initstreams() {
 	output.stream = stdout;
 	errout.stream = stderr;
 }
 
 
 void
-openmemout(void) {
+ShellContext::openmemout(void) {
 	INTOFF;
 	memout.stream = open_memstream(&memout.buf, &memout.bufsize);
 	INTON;
@@ -393,7 +363,7 @@ openmemout(void) {
 
 
 int
-__closememout(void) {
+ShellContext::__closememout(void) {
 	int error;
 	error = fclose(memout.stream);
 	memout.stream = NULL;
@@ -403,8 +373,8 @@ __closememout(void) {
 #endif
 
 
-static int
-xvsnprintf(char *outbuf, size_t length, const char *fmt, va_list ap)
+ int
+ShellContext::xvsnprintf(char *outbuf, size_t length, const char *fmt, va_list ap)
 {
 	int ret;
 

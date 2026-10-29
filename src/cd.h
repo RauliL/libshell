@@ -1,3 +1,5 @@
+#ifndef CD_H
+#define CD_H
 /*-
  * Copyright (c) 1995
  *	The Regents of the University of California.  All rights reserved.
@@ -33,3 +35,4 @@
 int	cdcmd(int, char **);
 int	pwdcmd(int, char **);
 void	setpwd(const char *, int);
+#endif

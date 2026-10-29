@@ -62,17 +62,17 @@
 
 #define PROFILE 0
 
-int rootpid;
-int mypid;
-int shlvl;
+
+
+
 #ifdef __GLIBC__
-int *dash_errno;
+
 #endif
 #if PROFILE
 short profile_buf[16384];
 extern int etext();
 #endif
-MKINIT struct jmploc main_handler;
+
 
 STATIC void read_profile(const char *);
 STATIC char *find_dot_file(char *);
@@ -88,7 +88,7 @@ int main(int, char **);
  */
 
 int
-main(int argc, char **argv)
+ShellContext::run(int argc, char **argv)
 {
 	char *shinit;
 	volatile int state;
@@ -171,7 +171,7 @@ state2:
 state3:
 	state = 4;
 	if (minusc)
-		evalstring(minusc, sflag ? 0 : EV_EXIT);
+		execute(minusc, sflag ? EvalFlags{} : EvalFlag::exit);
 
 	if (sflag || minusc == NULL) {
 state4:	/* XXX ??? - why isn't this before the "if" statement */
@@ -197,8 +197,8 @@ exit:
  * loop; it turns on prompting if the shell is interactive.
  */
 
-static int
-cmdloop(int top)
+ int
+ShellContext::cmdloop(int top)
 {
 	union node *n;
 	struct stackmark smark;
@@ -241,7 +241,7 @@ cmdloop(int top)
 
 			job_warning = (job_warning == 2) ? 1 : 0;
 			numeof = 0;
-			i = evaltree(n, 0);
+			i = evaltree(n, {});
 			if (n)
 				status = i;
 		}
@@ -263,8 +263,8 @@ cmdloop(int top)
  * Read /etc/profile or .profile.  Return on error.
  */
 
-STATIC void
-read_profile(const char *name)
+ void
+ShellContext::read_profile(const char *name)
 {
 	name = expandstr(name);
 	if (setinputfile(name, INPUT_PUSH_FILE | INPUT_NOFILE_OK) < 0)
@@ -281,7 +281,7 @@ read_profile(const char *name)
  */
 
 void
-readcmdfile(char *name)
+ShellContext::readcmdfile(char *name)
 {
 	setinputfile(name, INPUT_PUSH_FILE);
 	cmdloop(0);
@@ -296,8 +296,8 @@ readcmdfile(char *name)
  */
 
 
-STATIC char *
-find_dot_file(char *basename)
+ char *
+ShellContext::find_dot_file(char *basename)
 {
 	char *fullname;
 	const char *path = pathval();
@@ -323,7 +323,7 @@ find_dot_file(char *basename)
 }
 
 int
-dotcmd(int argc, char **argv)
+ShellContext::dotcmd(int argc, char **argv)
 {
 	int status = 0;
 
@@ -345,7 +345,7 @@ dotcmd(int argc, char **argv)
 
 
 int
-exitcmd(int argc, char **argv)
+ShellContext::exitcmd(int argc, char **argv)
 {
 	if (stoppedjobs())
 		return 0;
@@ -364,3 +364,9 @@ FORKRESET {
 	handler = &main_handler;
 }
 #endif
+
+int main(int argc, char **argv)
+{
+	ShellContext shell;
+	return shell.run(argc, argv);
+}

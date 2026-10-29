@@ -1,3 +1,5 @@
+#ifndef REDIR_H
+#define REDIR_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -52,3 +54,4 @@ struct redirtab *pushredir(union node *redir);
 int sh_open(const char *pathname, int flags, int mayfail);
 int sh_pipe(int pip[2], int memfd);
 
+#endif

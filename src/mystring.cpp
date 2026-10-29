@@ -89,7 +89,7 @@ const char dotdir[] = ".";
  */
 
 void
-scopyn(const char *from, char *to, int size)
+ShellContext::scopyn(const char *from, char *to, int size)
 {
 
 	while (--size > 0) {
@@ -115,7 +115,7 @@ prefix(const char *string, const char *pfx)
 	return const_cast<char *>(string + head.size());
 }
 
-void badnum(const char *s)
+void ShellContext::badnum(const char *s)
 {
 	sh_error(illnum, s);
 }
@@ -123,7 +123,7 @@ void badnum(const char *s)
 /*
  * Convert a string into an integer of type intmax_t.  Alow trailing spaces.
  */
-intmax_t atomax(const char *s, int base)
+intmax_t ShellContext::atomax(const char *s, int base)
 {
 	char *p;
 	intmax_t r;
@@ -147,7 +147,7 @@ intmax_t atomax(const char *s, int base)
 	return r;
 }
 
-intmax_t atomax10(const char *s)
+intmax_t ShellContext::atomax10(const char *s)
 {
 	return atomax(s, 10);
 }
@@ -158,7 +158,7 @@ intmax_t atomax10(const char *s)
  */
 
 int
-number(const char *s)
+ShellContext::number(const char *s)
 {
 	intmax_t n = atomax10(s);
 
@@ -175,7 +175,7 @@ number(const char *s)
  */
 
 int
-is_number(const char *p)
+ShellContext::is_number(const char *p)
 {
 	std::string_view text(p);
 	if (text.empty())
@@ -192,7 +192,7 @@ is_number(const char *p)
  */
 
 char *
-single_quote(const char *s) {
+ShellContext::single_quote(const char *s) {
 	char *p;
 
 	STARTSTACKSTR(p);
@@ -236,7 +236,7 @@ single_quote(const char *s) {
  */
 
 char *
-sstrdup(const char *p)
+ShellContext::sstrdup(const char *p)
 {
 	std::size_t len = std::strlen(p) + 1;
 	char *dst = stalloc(len);

@@ -1,3 +1,5 @@
+#ifndef MAIL_H
+#define MAIL_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -36,3 +38,4 @@
 
 void chkmail(void);
 void changemail(const char *);
+#endif

@@ -1,3 +1,5 @@
+#ifndef MISCBLTIN_H
+#define MISCBLTIN_H
 /*
  * Copyright (c) 1997 Christos Zoulas.  All rights reserved.
  * Copyright (c) 1997-2005
@@ -29,3 +31,4 @@
 int readcmd(int, char **);
 int umaskcmd(int, char **);
 int ulimitcmd(int, char **);
+#endif

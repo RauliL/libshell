@@ -1,3 +1,5 @@
+#ifndef EXPAND_H
+#define EXPAND_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -47,6 +49,18 @@ struct arglist {
 	struct strlist **lastp;
 };
 
+struct ifsregion {
+	struct ifsregion *next;
+	int begoff;
+	int endoff;
+	int nulonly;
+};
+
+struct mbpair {
+	unsigned ml;
+	unsigned ql;
+};
+
 /*
  * expandarg() flags
  */
@@ -86,3 +100,4 @@ void arith_lex_reset(void);
 #define arith_lex_reset()
 #endif
 int yylex(void);
+#endif

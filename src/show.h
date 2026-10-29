@@ -1,3 +1,5 @@
+#ifndef SHOW_H
+#define SHOW_H
 /*-
  * Copyright (c) 1995
  *      The Regents of the University of California.  All rights reserved.
@@ -42,4 +44,5 @@ void trargs(char **);
 void trputc(int);
 void trputs(const char *);
 void opentrace(void);
+#endif
 #endif

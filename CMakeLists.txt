@@ -300,6 +300,16 @@ add_custom_command(
   COMMENT "Generating signal names"
 )
 
+set_source_files_properties(
+  ${DASH_SOURCES}
+  "${CMAKE_CURRENT_BINARY_DIR}/builtins.cpp"
+  "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
+  "${CMAKE_CURRENT_BINARY_DIR}/nodes.cpp"
+  "${CMAKE_CURRENT_BINARY_DIR}/signames.cpp"
+  "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
+  PROPERTIES OBJECT_DEPENDS
+  "${CMAKE_CURRENT_BINARY_DIR}/token.h;${CMAKE_CURRENT_BINARY_DIR}/nodes.h;${CMAKE_CURRENT_BINARY_DIR}/builtins.h;${CMAKE_CURRENT_BINARY_DIR}/syntax.h")
+
 add_executable(dash
   ${DASH_SOURCES}
   "${CMAKE_CURRENT_BINARY_DIR}/builtins.cpp"

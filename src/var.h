@@ -1,3 +1,5 @@
+#ifndef VAR_H
+#define VAR_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -36,6 +38,8 @@
 
 #include <inttypes.h>
 
+struct ShellContext;
+
 /*
  * Shell variables.
  */
@@ -56,7 +60,7 @@ struct var {
 	struct var *next;		/* next entry in hash list */
 	int flags;			/* flags are defined above */
 	const char *text;		/* name=value */
-	void (*func)(const char *);
+	void (ShellContext::*func)(const char *);
 					/* function to be called when  */
 					/* the variable gets set/unset */
 };
@@ -176,9 +180,6 @@ static inline int varequal(const char *a, const char *b) {
  * Search the environment of a builtin command.
  */
 
-static inline char *bltinlookup(const char *name)
-{
-	return lookupvar(name);
-}
 
 
+#endif

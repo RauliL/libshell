@@ -52,15 +52,15 @@ static void trstring(char *);
 
 
 void
-showtree(union node *n)
+ShellContext::showtree(union node *n)
 {
 	trputs("showtree called\n");
 	shtree(n, 1, NULL, stdout);
 }
 
 
-static void
-shtree(union node *n, int ind, char *pfx, FILE *fp)
+ void
+ShellContext::shtree(union node *n, int ind, char *pfx, FILE *fp)
 {
 	struct nodelist *lp;
 	const char *s;
@@ -110,8 +110,8 @@ binop:
 
 
 
-static void
-shcmd(union node *cmd, FILE *fp)
+ void
+ShellContext::shcmd(union node *cmd, FILE *fp)
 {
 	union node *np;
 	int first;
@@ -152,8 +152,8 @@ shcmd(union node *cmd, FILE *fp)
 
 
 
-static void
-sharg(union node *arg, FILE *fp)
+ void
+ShellContext::sharg(union node *arg, FILE *fp)
 {
 	char *p;
 	struct nodelist *bqlist;
@@ -235,8 +235,8 @@ sharg(union node *arg, FILE *fp)
 }
 
 
-static void
-indent(int amount, char *pfx, FILE *fp)
+ void
+ShellContext::indent(int amount, char *pfx, FILE *fp)
 {
 	int i;
 
@@ -254,11 +254,11 @@ indent(int amount, char *pfx, FILE *fp)
  */
 
 
-FILE *tracefile;
+
 
 
 void
-trputc(int c)
+ShellContext::trputc(int c)
 {
 	if (debug != 1)
 		return;
@@ -266,7 +266,7 @@ trputc(int c)
 }
 
 void
-trace(const char *fmt, ...)
+ShellContext::trace(const char *fmt, ...)
 {
 	va_list va;
 
@@ -278,7 +278,7 @@ trace(const char *fmt, ...)
 }
 
 void
-tracev(const char *fmt, va_list va)
+ShellContext::tracev(const char *fmt, va_list va)
 {
 	if (debug != 1)
 		return;
@@ -287,7 +287,7 @@ tracev(const char *fmt, va_list va)
 
 
 void
-trputs(const char *s)
+ShellContext::trputs(const char *s)
 {
 	if (debug != 1)
 		return;
@@ -295,8 +295,8 @@ trputs(const char *s)
 }
 
 
-static void
-trstring(char *s)
+ void
+ShellContext::trstring(char *s)
 {
 	char *p;
 	char c;
@@ -334,7 +334,7 @@ backslash:	  putc('\\', tracefile);
 
 
 void
-trargs(char **ap)
+ShellContext::trargs(char **ap)
 {
 	if (debug != 1)
 		return;
@@ -349,7 +349,7 @@ trargs(char **ap)
 
 
 void
-opentrace(void)
+ShellContext::opentrace(void)
 {
 	char s[100];
 #ifdef O_APPEND

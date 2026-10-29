@@ -1,3 +1,5 @@
+#ifndef SYSTEM_H
+#define SYSTEM_H
 /*
  * Copyright (c) 2004
  *	Herbert Xu <herbert@gondor.apana.org.au>.  All rights reserved.
@@ -191,3 +193,4 @@ static inline void globfree64(glob64_t *pglob)
 #define uninitialized_var(x) x = x
 
 unsigned conv_escape(char *str, char *out, bool mbchar);
+#endif

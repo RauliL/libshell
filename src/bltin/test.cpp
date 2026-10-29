@@ -37,7 +37,7 @@
 	operand ::= <any legal UNIX file name>
 */
 
-enum token {
+enum token : int {
 	EOI,
 	FILRD,
 	FILWR,
@@ -88,10 +88,12 @@ enum token_types {
 	PAREN
 };
 
-static struct t_op {
+struct t_op {
 	const char *op_text;
 	short op_num, op_type;
-} const ops [] = {
+};
+
+static const struct t_op ops[] = {
 	{"-r",	FILRD,	UNOP},
 	{"-w",	FILWR,	UNOP},
 	{"-x",	FILEX,	UNOP},
@@ -134,8 +136,8 @@ static struct t_op {
 	{0,	0,	0}
 };
 
-static char **t_wp;
-static struct t_op const *t_wp_op;
+
+
 
 static void syntax(const char *, const char *);
 static int oexpr(enum token);
@@ -152,18 +154,18 @@ static int equalf(const char *, const char *);
 
 #ifdef HAVE_FACCESSAT
 # ifdef HAVE_TRADITIONAL_FACCESSAT
-static inline int faccessat_confused_about_superuser(void) { return 1; }
+ inline int ShellContext::faccessat_confused_about_superuser(void) { return 1; }
 # else
-static inline int faccessat_confused_about_superuser(void) { return 0; }
+ inline int ShellContext::faccessat_confused_about_superuser(void) { return 0; }
 # endif
 #endif
 
-static inline intmax_t getn(const char *s)
+ inline intmax_t ShellContext::getn(const char *s)
 {
 	return atomax10(s);
 }
 
-static const struct t_op *getop(const char *s)
+ const struct t_op *ShellContext::getop(const char *s)
 {
 	const struct t_op *op;
 
@@ -176,7 +178,7 @@ static const struct t_op *getop(const char *s)
 }
 
 int
-testcmd(int argc, char **argv)
+ShellContext::testcmd(int argc, char **argv)
 {
 	const struct t_op *op;
 	enum token n;
@@ -234,8 +236,8 @@ eval:
 	return res;
 }
 
-static void
-syntax(const char *op, const char *msg)
+ void
+ShellContext::syntax(const char *op, const char *msg)
 {
 	if (op && *op)
 		error("%s: %s", op, msg);
@@ -243,8 +245,8 @@ syntax(const char *op, const char *msg)
 		error("%s", msg);
 }
 
-static int
-oexpr(enum token n)
+ int
+ShellContext::oexpr(enum token n)
 {
 	int res = 0;
 
@@ -260,8 +262,8 @@ oexpr(enum token n)
 	return res;
 }
 
-static int
-aexpr(enum token n)
+ int
+ShellContext::aexpr(enum token n)
 {
 	int res = 1;
 
@@ -278,8 +280,8 @@ aexpr(enum token n)
 	return res;
 }
 
-static int
-nexpr(enum token n)
+ int
+ShellContext::nexpr(enum token n)
 {
 	if (n != UNOT)
 		return primary(n);
@@ -290,8 +292,8 @@ nexpr(enum token n)
 	return !nexpr(n);
 }
 
-static int
-primary(enum token n)
+ int
+ShellContext::primary(enum token n)
 {
 	enum token nn;
 	int res;
@@ -337,8 +339,8 @@ primary(enum token n)
 	return strlen(*t_wp) > 0;
 }
 
-static int
-binop(void)
+ int
+ShellContext::binop(void)
 {
 	const char *opnd1, *opnd2;
 	struct t_op const *op;
@@ -385,8 +387,8 @@ binop(void)
 	}
 }
 
-static int
-filstat(char *nm, enum token mode)
+ int
+ShellContext::filstat(char *nm, enum token mode)
 {
 	struct stat64 s;
 
@@ -437,7 +439,7 @@ filstat(char *nm, enum token mode)
 	}
 }
 
-static enum token t_lex(char **tp)
+ enum token ShellContext::t_lex(char **tp)
 {
 	struct t_op const *op;
 	char *s = *tp;
@@ -458,7 +460,7 @@ static enum token t_lex(char **tp)
 	return OPERAND;
 }
 
-static int isoperand(char **tp)
+ int ShellContext::isoperand(char **tp)
 {
 	struct t_op const *op;
 	char *s;
@@ -472,7 +474,7 @@ static int isoperand(char **tp)
 	return op && op->op_type == BINOP;
 }
 
-static bool newerf(const char *f1, const char *f2)
+ bool ShellContext::newerf(const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
 
@@ -490,7 +492,7 @@ static bool newerf(const char *f1, const char *f2)
 #endif
 }
 
-static bool olderf(const char *f1, const char *f2)
+ bool ShellContext::olderf(const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
 
@@ -508,8 +510,8 @@ static bool olderf(const char *f1, const char *f2)
 #endif
 }
 
-static int
-equalf (const char *f1, const char *f2)
+ int
+ShellContext::equalf (const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
 
@@ -520,7 +522,7 @@ equalf (const char *f1, const char *f2)
 }
 
 #ifdef HAVE_FACCESSAT
-static int has_exec_bit_set(const char *path)
+ int ShellContext::has_exec_bit_set(const char *path)
 {
 	struct stat64 st;
 
@@ -529,7 +531,7 @@ static int has_exec_bit_set(const char *path)
 	return st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH);
 }
 
-int test_file_access(const char *path, int mode)
+int ShellContext::test_file_access(const char *path, int mode)
 {
 	if (faccessat_confused_about_superuser() &&
 	    mode == X_OK && geteuid() == 0 && !has_exec_bit_set(path))
