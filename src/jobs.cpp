@@ -263,7 +263,7 @@ out:
 
 int killcmd(int argc, char **argv)
 {
-	extern char *signal_names[];
+	extern const char *const signal_names[];
 	int signo = -1;
 	int list = 0;
 	int i;
@@ -726,7 +726,9 @@ check:
 
 	match = prefix;
 	if (*p == '?') {
-		match = strstr;
+		match = [](const char *haystack, const char *needle) -> char * {
+			return const_cast<char *>(std::strstr(haystack, needle));
+		};
 		p++;
 	}
 
@@ -821,7 +823,8 @@ growjobtab(void)
 			l -= sizeof(*jp);
 			jq--;
 #define joff(p) ((struct job *)((char *)(p) + l))
-#define jmove(p) (p) = (void *)((char *)(p) + offset)
+#define jmove(p) ((p) = reinterpret_cast<std::remove_reference_t<decltype(p)>>( \
+	static_cast<void *>(reinterpret_cast<char *>(p) + (offset))))
 			if (likely(joff(jp)->ps == &jq->ps0))
 				jmove(joff(jp)->ps);
 			if (joff(jp)->prev_job)

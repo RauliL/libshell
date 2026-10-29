@@ -44,8 +44,8 @@
 
 
 struct synclass {
-	char *name;
-	char *comment;
+	const char *name;
+	const char *comment;
 };
 
 /* Syntax classes */
@@ -90,12 +90,12 @@ static char writer[] = "\
 
 static FILE *cfile;
 static FILE *hfile;
-static char *syntax[513];
+static const char *syntax[513];
 
-static void filltable(char *);
+static void filltable(const char *);
 static void init(void);
-static void add(char *, char *);
-static void print(char *);
+static void add(const char *, const char *);
+static void print(const char *);
 static void output_type_macros(void);
 int main(int, char **);
 
@@ -107,8 +107,8 @@ main(int argc, char **argv)
 	int pos;
 
 	/* Create output files */
-	if ((cfile = fopen("syntax.c", "w")) == NULL) {
-		perror("syntax.c");
+	if ((cfile = fopen("syntax.cpp", "w")) == NULL) {
+		perror("syntax.cpp");
 		exit(2);
 	}
 	if ((hfile = fopen("syntax.h", "w")) == NULL) {
@@ -216,7 +216,7 @@ main(int argc, char **argv)
  */
 
 static void
-filltable(char *dftval)
+filltable(const char *dftval)
 {
 	int i;
 
@@ -246,7 +246,7 @@ init(void)
  */
 
 static void
-add(char *p, char *type)
+add(const char *p, const char *type)
 {
 	while (*p)
 		syntax[(signed char)*p++ + 129] = type;
@@ -259,7 +259,7 @@ add(char *p, char *type)
  */
 
 static void
-print(char *name)
+print(const char *name)
 {
 	int i;
 	int col;
@@ -291,7 +291,7 @@ print(char *name)
  * contiguous, we can test for them quickly.
  */
 
-static char *macro[] = {
+static const char *macro[] = {
 	"#define is_digit(c)\t((unsigned)((c) - '0') <= 9)\n",
 	"#define is_alpha(c)\tisalpha((unsigned char)(c))\n",
 	"#define is_name(c)\t((c) == '_' || isalpha((unsigned char)(c)))\n",
@@ -303,7 +303,7 @@ static char *macro[] = {
 static void
 output_type_macros(void)
 {
-	char **pp;
+	const char **pp;
 
 	for (pp = macro ; *pp ; pp++)
 		fputs(*pp, hfile);

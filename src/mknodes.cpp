@@ -37,10 +37,10 @@
  * the files nodes.h and nodes.c.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #define MAXTYPES 50		/* max number of node types */
 #define MAXFIELDS 20		/* max fields in a structure */
@@ -220,8 +220,8 @@ output(char *file)
 		error("Can't open %s", file);
 	if ((hfile = fopen("nodes.h", "w")) == NULL)
 		error("Can't create nodes.h");
-	if ((cfile = fopen("nodes.c", "w")) == NULL)
-		error("Can't create nodes.c");
+	if ((cfile = fopen("nodes.cpp", "w")) == NULL)
+		error("Can't create nodes.cpp");
 	fputs(writer, hfile);
 	for (i = 0 ; i < ntypes ; i++)
 		fprintf(hfile, "#define %s %d\n", nodename[i], i);
@@ -295,7 +295,7 @@ outfunc(FILE *cfile, int calcsize)
 	if (calcsize)
 		fputs("      funcblocksize += nodesize[n->type];\n", cfile);
 	else {
-		fputs("      new = funcblock;\n", cfile);
+		fputs("      copied = static_cast<union node *>(funcblock);\n", cfile);
 		fputs("      funcblock = (char *) funcblock + nodesize[n->type];\n", cfile);
 	}
 	fputs("      switch (n->type) {\n", cfile);
@@ -314,7 +314,7 @@ outfunc(FILE *cfile, int calcsize)
 						sp->tag, fp->name);
 				} else {
 					indent(12, cfile);
-					fprintf(cfile, "new->%s.%s = copynode(n->%s.%s);\n",
+					fprintf(cfile, "copied->%s.%s = copynode(n->%s.%s);\n",
 						sp->tag, fp->name, sp->tag, fp->name);
 				}
 				break;
@@ -325,7 +325,7 @@ outfunc(FILE *cfile, int calcsize)
 						sp->tag, fp->name);
 				} else {
 					indent(12, cfile);
-					fprintf(cfile, "new->%s.%s = copynodelist(n->%s.%s);\n",
+					fprintf(cfile, "copied->%s.%s = copynodelist(n->%s.%s);\n",
 						sp->tag, fp->name, sp->tag, fp->name);
 				}
 				break;
@@ -336,7 +336,7 @@ outfunc(FILE *cfile, int calcsize)
 						sp->tag, fp->name);
 				} else {
 					indent(12, cfile);
-					fprintf(cfile, "new->%s.%s = nodesavestr(n->%s.%s);\n",
+					fprintf(cfile, "copied->%s.%s = nodesavestr(n->%s.%s);\n",
 						sp->tag, fp->name, sp->tag, fp->name);
 				}
 				break;
@@ -344,7 +344,7 @@ outfunc(FILE *cfile, int calcsize)
 			case T_OTHER:
 				if (! calcsize) {
 					indent(12, cfile);
-					fprintf(cfile, "new->%s.%s = n->%s.%s;\n",
+					fprintf(cfile, "copied->%s.%s = n->%s.%s;\n",
 						sp->tag, fp->name, sp->tag, fp->name);
 				}
 				break;
@@ -355,7 +355,7 @@ outfunc(FILE *cfile, int calcsize)
 	}
 	fputs("      };\n", cfile);
 	if (! calcsize)
-		fputs("      new->type = n->type;\n", cfile);
+		fputs("      copied->type = n->type;\n", cfile);
 }
 
 
@@ -441,7 +441,7 @@ savestr(const char *s)
 {
 	char *p;
 
-	if ((p = malloc(strlen(s) + 1)) == NULL)
+	if ((p = static_cast<char *>(std::malloc(std::strlen(s) + 1))) == nullptr)
 		error("Out of space");
 	(void) strcpy(p, s);
 	return p;

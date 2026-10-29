@@ -34,8 +34,9 @@
  *	@(#)memalloc.h	8.2 (Berkeley) 5/4/95
  */
 
-#include <stddef.h>
-#include <stdlib.h>
+#include <cstddef>
+#include <cstdlib>
+#include <type_traits>
 
 struct stackmark {
 	struct stack_block *stackp;
@@ -48,16 +49,28 @@ extern char *stacknxt;
 extern size_t stacknleft;
 extern char *sstrend;
 
-void *ckmalloc(size_t);
-void *ckrealloc(void *, size_t);
+/* Untyped heap/stack block. Call sites keep the C shape
+ * (`char *p = ckmalloc(n)`) and the conversion operator supplies the
+ * pointer type C++ will not implicitly convert from void *. */
+struct rawmem {
+	void *ptr;
+	template<class T>
+	operator T *() const
+	{
+		return static_cast<T *>(ptr);
+	}
+};
+
+rawmem ckmalloc(std::size_t);
+rawmem ckrealloc(void *, std::size_t);
 char *savestr(const char *);
-void *stalloc(size_t);
+rawmem stalloc(std::size_t);
 void stunalloc(void *);
-void pushstackmark(struct stackmark *mark, size_t len);
+void pushstackmark(struct stackmark *mark, std::size_t len);
 void setstackmark(struct stackmark *);
 void popstackmark(struct stackmark *);
-void *growstackstr(void);
-char *growstackto(size_t len);
+rawmem growstackstr();
+char *growstackto(std::size_t len);
 char *makestrspace(size_t, char *);
 char *stnputs(const char *, size_t, char *);
 char *stputs(const char *, char *);
@@ -75,9 +88,10 @@ static inline char *_STPUTC(int c, char *p) {
 	return p;
 }
 
-#define stackblock() ((void *)stacknxt)
+#define stackblock() (stacknxt)
 #define stackblocksize() stacknleft
-#define STARTSTACKSTR(p) ((p) = stackblock())
+#define STARTSTACKSTR(p) ((p) = static_cast<std::remove_reference_t<decltype(p)>>( \
+	static_cast<void *>(stacknxt)))
 #define STPUTC(c, p) ((p) = _STPUTC((c), (p)))
 #define CHECKSTRSPACE(n, p) \
 	({ \
@@ -96,6 +110,6 @@ static inline char *_STPUTC(int c, char *p) {
 
 #define grabstackstr(p)	stalloc((char *)(p) - (char *)stackblock())
 #define ungrabstackstr(s, p) stunalloc((s))
-#define stackstrend() ((void *)sstrend)
+#define stackstrend() (static_cast<void *>(sstrend))
 
-#define ckfree(p)	free((void *)(p))
+#define ckfree(p)	std::free(const_cast<void *>(static_cast<const void *>(p)))

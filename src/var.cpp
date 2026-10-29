@@ -169,7 +169,7 @@ RESET {
 static char *varnull(const char *s)
 {
 	/* Unset variables always end with two NUL chars. */
-	return strchrnul(s, '=') + 1;
+	return const_cast<char *>(strchrnul(s, '=')) + 1;
 }
 
 static void varfunc(struct var *vp)
@@ -236,10 +236,10 @@ struct var *setvar(const char *name, const char *val, int flags)
 		vallen = strlen(val);
 	}
 	INTOFF;
-	p = mempcpy(nameeq = ckmalloc(namelen + vallen + 2), name, namelen + 1);
+	p = static_cast<char *>(mempcpy(nameeq = ckmalloc(namelen + vallen + 2), name, namelen + 1));
 	if (val) {
 		p[-1] = '=';
-		p = mempcpy(p, val, vallen);
+		p = static_cast<char *>(mempcpy(p, val, vallen));
 	}
 	*p = '\0';
 	vp = setvareq(nameeq, flags | VNOSAVE);
@@ -346,7 +346,7 @@ lookupvar(const char *name)
 			fmtstr(linenovar+7, sizeof(linenovar)-7, "%d", lineno);
 		}
 #endif
-		return strchrnul(v->text, '=') + 1;
+		return const_cast<char *>(strchrnul(v->text, '=')) + 1;
 	}
 	return NULL;
 }
@@ -498,7 +498,7 @@ void mklocal(char *name, int flags)
 	if (name[0] == '-' && name[1] == '\0') {
 		char *p;
 		p = ckmalloc(sizeof(optlist));
-		lvp->text = memcpy(p, optlist, sizeof(optlist));
+		lvp->text = static_cast<char *>(std::memcpy(p, optlist, sizeof(optlist)));
 		vp = NULL;
 	} else {
 		char *eq;

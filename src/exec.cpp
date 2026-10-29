@@ -80,7 +80,7 @@
 
 struct tblentry {
 	struct tblentry *next;	/* next entry in hash chain */
-	union param param;	/* definition of builtin function */
+	cmdparam param;		/* definition of builtin function */
 	short cmdtype;		/* index identifying command */
 	char rehash;		/* if set, cd done since entry created */
 	char cmdname[ARB];	/* name of command */
@@ -251,7 +251,7 @@ int padvance_magic(const char **path, const char *name, int magic)
 	q = growstackto(qlen);
 
 	if (likely(len)) {
-		q = mempcpy(q, start, len);
+		q = static_cast<char *>(mempcpy(q, start, len));
 		*q++ = '/';
 	}
 	strcpy(q, name);
@@ -533,10 +533,10 @@ find_builtin(const char *name)
 {
 	struct builtincmd *bp;
 
-	bp = bsearch(
+	bp = static_cast<struct builtincmd *>(bsearch(
 		&name, builtincmd, NUMBUILTINS, sizeof(struct builtincmd),
 		pstrcmp
-	);
+	));
 	return bp;
 }
 
@@ -577,23 +577,23 @@ hashcd(void)
 void
 changepath(const char *newval)
 {
-	const char *new;
+	const char *scan;
 	int idx;
 	int bltin;
 
-	new = newval;
+	scan = newval;
 	idx = 0;
 	bltin = -1;
 	for (;;) {
-		if (*new == '%' && prefix(new + 1, "builtin")) {
+		if (*scan == '%' && prefix(scan + 1, "builtin")) {
 			bltin = idx;
 			break;
 		}
-		new = strchr(new, ':');
-		if (!new)
+		scan = std::strchr(scan, ':');
+		if (!scan)
 			break;
 		idx++;
-		new++;
+		scan++;
 	}
 	builtinloc = bltin;
 	clearcmdentry();
@@ -888,7 +888,8 @@ int commandcmd(int argc, char **argv)
 	enum {
 		VERIFY_BRIEF = 1,
 		VERIFY_VERBOSE = 2,
-	} verify = 0;
+	};
+	int verify = 0;
 	const char *path = NULL;
 
 	while ((c = nextopt("pvV")) != '\0')

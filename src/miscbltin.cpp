@@ -410,7 +410,7 @@ ulimitcmd(int argc, char **argv)
 {
 	int	c;
 	rlim_t val = 0;
-	enum limtype how = SOFT | HARD;
+	enum limtype how = static_cast<enum limtype>(SOFT | HARD);
 	const struct limits	*l;
 	int		set, all = 0;
 	int		optc, what;

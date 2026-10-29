@@ -32,7 +32,8 @@
  * SUCH DAMAGE.
  */
 
-#include <stdlib.h>
+#include <cstdlib>
+#include <cstring>
 #include <unistd.h>
 
 #include "shell.h"
@@ -48,23 +49,20 @@ static __attribute__((__always_inline__)) inline void outofspace(void)
 	sh_error("Out of space");
 }
 
-static void *checknull(void *p)
+static rawmem checknull(void *p)
 {
 	if (!p)
 		outofspace();
-	return p;
+	return {p};
 }
 
 /*
  * Like malloc, but returns an error when out of space.
  */
 
-__attribute__((__noinline__)) void *ckmalloc(size_t nbytes)
+__attribute__((__noinline__)) rawmem ckmalloc(std::size_t nbytes)
 {
-	void *p;
-
-	p = malloc(nbytes);
-	return checknull(p);
+	return checknull(std::malloc(nbytes));
 }
 
 
@@ -72,10 +70,9 @@ __attribute__((__noinline__)) void *ckmalloc(size_t nbytes)
  * Same for realloc.
  */
 
-__attribute__((__noinline__)) void *ckrealloc(void *p, size_t nbytes)
+__attribute__((__noinline__)) rawmem ckrealloc(void *p, std::size_t nbytes)
 {
-	p = realloc(p, nbytes);
-	return checknull(p);
+	return checknull(std::realloc(p, nbytes));
 }
 
 
@@ -86,7 +83,7 @@ __attribute__((__noinline__)) void *ckrealloc(void *p, size_t nbytes)
 char *
 savestr(const char *s)
 {
-	return checknull(strdup(s));
+	return checknull(::strdup(s));
 }
 
 
@@ -113,7 +110,7 @@ char *stacknxt = stackbase.space;
 size_t stacknleft = MINSIZE;
 char *sstrend = stackbase.space + MINSIZE;
 
-void *stalloc(size_t nbytes)
+rawmem stalloc(std::size_t nbytes)
 {
 	char *p;
 	size_t aligned;
@@ -142,7 +139,7 @@ void *stalloc(size_t nbytes)
 	p = stacknxt;
 	stacknxt += aligned;
 	stacknleft -= aligned;
-	return p;
+	return {p};
 }
 
 
@@ -154,8 +151,8 @@ void stunalloc(void *p)
 		abort();
 	}
 #endif
-	stacknleft += stacknxt - (char *)p;
-	stacknxt = p;
+	stacknleft += stacknxt - static_cast<char *>(p);
+	stacknxt = static_cast<char *>(p);
 }
 
 
@@ -238,7 +235,7 @@ static char *growstackblock(size_t min)
 		p = stalloc(newlen);
 
 		/* free the space we just allocated */
-		stacknxt = memcpy(p, oldspace, oldlen);
+		stacknxt = static_cast<char *>(std::memcpy(p, oldspace, oldlen));
 		stacknleft += newlen;
 	}
 
@@ -263,12 +260,12 @@ static char *growstackblock(size_t min)
  * is space for at least one character.
  */
 
-void *
-growstackstr(void)
+rawmem
+growstackstr()
 {
 	size_t len = stackblocksize();
 
-	return growstackblock(0) + len;
+	return {growstackblock(0) + len};
 }
 
 __attribute__((__noinline__)) char *growstackto(size_t len)
@@ -292,7 +289,7 @@ __attribute__((__noinline__)) char *makestrspace(size_t newlen, char *p)
 __attribute__((__noinline__)) char *stnputs(const char *s, size_t n, char *p)
 {
 	p = makestrspace(n, p);
-	p = mempcpy(p, s, n);
+	p = static_cast<char *>(mempcpy(p, s, n));
 	return p;
 }
 

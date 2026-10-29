@@ -32,8 +32,9 @@
  * SUCH DAMAGE.
  */
 
-#include <inttypes.h>
-#include <stdlib.h>
+#include <array>
+#include <cinttypes>
+#include <cstdlib>
 #include "arith_yacc.h"
 #include "expand.h"
 #include "shell.h"
@@ -52,26 +53,45 @@ union yystype yylval;
 
 static int last_token;
 
-#define ARITH_PRECEDENCE(op, prec) [op - ARITH_BINOP_MIN] = prec
+constexpr char arith_precedence(int op)
+{
+	switch (op) {
+	case ARITH_MUL:
+	case ARITH_DIV:
+	case ARITH_REM:
+		return 0;
+	case ARITH_ADD:
+	case ARITH_SUB:
+		return 1;
+	case ARITH_LSHIFT:
+	case ARITH_RSHIFT:
+		return 2;
+	case ARITH_LT:
+	case ARITH_LE:
+	case ARITH_GT:
+	case ARITH_GE:
+		return 3;
+	case ARITH_EQ:
+	case ARITH_NE:
+		return 4;
+	case ARITH_BAND:
+		return 5;
+	case ARITH_BXOR:
+		return 6;
+	case ARITH_BOR:
+		return 7;
+	default:
+		return 0;
+	}
+}
 
-static const char prec[ARITH_BINOP_MAX - ARITH_BINOP_MIN] = {
-	ARITH_PRECEDENCE(ARITH_MUL, 0),
-	ARITH_PRECEDENCE(ARITH_DIV, 0),
-	ARITH_PRECEDENCE(ARITH_REM, 0),
-	ARITH_PRECEDENCE(ARITH_ADD, 1),
-	ARITH_PRECEDENCE(ARITH_SUB, 1),
-	ARITH_PRECEDENCE(ARITH_LSHIFT, 2),
-	ARITH_PRECEDENCE(ARITH_RSHIFT, 2),
-	ARITH_PRECEDENCE(ARITH_LT, 3),
-	ARITH_PRECEDENCE(ARITH_LE, 3),
-	ARITH_PRECEDENCE(ARITH_GT, 3),
-	ARITH_PRECEDENCE(ARITH_GE, 3),
-	ARITH_PRECEDENCE(ARITH_EQ, 4),
-	ARITH_PRECEDENCE(ARITH_NE, 4),
-	ARITH_PRECEDENCE(ARITH_BAND, 5),
-	ARITH_PRECEDENCE(ARITH_BXOR, 6),
-	ARITH_PRECEDENCE(ARITH_BOR, 7),
-};
+constexpr auto prec = [] {
+	std::array<char, ARITH_BINOP_MAX - ARITH_BINOP_MIN> table{};
+	for (int op = ARITH_BINOP_MIN; op < ARITH_BINOP_MAX; ++op)
+		table[static_cast<std::size_t>(op - ARITH_BINOP_MIN)] =
+			arith_precedence(op);
+	return table;
+}();
 
 #define ARITH_MAX_PREC 8
 
@@ -212,7 +232,7 @@ static intmax_t binop(int token, union yystype *val, int op, int noeval)
 	return binop2(a, op, ARITH_MAX_PREC, noeval);
 }
 
-static intmax_t and(int token, union yystype *val, int op, int noeval)
+static intmax_t arith_and(int token, union yystype *val, int op, int noeval)
 {
 	intmax_t a = binop(token, val, op, noeval);
 	intmax_t b;
@@ -224,14 +244,14 @@ static intmax_t and(int token, union yystype *val, int op, int noeval)
 	token = yylex();
 	*val = yylval;
 
-	b = and(token, val, yylex(), noeval | !a);
+	b = arith_and(token, val, yylex(), noeval | !a);
 
 	return a && b;
 }
 
-static intmax_t or(int token, union yystype *val, int op, int noeval)
+static intmax_t arith_or(int token, union yystype *val, int op, int noeval)
 {
-	intmax_t a = and(token, val, op, noeval);
+	intmax_t a = arith_and(token, val, op, noeval);
 	intmax_t b;
 
 	op = last_token;
@@ -241,14 +261,14 @@ static intmax_t or(int token, union yystype *val, int op, int noeval)
 	token = yylex();
 	*val = yylval;
 
-	b = or(token, val, yylex(), noeval | !!a);
+	b = arith_or(token, val, yylex(), noeval | !!a);
 
 	return a || b;
 }
 
 static intmax_t cond(int token, union yystype *val, int op, int noeval)
 {
-	intmax_t a = or(token, val, op, noeval);
+	intmax_t a = arith_or(token, val, op, noeval);
 	intmax_t b;
 	intmax_t c;
 

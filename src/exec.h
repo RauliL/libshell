@@ -41,14 +41,19 @@
 #define CMDBUILTIN	2	/* command is a shell builtin */
 
 
+union param {
+	int index;
+	const struct builtincmd *cmd;
+	struct funcnode *func;
+};
+
 struct cmdentry {
 	int cmdtype;
-	union param {
-		int index;
-		const struct builtincmd *cmd;
-		struct funcnode *func;
-	} u;
+	union param u;
 };
+
+/* The member name `param` would hide the union type in C++. */
+using cmdparam = param;
 
 
 /* action to find_command() */

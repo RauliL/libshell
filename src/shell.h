@@ -34,6 +34,9 @@
  *	@(#)shell.h	8.2 (Berkeley) 5/4/95
  */
 
+#ifndef SHELL_H
+#define SHELL_H
+
 /*
  * The follow should be set to reflect the type of system you have:
  *	JOBS -> 1 if you have Berkeley job control, 0 otherwise.
@@ -50,6 +53,8 @@
  */
 
 #include <sys/param.h>
+#include <cstring>
+#include <type_traits>
 
 #ifndef JOBS
 #define JOBS 1
@@ -66,8 +71,25 @@
 
 typedef void *pointer;
 #ifndef NULL
-#define NULL (void *)0
+#define NULL nullptr
 #endif
+
+/* Byte copy of a trivially copyable object. Assignment of volatile class
+ * objects is ill-formed in C++; the shell saves and restores shellparam
+ * across setjmp this way. */
+template<class T>
+void pod_copy(volatile T &dst, const T &src)
+{
+	static_assert(std::is_trivially_copyable_v<T>);
+	std::memcpy(const_cast<T *>(&dst), &src, sizeof(T));
+}
+
+template<class T>
+void pod_copy(T &dst, const volatile T &src)
+{
+	static_assert(std::is_trivially_copyable_v<T>);
+	std::memcpy(&dst, const_cast<const T *>(&src), sizeof(T));
+}
 #define STATIC static
 #define MKINIT	/* empty */
 
@@ -102,3 +124,5 @@ static inline int max_int_length(int bytes)
 {
 	return (bytes * 8 - 1) * 0.30102999566398119521 + 14;
 }
+
+#endif

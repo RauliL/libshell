@@ -8,8 +8,6 @@
  * This program is in the Public Domain.
  */
 
-#include "bltin.h"
-#include "../exec.h"
 #include <fcntl.h>
 #include <inttypes.h>
 #include <stdarg.h>
@@ -19,6 +17,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "../exec.h"
+#include "bltin.h"
 
 /* test(1) accepts the following grammar:
 	oexpr	::= aexpr | aexpr "-o" oexpr ;
@@ -451,7 +451,7 @@ static enum token t_lex(char **tp)
 	if (op && !(op->op_type == UNOP && isoperand(tp)) &&
 	    !(op->op_num == LPAREN && !tp[1])) {
 		t_wp_op = op;
-		return op->op_num;
+		return static_cast<token>(op->op_num);
 	}
 
 	t_wp_op = (struct t_op *)0;
@@ -662,7 +662,7 @@ int test_file_access(const char *path, int mode)
 int test_access(const struct stat64 *sp, int stmode)
 {
 	gid_t *groups;
-	register int n;
+	int n;
 	uid_t euid;
 	int maxgroups;
 

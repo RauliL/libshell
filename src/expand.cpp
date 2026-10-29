@@ -925,7 +925,7 @@ static struct mbpair mbtodest(const char *p, char *q, const char *syntax,
 		USTPUTC(ml, q);
 	}
 
-	q = mempcpy(q, p, ml);
+	q = static_cast<char *>(mempcpy(q, p, ml));
 
 	if (syntax[CTLMBCHAR] == CCTL) {
 		USTPUTC(ml, q);
@@ -1487,8 +1487,9 @@ static void expandmeta_glob(struct strlist *str)
 			goto nometa;
 
 #ifdef __GLIBC__
-		pglob.gl_closedir = (void *)closedir;
-		pglob.gl_readdir = (void *)readdir64;
+		pglob.gl_closedir = reinterpret_cast<void (*)(void *)>(closedir);
+		pglob.gl_readdir = reinterpret_cast<struct dirent64 *(*)(void *)>(
+			readdir64);
 		pglob.gl_opendir = opendir_interruptible;
 		pglob.gl_lstat = lstat64;
 		pglob.gl_stat = stat64;
@@ -1615,9 +1616,9 @@ static char *expmeta_rmescapes(char *enddir, const char *name)
 
 	p = name;
 	do {
-		char *q = strchrnul(p, '\\');
+		const char *q = strchrnul(p, '\\');
 
-		enddir = mempcpy(enddir, p, q - p + 1);
+		enddir = static_cast<char *>(mempcpy(enddir, p, q - p + 1));
 		p = q;
 		if (!*p)
 			break;
@@ -1692,7 +1693,7 @@ static char *expmeta(char *name, unsigned name_len, size_t expdir_len)
 			cp = addfnamealt(enddir + 1, expdir_len);
 		goto out_opendir;
 	}
-	start = memrchr(name, '/', p - name);
+	start = static_cast<char *>(memrchr(name, '/', static_cast<size_t>(p - name)));
 	if (start) {
 		c = *++start;
 		*start = 0;
@@ -2079,7 +2080,7 @@ _rmescapes(char *str, int flag)
 		}
 		q = r;
 		if (len > 0) {
-			q = mempcpy(q, str, len);
+			q = static_cast<char *>(mempcpy(q, str, len));
 		}
 	}
 	inquotes = 0;

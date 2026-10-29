@@ -42,12 +42,14 @@
  *	is_number(s)		Return true if s is a string of digits.
  */
 
-#include <ctype.h>
-#include <errno.h>
-#include <inttypes.h>
-#include <limits.h>
-#include <inttypes.h>
-#include <stdlib.h>
+#include <algorithm>
+#include <cctype>
+#include <cerrno>
+#include <cinttypes>
+#include <climits>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include "shell.h"
 #include "syntax.h"
 #include "error.h"
@@ -106,11 +108,11 @@ scopyn(const char *from, char *to, int size)
 char *
 prefix(const char *string, const char *pfx)
 {
-	while (*pfx) {
-		if (*pfx++ != *string++)
-			return 0;
-	}
-	return (char *) string;
+	std::string_view text(string);
+	std::string_view head(pfx);
+	if (!text.starts_with(head))
+		return nullptr;
+	return const_cast<char *>(string + head.size());
 }
 
 void badnum(const char *s)
@@ -127,7 +129,7 @@ intmax_t atomax(const char *s, int base)
 	intmax_t r;
 
 	errno = 0;
-	r = strtoimax(s, &p, base);
+	r = std::strtoimax(s, &p, base);
 
 	/*
 	 * Disallow completely blank strings in non-arithmetic (base != 0)
@@ -136,7 +138,7 @@ intmax_t atomax(const char *s, int base)
 	if (p == s && base)
 		badnum(s);
 
-	while (isspace((unsigned char)*p))
+	while (std::isspace(static_cast<unsigned char>(*p)))
 	      p++;
 
 	if (*p)
@@ -175,11 +177,12 @@ number(const char *s)
 int
 is_number(const char *p)
 {
-	do {
-		if (! is_digit(*p))
-			return 0;
-	} while (*++p != '\0');
-	return 1;
+	std::string_view text(p);
+	if (text.empty())
+		return 0;
+	return std::all_of(text.begin(), text.end(), [](char c) {
+		return is_digit(static_cast<unsigned char>(c));
+	});
 }
 
 
@@ -203,7 +206,7 @@ single_quote(const char *s) {
 		q = p = makestrspace(len + 3, p);
 
 		*q++ = '\'';
-		q = mempcpy(q, s, len);
+		q = static_cast<char *>(mempcpy(q, s, len));
 		*q++ = '\'';
 		s += len;
 
@@ -216,7 +219,7 @@ single_quote(const char *s) {
 		q = p = makestrspace(len + 3, p);
 
 		*q++ = '"';
-		q = mempcpy(q, s, len);
+		q = static_cast<char *>(mempcpy(q, s, len));
 		*q++ = '"';
 		s += len;
 
@@ -235,8 +238,10 @@ single_quote(const char *s) {
 char *
 sstrdup(const char *p)
 {
-	size_t len = strlen(p) + 1;
-	return memcpy(stalloc(len), p, len);
+	std::size_t len = std::strlen(p) + 1;
+	char *dst = stalloc(len);
+	std::memcpy(dst, p, len);
+	return dst;
 }
 
 /*
@@ -245,7 +250,8 @@ sstrdup(const char *p)
 int
 pstrcmp(const void *a, const void *b)
 {
-	return strcmp(*(const char *const *) a, *(const char *const *) b);
+	return std::strcmp(*static_cast<const char *const *>(a),
+			   *static_cast<const char *const *>(b));
 }
 
 /*
@@ -254,5 +260,6 @@ pstrcmp(const void *a, const void *b)
 const char *const *
 findstring(const char *s, const char *const *array, size_t nmemb)
 {
-	return bsearch(&s, array, nmemb, sizeof(const char *), pstrcmp);
+	return static_cast<const char *const *>(
+		std::bsearch(&s, array, nmemb, sizeof(const char *), pstrcmp));
 }

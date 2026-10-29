@@ -34,8 +34,10 @@
  *	@(#)mystring.h	8.2 (Berkeley) 5/4/95
  */
 
-#include <inttypes.h>
-#include <string.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <string_view>
 
 #ifdef HAVE_FNMATCH
 #define FNMATCH_IS_ENABLED 1
@@ -73,5 +75,12 @@ char *sstrdup(const char *);
 int pstrcmp(const void *, const void *);
 const char *const *findstring(const char *, const char *const *, size_t);
 
-#define equal(s1, s2)	(strcmp(s1, s2) == 0)
-#define scopy(s1, s2)	((void)strcpy(s2, s1))
+inline bool equal(const char *s1, const char *s2)
+{
+	return std::string_view(s1) == s2;
+}
+
+inline void scopy(const char *from, char *to)
+{
+	std::strcpy(to, from);
+}

@@ -1,0 +1,89 @@
+#ifndef DASH_CONFIG_H
+#define DASH_CONFIG_H
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+
+#define PACKAGE "dash"
+#define PACKAGE_NAME "dash"
+#define PACKAGE_TARNAME "dash"
+#define PACKAGE_VERSION "${PROJECT_VERSION}"
+#define PACKAGE_STRING "dash ${PROJECT_VERSION}"
+#define VERSION "${PROJECT_VERSION}"
+
+#cmakedefine HAVE_ALLOCA_H 1
+#cmakedefine HAVE_PATHS_H 1
+#cmakedefine HAVE_SYS_WAIT_H 1
+#cmakedefine HAVE_BSEARCH 1
+#cmakedefine HAVE_FACCESSAT 1
+#cmakedefine HAVE_GETPWNAM 1
+#cmakedefine HAVE_GETRLIMIT 1
+#cmakedefine HAVE_ISALPHA 1
+#cmakedefine HAVE_KILLPG 1
+#cmakedefine HAVE_MEMFD_CREATE 1
+#cmakedefine HAVE_MEMPCPY 1
+#cmakedefine HAVE_MEMRCHR 1
+#cmakedefine HAVE_SIGSETMASK 1
+#cmakedefine HAVE_STPCPY 1
+#cmakedefine HAVE_STRCHRNUL 1
+#cmakedefine HAVE_STRSIGNAL 1
+#cmakedefine HAVE_STRTOD 1
+#cmakedefine HAVE_STRTOIMAX 1
+#cmakedefine HAVE_STRTOUMAX 1
+#cmakedefine HAVE_SYSCONF 1
+#cmakedefine HAVE_TEE 1
+#cmakedefine HAVE_WAIT3 1
+#cmakedefine HAVE_FNMATCH 1
+#cmakedefine HAVE_GLOB 1
+#cmakedefine HAVE_ST_MTIM 1
+#cmakedefine HAVE_TRADITIONAL_FACCESSAT 1
+#cmakedefine SMALL 1
+#cmakedefine WITH_LINENO 1
+#cmakedefine PRIdMAX "${PRIdMAX}"
+
+#define HAVE_DECL_ISBLANK ${HAVE_DECL_ISBLANK}
+#define HAVE_F_DUPFD_CLOEXEC ${HAVE_F_DUPFD_CLOEXEC}
+#define USE_TEE ${USE_TEE}
+#define USE_MEMFD_CREATE ${USE_MEMFD_CREATE}
+
+#cmakedefine01 HAVE_DECL__PATH_BSHELL
+#if !HAVE_DECL__PATH_BSHELL
+#define _PATH_BSHELL "/bin/sh"
+#endif
+#cmakedefine01 HAVE_DECL__PATH_DEVNULL
+#if !HAVE_DECL__PATH_DEVNULL
+#define _PATH_DEVNULL "/dev/null"
+#endif
+#cmakedefine01 HAVE_DECL__PATH_TTY
+#if !HAVE_DECL__PATH_TTY
+#define _PATH_TTY "/dev/tty"
+#endif
+
+#cmakedefine HAVE_STAT64 1
+#ifndef HAVE_STAT64
+#define stat64 stat
+#define fstat64 fstat
+#define lstat64 lstat
+#endif
+
+#cmakedefine HAVE_OPEN64 1
+#ifndef HAVE_OPEN64
+#define open64 open
+#define readdir64 readdir
+#define dirent64 dirent
+#endif
+
+#cmakedefine HAVE_GLOB64 1
+#ifndef HAVE_GLOB64
+#define glob64_t glob_t
+#define glob64 glob
+#define globfree64 globfree
+#endif
+
+#cmakedefine HAVE_BSD_SIGNAL_ALIAS 1
+#ifdef HAVE_BSD_SIGNAL_ALIAS
+#define signal bsd_signal
+#endif
+
+#endif

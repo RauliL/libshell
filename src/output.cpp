@@ -146,7 +146,7 @@ outmem(const char *p, size_t len, struct output *dest)
 	nleft = dest->end - dest->nextc;
 	if (likely(nleft >= len)) {
 buffered:
-		dest->nextc = mempcpy(dest->nextc, p, len);
+		dest->nextc = static_cast<char *>(mempcpy(dest->nextc, p, len));
 		return;
 	}
 
@@ -355,7 +355,7 @@ out:
 int
 xwrite(int fd, const void *p, size_t n)
 {
-	const char *buf = p;
+	const char *buf = static_cast<const char *>(p);
 
 	while (n) {
 		ssize_t i;

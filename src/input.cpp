@@ -252,8 +252,8 @@ nextc:
 
 	/* delete nul characters */
 	if (IS_DEFINED_SMALL && unlikely(!c)) {
-		parsefile->nextc = memmove(parsefile->nextc - 1,
-					   parsefile->nextc, parsefile->nleft);
+		parsefile->nextc = static_cast<char *>(memmove(
+			parsefile->nextc - 1, parsefile->nextc, parsefile->nleft));
 		goto nextc;
 	}
 

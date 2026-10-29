@@ -5,12 +5,12 @@
 
 #include <sys/times.h>
 #include <unistd.h>
+#include "system.h"
 #ifdef USE_GLIBC_STDIO
 #include <stdio.h>
 #else
 #include "bltin.h"
 #endif
-#include "system.h"
 
 int timescmd(int argc, char *argv[]) {
 	struct tms buf;

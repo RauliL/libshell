@@ -1000,12 +1000,13 @@ STATIC int
 readtoken1(int firstc, char const *syntax, char *eofmark, int striptabs)
 {
 	struct synstack synbase = {
-		.dblquote = syntax == DQSYNTAX,
 		.syntax = syntax,
+		.dblquote = syntax == DQSYNTAX,
 	};
 	int chkeofmark = checkkwd & CHKEOFMARK;
 	struct synstack *synstack = &synbase;
 	bool printesc = syntax == SQSYNTAX;
+	const char *newsyn = nullptr;
 	struct nodelist *bqlist = NULL;
 	int dollarsq = 0;
 	int c = firstc;
@@ -1277,7 +1278,7 @@ more_heredoc:
 				if (len) {
 					char *str;
 
-					str = alloca(len + 1);
+					str = static_cast<char *>(alloca(len + 1));
 					*(char *)mempcpy(str, p, len) = 0;
 
 					pushstring(str, NULL);
@@ -1361,10 +1362,10 @@ parseredir: {
  */
 
 parsesub: {
-	const char *newsyn = synstack->syntax;
+	newsyn = synstack->syntax;
 	static const char types[] = "}-+?=";
 	int subtype;
-	char *p;
+	const char *p;
 
 	USTPUTC('$', out);
 
@@ -1453,7 +1454,7 @@ varname:
 					STPUTC(c, out);
 				/*FALLTHROUGH*/
 			default:
-				p = strchr(types, c);
+				p = std::strchr(types, c);
 				if (p == NULL)
 					break;
 				subtype |= p - types + VSNORMAL;
@@ -1487,7 +1488,7 @@ badsub:
 		    subtype != VSNORMAL) {
 			synstack_push(&synstack,
 				      synstack->prev ?:
-				      alloca(sizeof(*synstack)),
+				      static_cast<struct synstack *>(alloca(sizeof(*synstack))),
 				      newsyn);
 
 			synstack->varpushed++;
@@ -1532,7 +1533,7 @@ parsebackq: {
 
 	if (chkeofmark) {
 		synstack_push(&synstack,
-			      synstack->prev ?: alloca(sizeof(*synstack)),
+			      synstack->prev ?: static_cast<struct synstack *>(alloca(sizeof(*synstack))),
 			      BASESYNTAX);
 		synstack->backq = oldstyle + 1;
 		printesc = 1;
@@ -1640,7 +1641,7 @@ parsebackq_out:
 parsearith: {
 
 	synstack_push(&synstack,
-		      synstack->prev ?: alloca(sizeof(*synstack)),
+		      synstack->prev ?: static_cast<struct synstack *>(alloca(sizeof(*synstack))),
 		      ARISYNTAX);
 	synstack->dblquote = 1;
 	if (chkeofmark)

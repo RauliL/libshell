@@ -82,7 +82,7 @@ volatile sig_atomic_t pending_sig;
 /* received SIGCHLD */
 volatile sig_atomic_t gotsigchld;
 
-extern char *signal_names[];
+extern const char *const signal_names[];
 
 static int decode_signum(const char *);
 MKINIT void clear_traps(union node *);

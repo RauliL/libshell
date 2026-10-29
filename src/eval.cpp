@@ -996,7 +996,7 @@ evalfun(struct funcnode *func, int argc, char **argv, int flags)
 	int savefuncline;
 	int saveloopnest;
 
-	saveparam = shellparam;
+	pod_copy(saveparam, shellparam);
 	savefuncline = funcline;
 	saveloopnest = loopnest;
 	savehandler = handler;
@@ -1021,7 +1021,7 @@ funcdone:
 	funcline = savefuncline;
 	freefunc(func);
 	freeparam(&shellparam);
-	shellparam = saveparam;
+	pod_copy(shellparam, saveparam);
 	handler = savehandler;
 	INTON;
 	evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);

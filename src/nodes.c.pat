@@ -107,10 +107,10 @@ static void sizenodelist(struct nodelist *lp)
 
 static union node *copynode(union node *n)
 {
-	union node *new;
+	union node *copied;
 
 	%COPY
-	return new;
+	return copied;
 }
 
 
@@ -121,7 +121,7 @@ static struct nodelist *copynodelist(struct nodelist *lp)
 
 	lpp = &start;
 	while (lp) {
-		*lpp = funcblock;
+		*lpp = static_cast<struct nodelist *>(funcblock);
 		funcblock = (char *) funcblock +
 		    SHELL_ALIGN(sizeof(struct nodelist));
 		(*lpp)->n = copynode(lp->n);

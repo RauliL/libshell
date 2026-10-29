@@ -56,8 +56,8 @@
  * to the file OUTTEMP, which is then moved to OUTFILE.
  */
 
-#define OUTFILE "init.c"
-#define OUTTEMP "init.c.new"
+#define OUTFILE "init.cpp"
+#define OUTTEMP "init.cpp.new"
 
 
 /*
@@ -88,10 +88,10 @@ struct block {
  */
 
 struct event {
-	char *name;		/* name of event (e.g. INIT) */
-	char *routine;		/* name of routine called on event */
+	const char *name;	/* name of event (e.g. INIT) */
+	const char *routine;	/* name of routine called on event */
 	char *comment;		/* comment describing routine */
-	char *args;		/* arguments to routine */
+	const char *args;	/* arguments to routine */
 	struct text code;	/* code for handling event */
 };
 
@@ -143,26 +143,26 @@ struct event event[] = {
 
 char *curfile;				/* current file */
 int linno;				/* current line */
-char *header_files[200];		/* list of header files */
+const char *header_files[200];		/* list of header files */
 struct text defines;			/* #define statements */
 struct text decls;			/* declarations */
 int amiddecls;				/* for formatting */
 
 
 void readfile(char *);
-int match(char *, char *);
+int match(const char *, const char *);
 int gooddefine(char *);
 void doevent(struct event *, FILE *, char *);
 void doinclude(char *);
 void dodecl(char *, FILE *);
 void output(void);
-void addstr(char *, struct text *);
+void addstr(const char *, struct text *);
 void addchar(int, struct text *);
 void writetext(struct text *, FILE *);
-FILE *ckfopen(char *, char *);
+FILE *ckfopen(const char *, const char *);
 void *ckmalloc(int);
 char *savestr(char *);
-static void error(char *);
+static void error(const char *);
 int main(int, char **);
 
 #define equal(s1, s2)	(strcmp(s1, s2) == 0)
@@ -233,11 +233,10 @@ readfile(char *fname)
 
 
 int
-match(char *name, char *line)
+match(const char *name, const char *line)
 {
-	char *p, *q;
-
-	p = name, q = line;
+	const char *p = name;
+	const char *q = line;
 	while (*p) {
 		if (*p++ != *q++)
 			return 0;
@@ -313,7 +312,7 @@ doinclude(char *line)
 {
 	char *p;
 	char *name;
-	char **pp;
+	const char **pp;
 
 	for (p = line ; *p != '"' && *p != '<' && *p != '\0' ; p++);
 	if (*p == '\0')
@@ -381,7 +380,7 @@ void
 output(void)
 {
 	FILE *fp;
-	char **pp;
+	const char **pp;
 	struct event *ep;
 
 	fp = ckfopen(OUTTEMP, "w");
@@ -410,7 +409,7 @@ output(void)
  */
 
 void
-addstr(char *s, struct text *text)
+addstr(const char *s, struct text *text)
 {
 	while (*s) {
 		if (--text->nleft < 0)
@@ -427,7 +426,7 @@ addchar(int c, struct text *text)
 	struct block *bp;
 
 	if (--text->nleft < 0) {
-		bp = ckmalloc(sizeof *bp);
+		bp = static_cast<struct block *>(ckmalloc(sizeof *bp));
 		if (text->start == NULL)
 			text->start = bp;
 		else
@@ -458,7 +457,7 @@ writetext(struct text *text, FILE *fp)
 }
 
 FILE *
-ckfopen(char *file, char *mode)
+ckfopen(const char *file, const char *mode)
 {
 	FILE *fp;
 
@@ -474,7 +473,7 @@ ckmalloc(int nbytes)
 {
 	char *p;
 
-	if ((p = malloc(nbytes)) == NULL)
+	if ((p = static_cast<char *>(malloc(nbytes))) == nullptr)
 		error("Out of space");
 	return p;
 }
@@ -484,13 +483,13 @@ savestr(char *s)
 {
 	char *p;
 
-	p = ckmalloc(strlen(s) + 1);
+	p = static_cast<char *>(ckmalloc(strlen(s) + 1));
 	strcpy(p, s);
 	return p;
 }
 
 static void
-error(char *msg)
+error(const char *msg)
 {
 	if (curfile != NULL)
 		fprintf(stderr, "%s:%d: ", curfile, linno);

@@ -26,9 +26,9 @@
  * SUCH DAMAGE.
  */
 
-#include <limits.h>
-#include <signal.h>
-#include <stdbool.h>
+#include <climits>
+#include <csignal>
+#include <cstddef>
 #include <sys/types.h>
 
 #ifndef SSIZE_MAX
@@ -174,7 +174,7 @@ typedef struct {
 
 static inline int glob64(const char *pattern, int flags,
 			 int (*errfunc)(const char *epath, int eerrno),
-			 glob64_t *restrict pglob)
+			 glob64_t *pglob)
 {
 	return -1;
 }
