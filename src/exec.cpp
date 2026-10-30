@@ -38,6 +38,7 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string>
 #ifdef HAVE_PATHS_H
 #include <paths.h>
 #endif
@@ -75,16 +76,15 @@
 
 
 #define CMDTABLESIZE 31		/* should be prime */
-#define ARB 1			/* actual size determined at run time */
 
 
 
 struct tblentry {
-	struct tblentry *next;	/* next entry in hash chain */
-	cmdparam param;		/* definition of builtin function */
-	short cmdtype;		/* index identifying command */
-	char rehash;		/* if set, cd done since entry created */
-	char cmdname[ARB];	/* name of command */
+	struct tblentry *next = nullptr; /* next entry in hash chain */
+	cmdparam param{};		/* definition of builtin function */
+	short cmdtype = 0;		/* index identifying command */
+	char rehash = 0;		/* if set, cd done since entry created */
+	std::string cmdname;		/* name of command */
 };
 
 
@@ -321,7 +321,7 @@ printentry(ShellContext &sh, struct tblentry *cmdp)
 	idx = cmdp->param.index;
 	path = pathval();
 	do {
-		padvance(sh, &path, cmdp->cmdname);
+		padvance(sh, &path, cmdp->cmdname.c_str());
 	} while (--idx >= 0);
 	name = stackblock();
 	out1str(name);
@@ -625,7 +625,7 @@ clearcmdentry(ShellContext &sh)
 			     !(cmdp->param.cmd->flags & BUILTIN_REGULAR) &&
 			     sh.builtinloc > 0)) {
 				*pp = cmdp->next;
-				ckfree(cmdp);
+				delete cmdp;
 			} else {
 				pp = &cmdp->next;
 			}
@@ -664,16 +664,14 @@ cmdlookup(ShellContext &sh, const char *name, int add)
 	hashval &= 0x7FFF;
 	pp = &sh.cmdtable[hashval % CMDTABLESIZE];
 	for (cmdp = *pp ; cmdp ; cmdp = cmdp->next) {
-		if (equal(cmdp->cmdname, name))
+		if (equal(cmdp->cmdname.c_str(), name))
 			break;
 		pp = &cmdp->next;
 	}
 	if (add && cmdp == NULL) {
-		cmdp = *pp = ckmalloc(sh, sizeof (struct tblentry) - ARB
-					+ strlen(name) + 1);
-		cmdp->next = NULL;
+		cmdp = *pp = new tblentry;
 		cmdp->cmdtype = CMDUNKNOWN;
-		strcpy(cmdp->cmdname, name);
+		cmdp->cmdname = name;
 	}
 	sh.lastcmdentry = pp;
 	return cmdp;
@@ -693,7 +691,7 @@ delete_cmd_entry(ShellContext &sh)
 	*sh.lastcmdentry = cmdp->next;
 	if (cmdp->cmdtype == CMDFUNCTION)
 		freefunc(sh, cmdp->param.func);
-	ckfree(cmdp);
+	delete cmdp;
 	INTON;
 }
 

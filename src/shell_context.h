@@ -174,7 +174,7 @@ struct ShellContext {
 	char ifsmap[128] = {};
 	const char *ncifs = nullptr;
 	size_t ifsmb0len = 0;
-	wchar_t *wcifs = nullptr;
+	std::wstring wcifs;
 
 	struct heredoc *heredoclist = nullptr;
 	int doprompt = 0;

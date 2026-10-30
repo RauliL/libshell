@@ -644,10 +644,7 @@ evalbackcmd(ShellContext &sh, union node *n, struct backcmd *result)
 	int pip[2];
 	int pid;
 
-	result->fd = -1;
-	result->buf = NULL;
-	result->nleft = 0;
-	result->jp = NULL;
+	*result = backcmd{};
 	if (n == NULL) {
 		goto out;
 	}
@@ -674,8 +671,8 @@ evalbackcmd(ShellContext &sh, union node *n, struct backcmd *result)
 	result->jp = jp;
 
 out:
-	TRACE(("evalbackcmd done: fd=%d buf=0x%x nleft=%d jp=0x%x\n",
-		result->fd, result->buf, result->nleft, result->jp));
+	TRACE(("evalbackcmd done: fd=%d buflen=%zu jp=0x%x\n",
+		result->fd, result->buf.size(), result->jp));
 }
 
 static struct strlist *

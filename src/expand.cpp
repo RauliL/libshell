@@ -48,6 +48,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -569,8 +570,8 @@ expbackq(ShellContext &sh, union node *cmd, int flag)
 		sh.stackstr.rewind(su);
 	}
 
-	p = in.buf;
-	i = in.nleft;
+	p = in.buf.data();
+	i = static_cast<int>(in.buf.size());
 	if (i == 0)
 		goto read;
 	for (;;) {
@@ -587,8 +588,6 @@ read:
 		p = buf;
 	}
 
-	if (in.buf)
-		ckfree(in.buf);
 	if (in.fd >= 0) {
 		close(in.fd);
 		sh.back_exitstatus = waitforjob(sh, in.jp);
@@ -1205,7 +1204,7 @@ ifsisifs(ShellContext &sh, const char *p, unsigned ml, const char *ifs)
 	wchar_t wc = *p;
 	wchar_t ifs0;
 
-	if (likely(ifs[0]) && unlikely(sh.wcifs)) {
+	if (likely(ifs[0]) && unlikely(!sh.wcifs.empty())) {
 		if (wc & 0x80) {
 			mbstate_t mbst = {};
 			wchar_t wc2;
@@ -1215,7 +1214,7 @@ ifsisifs(ShellContext &sh, const char *p, unsigned ml, const char *ifs)
 			wc = wc2;
 		}
 
-		isifs = wcschr(sh.wcifs, wc);
+		isifs = sh.wcifs.find(wc) != std::wstring::npos;
 		ifs0 = sh.wcifs[0];
 	} else if (likely(!ml)) {
 		isifs = strchr(ifs, wc);
@@ -1436,7 +1435,7 @@ void
 changeifs(ShellContext &sh, const char *ifs)
 {
 	mbstate_t mbs = {};
-	wchar_t *nwcifs;
+	std::wstring nwcifs;
 	unsigned mb = 0;
 	size_t len = 0;
 	const char *p;
@@ -1461,8 +1460,6 @@ changeifs(ShellContext &sh, const char *ifs)
 		len++;
 	}
 
-	nwcifs = NULL;
-
 	sh.ifsmb0len = !!len;
 
 	if (!mb)
@@ -1473,15 +1470,18 @@ changeifs(ShellContext &sh, const char *ifs)
 		ml = 1;
 	sh.ifsmb0len = ml;
 
-	nwcifs = ckmalloc(sh, (len + 1) * sizeof(*sh.wcifs));
-	memset(nwcifs, 0, (len + 1) * sizeof(*sh.wcifs));
-
+	nwcifs.assign(len + 1, L'\0');
 	p = ifs;
-	mbsrtowcs(nwcifs, &p, len + 1, &mbs);
+	{
+		size_t n = mbsrtowcs(nwcifs.data(), &p, len + 1, &mbs);
+		if (n == static_cast<size_t>(-1))
+			nwcifs.clear();
+		else
+			nwcifs.resize(n);
+	}
 
 out:
-	ckfree(sh.wcifs);
-	sh.wcifs = nwcifs;
+	sh.wcifs = std::move(nwcifs);
 }
 
 /*

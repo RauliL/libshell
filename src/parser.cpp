@@ -76,16 +76,17 @@
 
 
 
-/* Used by expandstr to get here-doc like behaviour. */
-#define FAKEEOFMARK (char *)1
+/* Used by expandstr to get here-doc like behaviour (address only). */
+static const std::string fake_eofmark;
+#define FAKEEOFMARK (&fake_eofmark)
 
 
 
 struct heredoc {
-	struct heredoc *next;	/* next here document in list */
-	union node *here;		/* redirection node */
-	char *eofmark;		/* string indicating end of input */
-	int striptabs;		/* if set, strip leading tabs */
+	struct heredoc *next = nullptr;	/* next here document in list */
+	union node *here = nullptr;	/* redirection node */
+	std::string eofmark;		/* string indicating end of input */
+	int striptabs = 0;		/* if set, strip leading tabs */
 };
 
 struct synstack {
@@ -127,7 +128,7 @@ static void parseheredoc(ShellContext &sh);
 static int readtoken(ShellContext &sh);
 static int xxreadtoken(ShellContext &sh);
 static int pgetc_eatbnl(ShellContext &sh);
-static int readtoken1(ShellContext &sh, int, char const *, char *, int);
+static int readtoken1(ShellContext &sh, int, char const *, const std::string *, int);
 static void synexpect(ShellContext &sh, int) __attribute__((__noreturn__));
 static void synerror(ShellContext &sh, const char *) __attribute__((__noreturn__));
 static void setprompt(ShellContext &sh, int);
@@ -150,8 +151,9 @@ issimplecmd(ShellContext &sh, union node *n, const char *name)
 }
 
 static inline int
-realeofmark(ShellContext &sh, const char *eofmark)
+realeofmark(ShellContext &sh, const std::string *eofmark)
 {
+	(void)sh;
 	return eofmark && eofmark != FAKEEOFMARK;
 }
 
@@ -657,7 +659,7 @@ parsefname(ShellContext &sh)
 			n->type = NXHERE;
 		TRACE(("Here document %d\n", n->type));
 		rmescapes(sh.wordtext);
-		here->eofmark = sh.wordtext;
+		here->eofmark = sh.wordtext ? sh.wordtext : "";
 		here->next = NULL;
 		if (sh.heredoclist == NULL)
 			sh.heredoclist = here;
@@ -687,20 +689,22 @@ parseheredoc(ShellContext &sh)
 	sh.heredoclist = 0;
 
 	while (here) {
+		struct heredoc *next = here->next;
 		if (sh.needprompt) {
 			setprompt(sh, 2);
 		}
 		if (here->here->type == NHERE)
-			readtoken1(sh, pgetc(sh), SQSYNTAX, here->eofmark, here->striptabs);
+			readtoken1(sh, pgetc(sh), SQSYNTAX, &here->eofmark, here->striptabs);
 		else
-			readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, here->eofmark, here->striptabs);
+			readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, &here->eofmark, here->striptabs);
 		n = new_node<narg>();
 		n->narg.type = NARG;
 		n->narg.next = NULL;
 		n->narg.text = sh.wordtext;
 		n->narg.backquote = std::move(sh.backquotelist);
 		here->here->nhere.doc = n;
-		here = here->next;
+		delete here;
+		here = next;
 	}
 }
 
@@ -848,7 +852,7 @@ xxreadtoken(ShellContext &sh)
 		case ')':
 			RETURN(TRP);
 		}
-		tok = readtoken1(sh, c, BASESYNTAX, (char *)NULL, 0);
+		tok = readtoken1(sh, c, BASESYNTAX, nullptr, 0);
 		if (tok != TBLANK)
 			return tok;
 	}
@@ -1008,7 +1012,7 @@ dollarsq_escape(ShellContext &sh, char *out)
 #define	PARSEARITH()	{goto parsearith; parsearith_return:;}
 
 static int
-readtoken1(ShellContext &sh, int firstc, char const *syntax, char *eofmark, int striptabs)
+readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *eofmark, int striptabs)
 {
 	struct synstack synbase = {
 		.syntax = syntax,
@@ -1257,6 +1261,7 @@ endword:
 checkend: {
 	if (realeofmark(sh, eofmark)) {
 		int markloc;
+		const char *ep;
 		char *p;
 
 		if (striptabs) {
@@ -1265,8 +1270,8 @@ checkend: {
 		}
 
 		markloc = out - (char *)stackblock();
-		for (p = eofmark; STPUTC(c, out), *p; p++) {
-			if (c != (signed char)*p)
+		for (ep = eofmark->c_str(); STPUTC(c, out), *ep; ep++) {
+			if (c != (signed char)*ep)
 				goto more_heredoc;
 
 			c = pgetc(sh);
@@ -1364,7 +1369,7 @@ parseredir: {
 	np->type = redir_type;
 	np->nfile.fd = fd != '\0' ? digit_val(fd) : default_fd;
 	if (redir_type == NHERE) {
-		sh.heredoc = (struct heredoc *)stalloc(sh, sizeof(struct heredoc));
+		sh.heredoc = new heredoc;
 		sh.heredoc->here = np;
 		sh.heredoc->striptabs = striptabs;
 	}

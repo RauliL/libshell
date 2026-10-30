@@ -36,11 +36,12 @@
  *	@(#)eval.h	8.2 (Berkeley) 5/4/95
  */
 
+#include <string>
+
 struct backcmd {		/* result of evalbackcmd */
-	int fd;			/* file descriptor to read from */
-	char *buf;		/* buffer */
-	int nleft;		/* number of chars in buffer */
-	struct job *jp;		/* job structure for command */
+	int fd = -1;		/* file descriptor to read from */
+	std::string buf;	/* buffer */
+	struct job *jp = nullptr; /* job structure for command */
 };
 
 #include <bitset>
