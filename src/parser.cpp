@@ -39,6 +39,7 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string>
 #include <wchar.h>
 #include <wctype.h>
 
@@ -60,6 +61,8 @@
 #include "show.h"
 #include "builtins.h"
 #include "system.h"
+#include "parse_error.h"
+#include "result.h"
 #ifndef SMALL
 #include "myhistedit.h"
 #endif
@@ -629,7 +632,8 @@ void ShellContext::fixredir(union node *n, const char *text, int err)
 	else {
 
 		if (err)
-			sh_error("Bad fd number: %s", text);
+			throw dash::ParseError(
+				std::string("Bad fd number: ") + text, plinno);
 		else
 			n->ndup.vname = makename();
 	}
@@ -1709,8 +1713,43 @@ ShellContext::synexpect(int token)
 ShellContext::synerror(const char *msg)
 {
 	errlinno = plinno;
-	sh_error("Syntax error: %s", msg);
-	/* NOTREACHED */
+	throw dash::ParseError(std::string("Syntax error: ") + msg, plinno);
+}
+
+void ShellContext::report_parse_error(const dash::ParseError &e)
+{
+	errlinno = e.lineno();
+	exitstatus = 2;
+	sh_warnx("%s", e.what());
+}
+
+dash::Result<void> ShellContext::try_parse_string(char *s)
+{
+	union node *n;
+	struct stackmark smark;
+	char save_nflag = nflag;
+
+	s = sstrdup(s);
+	setinputstring(s);
+	setstackmark(&smark);
+	nflag = 1;
+
+	try {
+		for (; (n = parsecmd(0)) != NEOF; popstackmark(&smark)) {
+		}
+		popstackmark(&smark);
+		popfile();
+		stunalloc(s);
+		nflag = save_nflag;
+		return dash::Result<void>::Ok();
+	} catch (const dash::ParseError &e) {
+		errlinno = e.lineno();
+		popstackmark(&smark);
+		popfile();
+		stunalloc(s);
+		nflag = save_nflag;
+		return dash::Result<void>::Err(e.what());
+	}
 }
 
  void __attribute__((noinline)) ShellContext::setprompt(int which)
@@ -1757,19 +1796,24 @@ ShellContext::expandstr(const char *ps)
 	needprompt = 0;
 	result = ps;
 	savehandler = handler;
-	if (unlikely(err = setjmp(jmploc.loc)))
-		goto out;
-	handler = &jmploc;
+	err = 0;
+	try {
+		if (unlikely(err = setjmp(jmploc.loc)))
+			goto out;
+		handler = &jmploc;
 
-	readtoken1(pgetc_eatbnl(), DQSYNTAX, FAKEEOFMARK, 0);
+		readtoken1(pgetc_eatbnl(), DQSYNTAX, FAKEEOFMARK, 0);
 
-	n.narg.type = NARG;
-	n.narg.next = NULL;
-	n.narg.text = wordtext;
-	n.narg.backquote = backquotelist;
+		n.narg.type = NARG;
+		n.narg.next = NULL;
+		n.narg.text = wordtext;
+		n.narg.backquote = backquotelist;
 
-	expandarg(&n, NULL, EXP_QUOTED);
-	result = stackblock();
+		expandarg(&n, NULL, EXP_QUOTED);
+		result = stackblock();
+	} catch (const dash::ParseError &) {
+		err = 1;
+	}
 
 out:
 	restore_handler_expandarg(savehandler, err);

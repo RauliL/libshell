@@ -37,8 +37,10 @@
  */
 
 #include "token.h"
+#include "result.h"
 
 union node;
+namespace dash { class ParseError; }
 
 /* control characters in argument strings */
 #define CTL_FIRST -127		/* first 'special' character */
@@ -98,5 +100,7 @@ const char *const *findkwd(const char *);
 char *endofname(const char *);
 const char *expandstr(const char *);
 unsigned getmbc(int c, char *out, int mode);
+void report_parse_error(const dash::ParseError &e);
+dash::Result<void> try_parse_string(char *s);
 
 #endif

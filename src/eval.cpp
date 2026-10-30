@@ -62,6 +62,7 @@
 #include "error.h"
 #include "show.h"
 #include "mystring.h"
+#include "parse_error.h"
 #ifndef SMALL
 #include "myhistedit.h"
 #endif
@@ -184,24 +185,31 @@ ShellContext::evalstring(char *s, EvalFlags flags)
 	setstackmark(&smark);
 
 	status = 0;
-	for (; (n = parsecmd(0)) != NEOF; popstackmark(&smark)) {
-		int i;
+	try {
+		for (; (n = parsecmd(0)) != NEOF; popstackmark(&smark)) {
+			int i;
 
-		EvalFlags child = flags;
-		if (!parser_eof())
-			child.reset(EvalFlag::exit);
-		i = evaltree(n, child);
-		if (n)
-			status = i;
+			EvalFlags child = flags;
+			if (!parser_eof())
+				child.reset(EvalFlag::exit);
+			i = evaltree(n, child);
+			if (n)
+				status = i;
 
-		if (evalskip)
-			break;
+			if (evalskip)
+				break;
+		}
+		popstackmark(&smark);
+		popfile();
+		stunalloc(s);
+		return status;
+	} catch (const dash::ParseError &e) {
+		report_parse_error(e);
+		popstackmark(&smark);
+		popfile();
+		stunalloc(s);
+		return exitstatus;
 	}
-	popstackmark(&smark);
-	popfile();
-	stunalloc(s);
-
-	return status;
 }
 
 

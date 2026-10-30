@@ -59,6 +59,7 @@
 #include "mystring.h"
 #include "exec.h"
 #include "cd.h"
+#include "parse_error.h"
 
 #define PROFILE 0
 
@@ -77,8 +78,6 @@ extern int etext();
 STATIC void read_profile(const char *);
 STATIC char *find_dot_file(char *);
 static int cmdloop(int);
-int main(int, char **);
-
 /*
  * Main routine.  We initialize things, parse the arguments, execute
  * profiles if we're a login shell, and then call cmdloop to execute
@@ -218,32 +217,45 @@ ShellContext::cmdloop(int top)
 			inter++;
 			chkmail();
 		}
-		n = parsecmd(inter);
-		/* showtree(n); DEBUG */
-		if (n == NEOF) {
-			if (!top || numeof >= 50)
-				break;
-			if (!stoppedjobs()) {
-				if (!Iflag) {
-					if (iflag) {
-						out2c('\n');
-#ifdef FLUSHERR
-						flushout(out2);
-#endif
-					}
+		try {
+			n = parsecmd(inter);
+			/* showtree(n); DEBUG */
+			if (n == NEOF) {
+				if (!top || numeof >= 50)
 					break;
+				if (!stoppedjobs()) {
+					if (!Iflag) {
+						if (iflag) {
+							out2c('\n');
+#ifdef FLUSHERR
+							flushout(out2);
+#endif
+						}
+						break;
+					}
+					out2str("\nUse \"exit\" to leave shell.\n");
 				}
-				out2str("\nUse \"exit\" to leave shell.\n");
-			}
-			numeof++;
-		} else {
-			int i;
+				numeof++;
+			} else {
+				int i;
 
-			job_warning = (job_warning == 2) ? 1 : 0;
-			numeof = 0;
-			i = evaltree(n, {});
-			if (n)
-				status = i;
+				job_warning = (job_warning == 2) ? 1 : 0;
+				numeof = 0;
+				i = evaltree(n, {});
+				if (n)
+					status = i;
+			}
+		} catch (const dash::ParseError &e) {
+			report_parse_error(e);
+			popstackmark(&smark);
+			if (!(iflag && top))
+				return exitstatus;
+			skip = evalskip;
+			if (skip) {
+				evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+				break;
+			}
+			continue;
 		}
 		popstackmark(&smark);
 
@@ -364,9 +376,3 @@ FORKRESET {
 	handler = &main_handler;
 }
 #endif
-
-int main(int argc, char **argv)
-{
-	ShellContext shell;
-	return shell.run(argc, argv);
-}

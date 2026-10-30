@@ -23,7 +23,6 @@
 #include <sys/types.h>
 #include <termios.h>
 
-#include "arith_yacc.h"
 #include "error.h"
 #include "eval.h"
 #include "expand.h"
@@ -177,11 +176,6 @@ struct ShellContext {
 	const char *ncifs = nullptr;
 	size_t ifsmb0len = 0;
 	wchar_t *wcifs = nullptr;
-
-	const char *arith_startbuf = nullptr;
-	const char *arith_buf = nullptr;
-	union yystype yylval = {};
-	int last_token = 0;
 
 	struct heredoc *heredoclist = nullptr;
 	int doprompt = 0;

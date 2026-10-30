@@ -7,19 +7,7 @@
 	struct alias * freealias(struct alias *ap);
 	void __attribute__((noinline)) printalias(const struct alias *ap);
 	struct alias ** __lookupalias(const char *name);
-	void yyerror(const char *s);
-	inline int arith_prec(int op);
-	inline int higher_prec(int op1, int op2);
-	intmax_t do_binop(int op, intmax_t a, intmax_t b);
-	intmax_t primary(int token, union yystype *val, int op, int noeval);
-	intmax_t binop2(intmax_t a, int op, int prec, int noeval);
-	intmax_t binop(int token, union yystype *val, int op, int noeval);
-	intmax_t arith_and(int token, union yystype *val, int op, int noeval);
-	intmax_t arith_or(int token, union yystype *val, int op, int noeval);
-	intmax_t cond(int token, union yystype *val, int op, int noeval);
-	intmax_t assignment(int var, int noeval);
 	intmax_t arith(const char *s);
-	int yylex();
 	int print_escape_str(const char *f, int *param, int *array, char *s);
 	int printfcmd(int argc, char *argv[]);
 	int conv_escape_str(char *str, char **sp);
@@ -325,6 +313,8 @@
 	char * endofname(const char *name);
 	void synexpect(int token);
 	void synerror(const char *msg);
+	void report_parse_error(const dash::ParseError &e);
+	dash::Result<void> try_parse_string(char *s);
 	void __attribute__((noinline)) setprompt(int which);
 	const char * expandstr(const char *ps);
 	const char * getprompt(void *unused);

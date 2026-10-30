@@ -91,13 +91,4 @@ void ifsfree(void);
 void restore_handler_expandarg(struct jmploc *savehandler, int err);
 void changeifs(const char *);
 
-/* From arith.y */
-intmax_t arith(const char *);
-int expcmd(int , char **);
-#ifdef USE_LEX
-void arith_lex_reset(void);
-#else
-#define arith_lex_reset()
-#endif
-int yylex(void);
 #endif

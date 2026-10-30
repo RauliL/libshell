@@ -189,8 +189,7 @@ endfunction()
 
 set(DASH_SOURCES
   src/alias.cpp
-  src/arith_yacc.cpp
-  src/arith_yylex.cpp
+  src/arith.cpp
   src/cd.cpp
   src/error.cpp
   src/eval.cpp
@@ -310,19 +309,27 @@ set_source_files_properties(
   PROPERTIES OBJECT_DEPENDS
   "${CMAKE_CURRENT_BINARY_DIR}/token.h;${CMAKE_CURRENT_BINARY_DIR}/nodes.h;${CMAKE_CURRENT_BINARY_DIR}/builtins.h;${CMAKE_CURRENT_BINARY_DIR}/syntax.h")
 
-add_executable(dash
-  ${DASH_SOURCES}
+set(DASH_GENERATED_SOURCES
   "${CMAKE_CURRENT_BINARY_DIR}/builtins.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/nodes.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/signames.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
 )
-dash_configure_tool(dash)
+
+add_library(dash_lib STATIC
+  ${DASH_SOURCES}
+  ${DASH_GENERATED_SOURCES}
+)
+dash_configure_tool(dash_lib)
 if(WITH_LIBEDIT)
-  target_include_directories(dash PRIVATE "${EDIT_INCLUDE_DIR}")
-  target_link_libraries(dash PRIVATE "${EDIT_LIBRARY}")
+  target_include_directories(dash_lib PUBLIC "${EDIT_INCLUDE_DIR}")
+  target_link_libraries(dash_lib PUBLIC "${EDIT_LIBRARY}")
 endif()
+
+add_executable(dash src/dash_main.cpp)
+target_link_libraries(dash PRIVATE dash_lib)
+dash_configure_tool(dash)
 if(ENABLE_STATIC)
   target_link_options(dash PRIVATE -static)
 endif()
@@ -330,6 +337,25 @@ endif()
 install(TARGETS dash RUNTIME DESTINATION bin)
 install(FILES src/dash.1 DESTINATION share/man/man1)
 
-enable_testing()
-add_test(NAME smoke COMMAND dash -c "echo ok")
-set_tests_properties(smoke PROPERTIES PASS_REGULAR_EXPRESSION "^ok\n$")
+include(CTest)
+if(BUILD_TESTING)
+  include(FetchContent)
+  FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG v3.8.1
+  )
+  FetchContent_MakeAvailable(Catch2)
+
+  add_executable(parse_tests tests/parse/parse_tests.cpp)
+  target_include_directories(parse_tests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/parse")
+  target_compile_definitions(parse_tests PRIVATE
+    "PARSE_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/parse\"")
+  target_link_libraries(parse_tests PRIVATE dash_lib Catch2::Catch2WithMain)
+  dash_configure_tool(parse_tests)
+
+  list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")
+  include(Catch)
+  catch_discover_tests(parse_tests)
+endif()
