@@ -74,6 +74,7 @@
 #include "output.h"
 #include "parser.h"
 #include "shell.h"
+#include "shell_context.h"
 #include "show.h"
 #include "syntax.h"
 #include "system.h"
@@ -103,7 +104,7 @@ struct ifs_state {
 	int ifsspc;
 };
 
-/* output of current string */
+/* sh.output of current string */
 
 /* list of back quote expressions */
 
@@ -119,24 +120,24 @@ struct ifs_state {
 
 
 
-static char *argstr(char *p, int flag);
-static char *exptilde(char *startp, int flag);
-static char *expari(char *start, int flag);
-STATIC void expbackq(union node *, int);
-STATIC char *evalvar(char *, int);
-static size_t strtodest(const char *p, int flags);
-static size_t memtodest(const char *p, size_t len, int flags);
-STATIC ssize_t varvalue(char *, int, unsigned);
-STATIC void expandmeta(struct strlist *);
-static void addglob(const glob64_t *);
-static char *expmeta(char *, unsigned, size_t);
-STATIC struct strlist *expsort(struct strlist *);
-STATIC struct strlist *msort(struct strlist *, int);
-STATIC void addfname(char *);
-STATIC int patmatch(char *, const char *);
-STATIC int pmatch(char *, const char *);
-static size_t cvtnum(intmax_t num, int flags);
-STATIC void varunset(const char *, const char *, const char *, int)
+static char * argstr(ShellContext &sh, char *p, int flag);
+static char * exptilde(ShellContext &sh, char *startp, int flag);
+static char * expari(ShellContext &sh, char *start, int flag);
+static void expbackq(ShellContext &sh, union node *, int);
+static char * evalvar(ShellContext &sh, char *, int);
+static size_t strtodest(ShellContext &sh, const char *p, int flags);
+static size_t memtodest(ShellContext &sh, const char *p, size_t len, int flags);
+static ssize_t varvalue(ShellContext &sh, char *, int, unsigned);
+static void expandmeta(ShellContext &sh, struct strlist *);
+static void addglob(ShellContext &sh, const glob64_t *);
+static char * expmeta(ShellContext &sh, char *, unsigned, size_t);
+static struct strlist * expsort(ShellContext &sh, struct strlist *);
+static struct strlist * msort(ShellContext &sh, struct strlist *, int);
+static void addfname(ShellContext &sh, char *);
+static int patmatch(ShellContext &sh, char *, const char *);
+static int pmatch(ShellContext &sh, char *, const char *);
+static size_t cvtnum(ShellContext &sh, intmax_t num, int flags);
+static void varunset(ShellContext &sh, const char *, const char *, const char *, int)
 	__attribute__((__noreturn__));
 
 
@@ -146,19 +147,22 @@ STATIC void varunset(const char *, const char *, const char *, int)
  * Returns an stalloced string.
  */
 
- inline char *
-ShellContext::preglob(const char *pattern, int flag) {
+static inline char *
+preglob(ShellContext &sh, const char *pattern, int flag)
+{
 	if (FNMATCH_IS_ENABLED) {
 		if (!flag)
 			flag = RMESCAPE_GROW;
 		flag |= RMESCAPE_ALLOC;
 	}
 	flag |= RMESCAPE_GLOB;
-	return _rmescapes((char *)pattern, flag);
+	return _rmescapes(sh, (char *)pattern, flag);
 }
 
 
- size_t ShellContext::mesclen(const char *start, const char *p, char mesc) {
+static size_t
+mesclen(ShellContext &sh, const char *start, const char *p, char mesc)
+{
 	size_t esc = 0;
 
 	while (p > start && *--p == mesc) {
@@ -167,11 +171,14 @@ ShellContext::preglob(const char *pattern, int flag) {
 	return esc;
 }
 
- size_t ShellContext::esclen(const char *start, const char *p) {
-	return mesclen(start, p, CTLESC);
+static size_t
+esclen(ShellContext &sh, const char *start, const char *p)
+{
+	return mesclen(sh, start, p, CTLESC);
 }
 
- __attribute__((noinline)) unsigned ShellContext::mbnext(const char *p)
+static __attribute__((noinline)) unsigned
+mbnext(ShellContext &sh, const char *p)
 {
 	unsigned start = 0;
 	unsigned end = 0;
@@ -196,7 +203,8 @@ ShellContext::preglob(const char *pattern, int flag) {
 	return start | end << 8;
 }
 
- inline const char *ShellContext::getpwhome(const char *name)
+static inline const char *
+getpwhome(ShellContext &sh, const char *name)
 {
 #ifdef HAVE_GETPWNAM
 	struct passwd *pw = getpwnam(name);
@@ -215,53 +223,54 @@ ShellContext::preglob(const char *pattern, int flag) {
  */
 
 void
-ShellContext::expandarg(union node *arg, struct arglist *arglist, int flag)
+expandarg(ShellContext &sh, union node *arg, struct arglist *arglist, int flag)
 {
 	struct strlist *sp;
 	char *p;
 
-	argbackq = arg->narg.backquote;
-	STARTSTACKSTR(expdest);
-	argstr(arg->narg.text, flag);
+	sh.argbackq = arg->narg.backquote;
+	STARTSTACKSTR(sh.expdest);
+	argstr(sh, arg->narg.text, flag);
 	if (arglist == NULL) {
 		/* here document expanded */
 		goto out;
 	}
-	p = grabstackstr(expdest);
-	exparg.lastp = &exparg.list;
+	p = grabstackstr(sh.expdest);
+	sh.exparg.lastp = &sh.exparg.list;
 	/*
 	 * TODO - EXP_REDIR
 	 */
 	if (flag & EXP_FULL) {
-		ifsbreakup(p, -1, &exparg);
-		*exparg.lastp = NULL;
-		exparg.lastp = &exparg.list;
-		expandmeta(exparg.list);
+		ifsbreakup(sh, p, -1, &sh.exparg);
+		*sh.exparg.lastp = NULL;
+		sh.exparg.lastp = &sh.exparg.list;
+		expandmeta(sh, sh.exparg.list);
 	} else {
-		sp = (struct strlist *)stalloc(sizeof (struct strlist));
+		sp = (struct strlist *)stalloc(sh, sizeof (struct strlist));
 		sp->text = p;
-		*exparg.lastp = sp;
-		exparg.lastp = &sp->next;
+		*sh.exparg.lastp = sp;
+		sh.exparg.lastp = &sp->next;
 	}
-	*exparg.lastp = NULL;
-	if (exparg.list) {
-		*arglist->lastp = exparg.list;
-		arglist->lastp = exparg.lastp;
+	*sh.exparg.lastp = NULL;
+	if (sh.exparg.list) {
+		*arglist->lastp = sh.exparg.list;
+		arglist->lastp = sh.exparg.lastp;
 	}
 
 out:
-	ifsfree();
+	ifsfree(sh);
 }
 
 
 
 /*
- * Perform variable and command substitution.  If EXP_FULL is set, output CTLESC
+ * Perform variable and command substitution.  If EXP_FULL is set, sh.output CTLESC
  * characters to allow for further processing.  Otherwise treat
  * $@ like $* since no splitting will be performed.
  */
 
- char *ShellContext::argstr(char *p, int flag)
+static char *
+argstr(ShellContext &sh, char *p, int flag)
 {
 	static const char spclchars[] = {
 		'=',
@@ -291,10 +300,10 @@ out:
 		flag &= ~EXP_TILDE;
 tilde:
 		if (*p == '~')
-			p = exptilde(p, flag);
+			p = exptilde(sh, p, flag);
 	}
 start:
-	startloc = expdest - (char *)stackblock();
+	startloc = sh.expdest - (char *)stackblock();
 	for (;;) {
 		unsigned ml;
 		unsigned mb;
@@ -316,12 +325,12 @@ start:
 			int newloc;
 			char *q;
 
-			q = stnputs(p, length, expdest);
+			q = stnputs(sh, p, length, sh.expdest);
 			q[-1] &= end - 1;
-			expdest = q - (flag & EXP_WORD ? end : 0);
+			sh.expdest = q - (flag & EXP_WORD ? end : 0);
 			newloc = q - (char *)stackblock() - end;
 			if (breakall && !inquotes && newloc > startloc) {
-				recordregion(startloc, newloc, 0);
+				recordregion(sh, startloc, newloc, 0);
 			}
 			startloc = newloc;
 		}
@@ -348,7 +357,7 @@ start:
 		case CTLQUOTEMARK:
 			/* "$@" syntax adherence hack */
 			if (!inquotes && !strcmp(p, dolatstr + 1)) {
-				p = evalvar(p + 1, flag | EXP_QUOTED) + 1;
+				p = evalvar(sh, p + 1, flag | EXP_QUOTED) + 1;
 				goto start;
 			}
 			inquotes ^= EXP_QUOTED;
@@ -361,7 +370,7 @@ addquote:
 			break;
 		case CTLMBCHAR:
 			c = (signed char)*p--;
-			mb = mbnext(p);
+			mb = mbnext(sh, p);
 			ml = (mb >> 8) - 2;
 			if (flag & (QUOTES_ESC | EXP_MBCHAR)) {
 				length = (mb >> 8) + (mb & 0xff);
@@ -373,7 +382,7 @@ addquote:
 				startloc += ml;
 			p += mb & 0xff;
 			if (!(flag & EXP_DISCARD))
-				expdest = stnputs(p, ml, expdest);
+				sh.expdest = stnputs(sh, p, ml, sh.expdest);
 			p += mb >> 8;
 			break;
 		case CTLESC:
@@ -381,20 +390,21 @@ addquote:
 			length++;
 			goto addquote;
 		case CTLVAR:
-			p = evalvar(p, flag | inquotes);
+			p = evalvar(sh, p, flag | inquotes);
 			goto start;
 		case CTLBACKQ:
-			expbackq(argbackq->n, flag | inquotes);
+			expbackq(sh, sh.argbackq->n, flag | inquotes);
 			goto start;
 		case CTLARI:
-			p = expari(p, flag | inquotes);
+			p = expari(sh, p, flag | inquotes);
 			goto start;
 		}
 	}
 	return p - 1;
 }
 
- char *ShellContext::exptilde(char *startp, int flag)
+static char *
+exptilde(ShellContext &sh, char *startp, int flag)
 {
 	signed char c;
 	char *name;
@@ -424,14 +434,14 @@ done:
 		goto out;
 	*p = '\0';
 	if (*name == '\0') {
-		home = lookupvar(homestr);
+		home = lookupvar(sh, homestr);
 	} else {
-		home = getpwhome(name);
+		home = getpwhome(sh, name);
 	}
 	*p = c;
 	if (!home)
 		goto lose;
-	strtodest(home, flag | EXP_QUOTED);
+	strtodest(sh, home, flag | EXP_QUOTED);
 out:
 	return (p);
 lose:
@@ -439,43 +449,43 @@ lose:
 }
 
 
-void 
-ShellContext::removerecordregions(int endoff)
+void
+removerecordregions(ShellContext &sh, int endoff)
 {
-	if (ifslastp == NULL)
+	if (sh.ifslastp == NULL)
 		return;
 
-	if (ifsfirst.endoff > endoff) {
-		while (ifsfirst.next != NULL) {
+	if (sh.ifsfirst.endoff > endoff) {
+		while (sh.ifsfirst.next != NULL) {
 			struct ifsregion *ifsp;
 			INTOFF;
-			ifsp = ifsfirst.next->next;
-			ckfree(ifsfirst.next);
-			ifsfirst.next = ifsp;
+			ifsp = sh.ifsfirst.next->next;
+			ckfree(sh.ifsfirst.next);
+			sh.ifsfirst.next = ifsp;
 			INTON;
 		}
-		if (ifsfirst.begoff > endoff)
-			ifslastp = NULL;
+		if (sh.ifsfirst.begoff > endoff)
+			sh.ifslastp = NULL;
 		else {
-			ifslastp = &ifsfirst;
-			ifsfirst.endoff = endoff;
+			sh.ifslastp = &sh.ifsfirst;
+			sh.ifsfirst.endoff = endoff;
 		}
 		return;
 	}
 	
-	ifslastp = &ifsfirst;
-	while (ifslastp->next && ifslastp->next->begoff < endoff)
-		ifslastp=ifslastp->next;
-	while (ifslastp->next != NULL) {
+	sh.ifslastp = &sh.ifsfirst;
+	while (sh.ifslastp->next && sh.ifslastp->next->begoff < endoff)
+		sh.ifslastp=sh.ifslastp->next;
+	while (sh.ifslastp->next != NULL) {
 		struct ifsregion *ifsp;
 		INTOFF;
-		ifsp = ifslastp->next->next;
-		ckfree(ifslastp->next);
-		ifslastp->next = ifsp;
+		ifsp = sh.ifslastp->next->next;
+		ckfree(sh.ifslastp->next);
+		sh.ifslastp->next = ifsp;
 		INTON;
 	}
-	if (ifslastp->endoff > endoff)
-		ifslastp->endoff = endoff;
+	if (sh.ifslastp->endoff > endoff)
+		sh.ifslastp->endoff = endoff;
 }
 
 
@@ -483,7 +493,8 @@ ShellContext::removerecordregions(int endoff)
  * Expand arithmetic expression.  Backup to start of expression,
  * evaluate, place result in (backed up) result, adjust string position.
  */
- char *ShellContext::expari(char *start, int flag)
+static char *
+expari(ShellContext &sh, char *start, int flag)
 {
 	int begoff;
 	int endoff;
@@ -492,35 +503,35 @@ ShellContext::removerecordregions(int endoff)
 	char *p;
 
 	p = stackblock();
-	begoff = expdest - p;
-	p = argstr(start, flag & EXP_DISCARD);
+	begoff = sh.expdest - p;
+	p = argstr(sh, start, flag & EXP_DISCARD);
 
 	if (flag & EXP_DISCARD)
 		goto out;
 
 	start = stackblock();
-	endoff = expdest - start;
+	endoff = sh.expdest - start;
 	start += begoff;
-	STADJUST(start - expdest, expdest);
+	STADJUST(start - sh.expdest, sh.expdest);
 
-	removerecordregions(begoff);
+	removerecordregions(sh, begoff);
 
 	{
-		std::size_t su = stackstr.used;
-		std::size_t hc = stackheaps.size();
-		stackstr.commit(endoff);
-		result = arith(start);
-		while (stackheaps.size() > hc) {
-			ckfree(stackheaps.back());
-			stackheaps.pop_back();
+		std::size_t su = sh.stackstr.used;
+		std::size_t hc = sh.stackheaps.size();
+		sh.stackstr.commit(endoff);
+		result = arith(sh, start);
+		while (sh.stackheaps.size() > hc) {
+			ckfree(sh.stackheaps.back());
+			sh.stackheaps.pop_back();
 		}
-		stackstr.rewind(su);
+		sh.stackstr.rewind(su);
 	}
 
-	len = cvtnum(result, flag);
+	len = cvtnum(sh, result, flag);
 
 	if (likely(!(flag & EXP_QUOTED)))
-		recordregion(begoff, begoff + len, 0);
+		recordregion(sh, begoff, begoff + len, 0);
 
 out:
 	return p;
@@ -531,8 +542,8 @@ out:
  * Expand stuff in backwards quotes.
  */
 
- void
-ShellContext::expbackq(union node *cmd, int flag)
+static void
+expbackq(ShellContext &sh, union node *cmd, int flag)
 {
 	struct backcmd in;
 	int i;
@@ -545,17 +556,17 @@ ShellContext::expbackq(union node *cmd, int flag)
 		goto out;
 
 	INTOFF;
-	startloc = expdest - (char *)stackblock();
+	startloc = sh.expdest - (char *)stackblock();
 	{
-		std::size_t su = stackstr.used;
-		std::size_t hc = stackheaps.size();
-		stackstr.commit(startloc);
-		evalbackcmd(cmd, (struct backcmd *) &in);
-		while (stackheaps.size() > hc) {
-			ckfree(stackheaps.back());
-			stackheaps.pop_back();
+		std::size_t su = sh.stackstr.used;
+		std::size_t hc = sh.stackheaps.size();
+		sh.stackstr.commit(startloc);
+		evalbackcmd(sh, cmd, (struct backcmd *) &in);
+		while (sh.stackheaps.size() > hc) {
+			ckfree(sh.stackheaps.back());
+			sh.stackheaps.pop_back();
 		}
-		stackstr.rewind(su);
+		sh.stackstr.rewind(su);
 	}
 
 	p = in.buf;
@@ -563,7 +574,7 @@ ShellContext::expbackq(union node *cmd, int flag)
 	if (i == 0)
 		goto read;
 	for (;;) {
-		memtodest(p, i, flag);
+		memtodest(sh, p, i, flag);
 read:
 		if (in.fd < 0)
 			break;
@@ -580,31 +591,32 @@ read:
 		ckfree(in.buf);
 	if (in.fd >= 0) {
 		close(in.fd);
-		back_exitstatus = waitforjob(in.jp);
+		sh.back_exitstatus = waitforjob(sh, in.jp);
 	}
 	INTON;
 
 	/* Eat all trailing newlines */
-	dest = expdest;
+	dest = sh.expdest;
 	for (; dest > ((char *)stackblock() + startloc) && dest[-1] == '\n';)
 		STUNPUTC(dest);
-	expdest = dest;
+	sh.expdest = dest;
 
 	if (!(flag & EXP_QUOTED))
-		recordregion(startloc, dest - (char *)stackblock(), 0);
+		recordregion(sh, startloc, dest - (char *)stackblock(), 0);
 	TRACE(("evalbackq: size=%d: \"%.*s\"\n",
 		(dest - (char *)stackblock()) - startloc,
 		(dest - (char *)stackblock()) - startloc,
 		stackblock() + startloc));
 
 out:
-	argbackq = argbackq->next;
+	sh.argbackq = sh.argbackq->next;
 }
 
 
- char *ShellContext::scanleft(char *startp, char *endp, char *rmesc, char *rmescend,
-		      char *str, int quotes, int zero
-) {
+static char *
+scanleft(ShellContext &sh, char *startp, char *endp, char *rmesc, char *rmescend,
+		      char *str, int quotes, int zero)
+{
 	char *loc;
 	char *loc2;
 	char c;
@@ -622,7 +634,7 @@ out:
 			*s = '\0';
 			s = FNMATCH_IS_ENABLED ? rmesc : startp;
 		}
-		match = pmatch(str, s);
+		match = pmatch(sh, str, s);
 		*(FNMATCH_IS_ENABLED ? loc2 : loc) = c;
 		if (match)
 			return quotes ? loc : loc2;
@@ -630,7 +642,7 @@ out:
 		if (!c)
 			break;
 
-		mb = mbnext(loc);
+		mb = mbnext(sh, loc);
 		loc += (mb & 0xff) + (mb >> 8);
 		ml = (mb >> 8) > 3 ? (mb >> 8) - 2 : 1;
 		loc2 += ml;
@@ -639,9 +651,10 @@ out:
 }
 
 
- char *ShellContext::scanright(char *startp, char *endp, char *rmesc, char *rmescend,
-		       char *str, int quotes, int zero
-) {
+static char *
+scanright(ShellContext &sh, char *startp, char *endp, char *rmesc, char *rmescend,
+		       char *str, int quotes, int zero)
+{
 	size_t esc = 0;
 	char *loc;
 	char *loc2;
@@ -656,14 +669,14 @@ out:
 			*s = '\0';
 			s = FNMATCH_IS_ENABLED ? rmesc : startp;
 		}
-		match = pmatch(str, s);
+		match = pmatch(sh, str, s);
 		*(FNMATCH_IS_ENABLED ? loc2 : loc) = c;
 		if (match)
 			return quotes ? loc : loc2;
 		if (--loc < startp)
 			break;
 		if (!esc--)
-			esc = esclen(startp, loc);
+			esc = esclen(sh, startp, loc);
 		if (esc % 2) {
 			esc--;
 			loc--;
@@ -681,7 +694,8 @@ out:
 	return 0;
 }
 
- char *ShellContext::subevalvar(char *start, char *str, int strloc, int startloc,
+static char *
+subevalvar(ShellContext &sh, char *start, char *str, int strloc, int startloc,
 			int varflags, int flag)
 {
 	int subtype = varflags & VSTYPE;
@@ -691,12 +705,12 @@ out:
 	long amount;
 	char *rmesc, *rmescend;
 	int zero;
-	char *(ShellContext::*scan)(char *, char *, char *, char *, char *, int, int);
+	char *(*scan)(ShellContext &, char *, char *, char *, char *, char *, int, int);
 	int nstrloc = strloc;
 	char *endp;
 	char *p;
 
-	p = argstr(start, (flag & EXP_DISCARD) | EXP_TILDE |
+	p = argstr(sh, start, (flag & EXP_DISCARD) | EXP_TILDE |
 			  (str ?  0 : EXP_CASE));
 	if (flag & EXP_DISCARD)
 		return p;
@@ -705,13 +719,13 @@ out:
 
 	switch (subtype) {
 	case VSASSIGN:
-		setvar(str, startp, 0);
+		setvar(sh, str, startp, 0);
 
 		loc = startp;
 		goto out;
 
 	case VSQUESTION:
-		varunset(start, str, startp, varflags);
+		varunset(sh, start, str, startp, varflags);
 		/* NOTREACHED */
 	}
 
@@ -722,7 +736,7 @@ out:
 #endif
 
 	rmescend = stackblock() + strloc;
-	str = preglob(rmescend, 0);
+	str = preglob(sh, rmescend, 0);
 	if (FNMATCH_IS_ENABLED) {
 		startp = stackblock() + startloc;
 		rmescend = stackblock() + strloc;
@@ -731,9 +745,9 @@ out:
 
 	rmesc = startp;
 	if (FNMATCH_IS_ENABLED || !quotes) {
-		rmesc = _rmescapes(startp, RMESCAPE_ALLOC | RMESCAPE_GROW);
+		rmesc = _rmescapes(sh, startp, RMESCAPE_ALLOC | RMESCAPE_GROW);
 		if (rmesc != startp)
-			rmescend = expdest;
+			rmescend = sh.expdest;
 		startp = stackblock() + startloc;
 		str = stackblock() + nstrloc;
 	}
@@ -742,10 +756,10 @@ out:
 	/* zero = subtype == VSTRIMLEFT || subtype == VSTRIMLEFTMAX */
 	zero = subtype >> 1;
 	/* VSTRIMLEFT/VSTRIMRIGHTMAX -> scanleft */
-	scan = (subtype & 1) ^ zero ? &ShellContext::scanleft : &ShellContext::scanright;
+	scan = (subtype & 1) ^ zero ? scanleft : scanright;
 
 	endp = stackblock() + strloc - 1;
-	loc = (this->*scan)(startp, endp, rmesc, rmescend, str, quotes, zero);
+	loc = scan(sh, startp, endp, rmesc, rmescend, str, quotes, zero);
 	if (!loc) {
 		if (quotes) {
 			rmesc = startp;
@@ -769,11 +783,11 @@ out:
 
 out:
 	*loc = '\0';
-	amount = loc - expdest;
-	STADJUST(amount, expdest);
+	amount = loc - sh.expdest;
+	STADJUST(amount, sh.expdest);
 
 	/* Remove any recorded regions beyond start of variable */
-	removerecordregions(startloc);
+	removerecordregions(sh, startloc);
 
 	return p;
 }
@@ -783,8 +797,8 @@ out:
  * Expand a variable, and return a pointer to the next character in the
  * input string.
  */
- char *
-ShellContext::evalvar(char *p, int flag)
+static char *
+evalvar(ShellContext &sh, char *p, int flag)
 {
 	int subtype;
 	int varflags;
@@ -801,7 +815,7 @@ ShellContext::evalvar(char *p, int flag)
 
 	quoted = flag & EXP_QUOTED;
 	var = p;
-	startloc = expdest - (char *)stackblock();
+	startloc = sh.expdest - (char *)stackblock();
 	p = strchr(p, '=') + 1;
 
 	mbchar = 0;
@@ -815,7 +829,7 @@ ShellContext::evalvar(char *p, int flag)
 	}
 
 again:
-	varlen = varvalue(var, varflags, flag | mbchar);
+	varlen = varvalue(sh, var, varflags, flag | mbchar);
 	if (varflags & VSNUL)
 		varlen--;
 
@@ -828,13 +842,13 @@ again:
 
 	case 0:
 	case VSMINUS:
-		p = argstr(p, flag | EXP_TILDE | EXP_WORD |
+		p = argstr(sh, p, flag | EXP_TILDE | EXP_WORD |
 			      (discard ^ EXP_DISCARD));
 		goto record;
 
 	case VSASSIGN:
 	case VSQUESTION:
-		p = subevalvar(p, var, 0, startloc, varflags,
+		p = subevalvar(sh, p, var, 0, startloc, varflags,
 			       (flag & ~QUOTES_ESC) |
 			       (discard ^ EXP_DISCARD));
 
@@ -847,13 +861,13 @@ again:
 	}
 
 	if ((discard & ~flag) && uflag)
-		varunset(p, var, 0, 0);
+		varunset(sh, p, var, 0, 0);
 
 	if (subtype == VSLENGTH) {
 		p++;
 		if (flag & EXP_DISCARD)
 			return p;
-		cvtnum(varlen > 0 ? varlen : 0, flag);
+		cvtnum(sh, varlen > 0 ? varlen : 0, flag);
 		goto really_record;
 	}
 
@@ -878,11 +892,11 @@ again:
 		 * Terminate the string and start recording the pattern
 		 * right after it
 		 */
-		STPUTC('\0', expdest);
+		STPUTC('\0', sh.expdest);
 	}
 
-	patloc = expdest - (char *)stackblock();
-	p = subevalvar(p, NULL, patloc, startloc, varflags, flag);
+	patloc = sh.expdest - (char *)stackblock();
+	p = subevalvar(sh, p, NULL, patloc, startloc, varflags, flag);
 
 record:
 	if ((flag | discard) & EXP_DISCARD)
@@ -890,15 +904,16 @@ record:
 
 really_record:
 	if (quoted) {
-		quoted = *var == '@' && shellparam.nparam;
+		quoted = *var == '@' && sh.shellparam.nparam;
 		if (!quoted)
 			return p;
 	}
-	recordregion(startloc, expdest - (char *)stackblock(), quoted);
+	recordregion(sh, startloc, sh.expdest - (char *)stackblock(), quoted);
 	return p;
 }
 
- char *ShellContext::chtodest(int c, const char *syntax, char *out)
+static char *
+chtodest(ShellContext &sh, int c, const char *syntax, char *out)
 {
 	if (syntax[c] == CCTL)
 		USTPUTC(CTLESC, out);
@@ -907,7 +922,8 @@ really_record:
 	return out;
 }
 
- struct mbpair ShellContext::mbtodest(const char *p, char *q, const char *syntax,
+static struct mbpair
+mbtodest(ShellContext &sh, const char *p, char *q, const char *syntax,
 			      size_t len)
 {
 	mbstate_t mbs = {};
@@ -917,7 +933,7 @@ really_record:
 
 	ml = mbrlen(--p, len, &mbs);
 	if (ml == -2 || ml == -1 || ml < 2) {
-		q = chtodest((signed char)*p, syntax, q);
+		q = chtodest(sh, (signed char)*p, syntax, q);
 		ml = 1;
 		goto out;
 	}
@@ -944,7 +960,8 @@ out:
  * Put a string on the stack.
  */
 
- size_t ShellContext::memtodest(const char *p, size_t len, int flags)
+static size_t
+memtodest(ShellContext &sh, const char *p, size_t len, int flags)
 {
 	const char *syntax;
 	size_t count = 0;
@@ -955,7 +972,7 @@ out:
 		return 0;
 
 	/* CTLMBCHAR, 2, c, c, 2, CTLMBCHAR */
-	q = makestrspace(len * 3, expdest);
+	q = makestrspace(sh, len * 3, sh.expdest);
 
 #if QUOTES_ESC != 0x11 || EXP_MBCHAR != 0x20 || EXP_QUOTED != 0x100
 #error QUOTES_ESC != 0x11 || EXP_MBCHAR != 0x20 || EXP_QUOTED != 0x100
@@ -995,7 +1012,7 @@ out:
 		count++;
 
 		if (unlikely(c < 0)) {
-			struct mbpair mbp = mbtodest(p, q, syntax, len);
+			struct mbpair mbp = mbtodest(sh, p, q, syntax, len);
 			unsigned mlm;
 
 			q += mbp.ql;
@@ -1005,18 +1022,19 @@ out:
 			continue;
 		}
 
-		q = chtodest(c, syntax, q);
+		q = chtodest(sh, c, syntax, q);
 	}
 
-	expdest = q;
+	sh.expdest = q;
 	return count;
 }
 
 
- size_t ShellContext::strtodest(const char *p, int flags)
+static size_t
+strtodest(ShellContext &sh, const char *p, int flags)
 {
 	size_t len = strlen(p);
-	return memtodest(p, len, flags);
+	return memtodest(sh, p, len, flags);
 }
 
 
@@ -1025,7 +1043,8 @@ out:
  * Add the value of a specialized variable to the stack string.
  */
 
- ssize_t ShellContext::varvalue(char *name, int varflags, unsigned flags)
+static ssize_t
+varvalue(ShellContext &sh, char *name, int varflags, unsigned flags)
 {
 	int subtype = varflags & VSTYPE;
 	unsigned long seplen;
@@ -1045,40 +1064,40 @@ out:
 		if (discard)
 			return -1;
 
-		sh_error("Bad substitution");
+		sh_error(sh, "Bad substitution");
 	}
 
 	flags &= discard ? ~QUOTES_ESC : ~0;
 	seps = nullstr;
 	seplen = flags & EXP_FULL;
-	start = expdest - (char *)stackblock();
+	start = sh.expdest - (char *)stackblock();
 
 	switch (*name) {
 	case '$':
-		num = rootpid;
+		num = sh.rootpid;
 		goto numvar;
 	case '?':
-		num = exitstatus;
+		num = sh.exitstatus;
 		goto numvar;
 	case '#':
-		num = shellparam.nparam;
+		num = sh.shellparam.nparam;
 		goto numvar;
 	case '!':
-		num = backgndpid;
+		num = sh.backgndpid;
 		if (num == 0)
 			return -1;
 numvar:
-		len = cvtnum(num, flags);
+		len = cvtnum(sh, num, flags);
 		break;
 	case '-':
-		p = makestrspace(NOPTS, expdest);
+		p = makestrspace(sh, NOPTS, sh.expdest);
 		for (i = NOPTS - 1; i >= 0; i--) {
-			if (optlist[i] && optletters[i]) {
+			if (sh.optlist[i] && optletters[i]) {
 				USTPUTC(optletters[i], p);
 				len++;
 			}
 		}
-		expdest = p;
+		sh.expdest = p;
 		break;
 	case '@':
 		if ((flags & (EXP_QUOTED | EXP_FULL)) ==
@@ -1102,20 +1121,20 @@ numvar:
 #endif
 		seplen &= ~(flags >> CHAR_BIT);
 		if (!seplen)
-			seps = ncifs;
-		seplen = ((seplen - 1) & (ifsmb0len - 1)) + 1;
+			seps = sh.ncifs;
+		seplen = ((seplen - 1) & (sh.ifsmb0len - 1)) + 1;
 param:
-		if (!(ap = shellparam.p))
+		if (!(ap = sh.shellparam.p))
 			return -1;
 		if (!(p = *ap))
 			break;
 		for (;;) {
-			len += strtodest(p, flags);
+			len += strtodest(sh, p, flags);
 
 			if (!(p = *++ap))
 				break;
 
-			len += memtodest(seps, seplen, flags | EXP_KEEPNUL);
+			len += memtodest(sh, seps, seplen, flags | EXP_KEEPNUL);
 		}
 		break;
 	case '0':
@@ -1129,22 +1148,22 @@ param:
 	case '8':
 	case '9':
 		num = atoi(name);
-		if (num < 0 || num > shellparam.nparam)
+		if (num < 0 || num > sh.shellparam.nparam)
 			return -1;
-		p = num ? shellparam.p[num - 1] : arg0;
+		p = num ? sh.shellparam.p[num - 1] : sh.arg0;
 		goto value;
 	default:
-		p = lookupvar(name);
+		p = lookupvar(sh, name);
 value:
 		if (!p)
 			return -1;
 
-		len = strtodest(p, flags);
+		len = strtodest(sh, p, flags);
 		break;
 	}
 
 	if (discard)
-		expdest = (char *)stackblock() + start;
+		sh.expdest = (char *)stackblock() + start;
 
 	return len;
 }
@@ -1157,33 +1176,34 @@ value:
  */
 
 void
-ShellContext::recordregion(int start, int end, int nulonly)
+recordregion(ShellContext &sh, int start, int end, int nulonly)
 {
 	struct ifsregion *ifsp;
 
-	if (ifslastp == NULL) {
-		ifsp = &ifsfirst;
+	if (sh.ifslastp == NULL) {
+		ifsp = &sh.ifsfirst;
 	} else {
 		INTOFF;
-		ifsp = (struct ifsregion *)ckmalloc(sizeof (struct ifsregion));
+		ifsp = (struct ifsregion *)ckmalloc(sh, sizeof (struct ifsregion));
 		ifsp->next = NULL;
-		ifslastp->next = ifsp;
+		sh.ifslastp->next = ifsp;
 		INTON;
 	}
-	ifslastp = ifsp;
-	ifslastp->begoff = start;
-	ifslastp->endoff = end;
-	ifslastp->nulonly = nulonly;
+	sh.ifslastp = ifsp;
+	sh.ifslastp->begoff = start;
+	sh.ifslastp->endoff = end;
+	sh.ifslastp->nulonly = nulonly;
 }
 
- unsigned ShellContext::ifsisifs(const char *p, unsigned ml, const char *ifs)
+static unsigned
+ifsisifs(ShellContext &sh, const char *p, unsigned ml, const char *ifs)
 {
 	bool isdefifs = false;
 	bool isifs = false;
 	wchar_t wc = *p;
 	wchar_t ifs0;
 
-	if (likely(ifs[0]) && unlikely(wcifs)) {
+	if (likely(ifs[0]) && unlikely(sh.wcifs)) {
 		if (wc & 0x80) {
 			mbstate_t mbst = {};
 			wchar_t wc2;
@@ -1193,8 +1213,8 @@ ShellContext::recordregion(int start, int end, int nulonly)
 			wc = wc2;
 		}
 
-		isifs = wcschr(wcifs, wc);
-		ifs0 = wcifs[0];
+		isifs = wcschr(sh.wcifs, wc);
+		ifs0 = sh.wcifs[0];
 	} else if (likely(!ml)) {
 		isifs = strchr(ifs, wc);
 		ifs0 = ifs[0];
@@ -1207,7 +1227,8 @@ out:
 	return isifs << 1 | isdefifs;
 }
 
- char *ShellContext::ifsbreakup_slow(struct ifs_state *ifst, struct arglist *arglist,
+static char *
+ifsbreakup_slow(ShellContext &sh, struct ifs_state *ifst, struct arglist *arglist,
 			     int nulonly, char *p)
 {
 	struct strlist *sp;
@@ -1220,12 +1241,12 @@ out:
 
 	q = p;
 
-	ifschar = mbnext(p);
+	ifschar = mbnext(sh, p);
 	p += ifschar & 0xff;
 	ml = (ifschar >> 8) > 3 ?
 	     (ifschar >> 8) - 2 : 0;
 
-	sisifs = ifsisifs(p, ml, ifst->ifs);
+	sisifs = ifsisifs(sh, p, ml, ifst->ifs);
 	p += ifschar >> 8;
 
 	isifs = sisifs >> 1;
@@ -1285,7 +1306,7 @@ out:
 			return p;
 		}
 		*q = '\0';
-		sp = (struct strlist *)stalloc(sizeof *sp);
+		sp = (struct strlist *)stalloc(sh, sizeof *sp);
 		sp->text = ifst->start;
 		*arglist->lastp = sp;
 		arglist->lastp = &sp->next;
@@ -1306,7 +1327,7 @@ out_zero_ifsspc:
  * joining together the last arguments.
  */
 void
-ShellContext::ifsbreakup(char *string, int maxargs, struct arglist *arglist)
+ifsbreakup(ShellContext &sh, char *string, int maxargs, struct arglist *arglist)
 {
 	struct ifsregion *ifsp;
 	struct ifs_state ifst;
@@ -1318,11 +1339,11 @@ ShellContext::ifsbreakup(char *string, int maxargs, struct arglist *arglist)
 	ifst.r = NULL;
 	ifst.start = string;
 	ifst.maxargs = maxargs;
-	if (ifslastp != NULL) {
+	if (sh.ifslastp != NULL) {
 		ifst.ifsspc = 0;
 		nulonly = 0;
-		realifs = ncifs;
-		ifsp = &ifsfirst;
+		realifs = sh.ncifs;
+		ifsp = &sh.ifsfirst;
 		do {
 			int afternul;
 
@@ -1344,14 +1365,14 @@ ShellContext::ifsbreakup(char *string, int maxargs, struct arglist *arglist)
 
 					if ((x.qw & 0x8080808080808080))
 						break;
-					if (ifsmap[x.b[0]] |
-					    ifsmap[x.b[1]] |
-					    ifsmap[x.b[2]] |
-					    ifsmap[x.b[3]] |
-					    ifsmap[x.b[4]] |
-					    ifsmap[x.b[5]] |
-					    ifsmap[x.b[6]] |
-					    ifsmap[x.b[7]])
+					if (sh.ifsmap[x.b[0]] |
+					    sh.ifsmap[x.b[1]] |
+					    sh.ifsmap[x.b[2]] |
+					    sh.ifsmap[x.b[3]] |
+					    sh.ifsmap[x.b[4]] |
+					    sh.ifsmap[x.b[5]] |
+					    sh.ifsmap[x.b[6]] |
+					    sh.ifsmap[x.b[7]])
 						break;
 					p += 8;
 				}
@@ -1367,7 +1388,7 @@ ShellContext::ifsbreakup(char *string, int maxargs, struct arglist *arglist)
 				if (p >= string + ifsp->endoff)
 					break;
 
-				p = ifsbreakup_slow(&ifst, arglist,
+				p = ifsbreakup_slow(sh, &ifst, arglist,
 						    afternul | nulonly, p);
 			}
 		} while ((ifsp = ifsp->next) != NULL);
@@ -1381,15 +1402,16 @@ ShellContext::ifsbreakup(char *string, int maxargs, struct arglist *arglist)
 		return;
 
 add:
-	sp = (struct strlist *)stalloc(sizeof *sp);
+	sp = (struct strlist *)stalloc(sh, sizeof *sp);
 	sp->text = ifst.start;
 	*arglist->lastp = sp;
 	arglist->lastp = &sp->next;
 }
 
-void ShellContext::ifsfree(void)
+void
+ifsfree(ShellContext &sh)
 {
-	struct ifsregion *p = ifsfirst.next;
+	struct ifsregion *p = sh.ifsfirst.next;
 
 	if (!p)
 		goto out;
@@ -1401,14 +1423,15 @@ void ShellContext::ifsfree(void)
 		ckfree(p);
 		p = ifsp;
 	} while (p);
-	ifsfirst.next = NULL;
+	sh.ifsfirst.next = NULL;
 	INTON;
 
 out:
-	ifslastp = NULL;
+	sh.ifslastp = NULL;
 }
 
-void ShellContext::changeifs(const char *ifs)
+void
+changeifs(ShellContext &sh, const char *ifs)
 {
 	mbstate_t mbs = {};
 	wchar_t *nwcifs;
@@ -1419,16 +1442,16 @@ void ShellContext::changeifs(const char *ifs)
 
 	if (!ifsset())
 		ifs = defifs;
-	ncifs = ifs;
+	sh.ncifs = ifs;
 
-	memset(ifsmap, 0, sizeof(ifsmap));
+	memset(sh.ifsmap, 0, sizeof(sh.ifsmap));
 
 	for (p = ifs;; p++) {
 		unsigned c = (unsigned char)*p;
 
 		mb |= c >> 7;
 		if (!(c >> 7))
-			ifsmap[c] = 1;
+			sh.ifsmap[c] = 1;
 
 		if (c == 0)
 			break;
@@ -1438,7 +1461,7 @@ void ShellContext::changeifs(const char *ifs)
 
 	nwcifs = NULL;
 
-	ifsmb0len = !!len;
+	sh.ifsmb0len = !!len;
 
 	if (!mb)
 		goto out;
@@ -1446,30 +1469,31 @@ void ShellContext::changeifs(const char *ifs)
 	ml = mbrlen(ifs, len, &mbs);
 	if (ml == -2 || ml == -1)
 		ml = 1;
-	ifsmb0len = ml;
+	sh.ifsmb0len = ml;
 
-	nwcifs = ckmalloc((len + 1) * sizeof(*wcifs));
-	memset(nwcifs, 0, (len + 1) * sizeof(*wcifs));
+	nwcifs = ckmalloc(sh, (len + 1) * sizeof(*sh.wcifs));
+	memset(nwcifs, 0, (len + 1) * sizeof(*sh.wcifs));
 
 	p = ifs;
 	mbsrtowcs(nwcifs, &p, len + 1, &mbs);
 
 out:
-	ckfree(wcifs);
-	wcifs = nwcifs;
+	ckfree(sh.wcifs);
+	sh.wcifs = nwcifs;
 }
 
 /*
  * Expand shell metacharacters.  At this point, the only control characters
- * should be escapes.  The results are stored in the list exparg.
+ * should be escapes.  The results are stored in the list sh.exparg.
  */
 
 #ifdef __GLIBC__
- void *ShellContext::opendir_interruptible(const char *pathname)
+static void *
+opendir_interruptible(ShellContext &sh, const char *pathname)
 {
 	if (int_pending()) {
-		suppressint = 0;
-		onint();
+		sh.suppressint = 0;
+		onint(sh);
 	}
 
 	return opendir(pathname);
@@ -1478,7 +1502,8 @@ out:
 #define GLOB_ALTDIRFUNC 0
 #endif
 
- void ShellContext::expandmeta_glob(struct strlist *str)
+static void
+expandmeta_glob(ShellContext &sh, struct strlist *str)
 {
 	while (str) {
 		const char *p;
@@ -1493,14 +1518,14 @@ out:
 		pglob.gl_readdir = reinterpret_cast<struct dirent64 *(*)(void *)>(
 			readdir64);
 		pglob.gl_opendir = [](const char *pathname) -> void * {
-			return ShellContext::signaled->opendir_interruptible(pathname);
+			return opendir_interruptible(*ShellContext::signaled, pathname);
 		};
 		pglob.gl_lstat = lstat64;
 		pglob.gl_stat = stat64;
 #endif
 
 		INTOFF;
-		p = preglob(str->text, RMESCAPE_HEAP);
+		p = preglob(sh, str->text, RMESCAPE_HEAP);
 		i = glob64(p, GLOB_ALTDIRFUNC | GLOB_NOMAGIC, 0, &pglob);
 		if (p != str->text)
 			ckfree(p);
@@ -1509,7 +1534,7 @@ out:
 			if ((pglob.gl_flags & (GLOB_NOMAGIC | GLOB_NOCHECK)) ==
 			    (GLOB_NOMAGIC | GLOB_NOCHECK))
 				goto nometa2;
-			addglob(&pglob);
+			addglob(sh, &pglob);
 			globfree64(&pglob);
 			INTON;
 			break;
@@ -1518,12 +1543,12 @@ nometa2:
 			globfree64(&pglob);
 			INTON;
 nometa:
-			*exparg.lastp = str;
+			*sh.exparg.lastp = str;
 			rmescapes(str->text);
-			exparg.lastp = &str->next;
+			sh.exparg.lastp = &str->next;
 			break;
 		default:	/* GLOB_NOSPACE */
-			sh_error("Out of space");
+			sh_error(sh, "Out of space");
 		}
 		str = str->next;
 	}
@@ -1534,22 +1559,23 @@ nometa:
  * Add the result of glob(3) to the list.
  */
 
- void ShellContext::addglob(const glob64_t *pglob)
+static void
+addglob(ShellContext &sh, const glob64_t *pglob)
 {
 	char **p = pglob->gl_pathv;
 
 	do {
-		addfname(*p);
+		addfname(sh, *p);
 	} while (*++p);
 }
 
- void
-ShellContext::expandmeta(struct strlist *str)
+static void
+expandmeta(ShellContext &sh, struct strlist *str)
 {
 	/* TODO - EXP_REDIR */
 
 	if (GLOB_IS_ENABLED)
-		return expandmeta_glob(str);
+		return expandmeta_glob(sh, str);
 
 	while (str) {
 		struct strlist **savelastp;
@@ -1561,57 +1587,60 @@ ShellContext::expandmeta(struct strlist *str)
 			goto nometa;
 		if (!strpbrk(str->text, "*?]") || !strcmp(str->text, "]"))
 			goto nometa;
-		savelastp = exparg.lastp;
+		savelastp = sh.exparg.lastp;
 
 		INTOFF;
-		p = preglob(str->text, RMESCAPE_ALLOC | RMESCAPE_HEAP);
+		p = preglob(sh, str->text, RMESCAPE_ALLOC | RMESCAPE_HEAP);
 		len = strlen(p);
 
-		expmeta(p, len, 0);
+		expmeta(sh, p, len, 0);
 		if (p != str->text)
 			ckfree(p);
 		INTON;
-		if (exparg.lastp == savelastp) {
+		if (sh.exparg.lastp == savelastp) {
 			/*
 			 * no matches
 			 */
 nometa:
-			*exparg.lastp = str;
+			*sh.exparg.lastp = str;
 			rmescapes(str->text);
-			exparg.lastp = &str->next;
+			sh.exparg.lastp = &str->next;
 		} else {
-			*exparg.lastp = NULL;
-			*savelastp = sp = expsort(*savelastp);
+			*sh.exparg.lastp = NULL;
+			*savelastp = sp = expsort(sh, *savelastp);
 			while (sp->next != NULL)
 				sp = sp->next;
-			exparg.lastp = &sp->next;
+			sh.exparg.lastp = &sp->next;
 		}
 		str = str->next;
 	}
 }
 
- void ShellContext::addfname_common(char *name)
+static void
+addfname_common(ShellContext &sh, char *name)
 {
 	struct strlist *sp;
 
-	sp = (struct strlist *)stalloc(sizeof *sp);
+	sp = (struct strlist *)stalloc(sh, sizeof *sp);
 	sp->text = name;
-	*exparg.lastp = sp;
-	exparg.lastp = &sp->next;
+	*sh.exparg.lastp = sp;
+	sh.exparg.lastp = &sp->next;
 }
 
- char *ShellContext::addfnamealt(char *enddir, size_t expdir_len)
+static char *
+addfnamealt(ShellContext &sh, char *enddir, size_t expdir_len)
 {
 	char *name;
 
 	name = grabstackstr(enddir);
-	addfname_common(name);
+	addfname_common(sh, name);
 
 	STARTSTACKSTR(enddir);
-	return stnputs(name, expdir_len, enddir) - expdir_len;
+	return stnputs(sh, name, expdir_len, enddir) - expdir_len;
 }
 
- char *ShellContext::expmeta_rmescapes(char *enddir, const char *name)
+static char *
+expmeta_rmescapes(ShellContext &sh, char *enddir, const char *name)
 {
 	const char *p;
 
@@ -1634,7 +1663,8 @@ nometa:
 }
 
 #ifndef HAVE_MEMRCHR
- void *ShellContext::memrchr(const void *s, int c, size_t n)
+static void *
+memrchr(ShellContext &sh, const void *s, int c, size_t n)
 {
 	const unsigned char *str = s;
 	const unsigned char *cp;
@@ -1650,7 +1680,8 @@ nometa:
  * Do metacharacter (i.e. *, ?, [...]) expansion.
  */
 
- char *ShellContext::expmeta(char *name, unsigned name_len, size_t expdir_len)
+static char *
+expmeta(ShellContext &sh, char *name, unsigned name_len, size_t expdir_len)
 {
 	const char mesc = FNMATCH_IS_ENABLED ? '\\' : CTLESC;
 	struct jmploc *volatile savehandler;
@@ -1672,12 +1703,12 @@ nometa:
 	int c;
 
 	*(DIR *volatile *)&dirp = NULL;
-	savehandler = handler;
+	savehandler = sh.handler;
 	if (unlikely(err = setjmp(jmploc.loc)))
 		goto out;
 
 	len = expdir_len + name_len + 1;
-	cp = growstackto(len);
+	cp = growstackto(sh, len);
 	enddir = cp + expdir_len;
 
 	p = name;
@@ -1686,22 +1717,22 @@ nometa:
 		p = strpbrk(p + esc, "*?]");
 		if (!p)
 			break;
-		esc = mesclen(name, p, mesc) & 1;
+		esc = mesclen(sh, name, p, mesc) & 1;
 	} while (esc);
 	/* No meta characters */
 	if (likely(!p)) {
 		if (!expdir_len)
 			goto out_opendir;
-		enddir = expmeta_rmescapes(enddir, name);
+		enddir = expmeta_rmescapes(sh, enddir, name);
 		if (lstat64(cp, &statb) >= 0)
-			cp = addfnamealt(enddir + 1, expdir_len);
+			cp = addfnamealt(sh, enddir + 1, expdir_len);
 		goto out_opendir;
 	}
 	start = static_cast<char *>(memrchr(name, '/', static_cast<size_t>(p - name)));
 	if (start) {
 		c = *++start;
 		*start = 0;
-		enddir = expmeta_rmescapes(enddir, name);
+		enddir = expmeta_rmescapes(sh, enddir, name);
 		*start = c;
 		expdir_len = enddir - cp;
 	} else
@@ -1716,7 +1747,7 @@ nometa:
 	zeroedp = p;
 	endname = p;
 	if (*p) {
-		esc = mesclen(name, p, mesc) & 1;
+		esc = mesclen(sh, name, p, mesc) & 1;
 		zeroedp -= esc;
 		endname++;
 	}
@@ -1741,20 +1772,20 @@ nometa:
 		len = strlen(dname) + 1;
 		p = dname;
 		if (!FNMATCH_IS_ENABLED) {
-			expdest = enddir;
-			memtodest(p, len, EXP_MBCHAR | EXP_KEEPNUL);
+			sh.expdest = enddir;
+			memtodest(sh, p, len, EXP_MBCHAR | EXP_KEEPNUL);
 			cp = stackblock();
 			enddir = cp + expdir_len;
 			p = enddir;
 		}
-		if (pmatch(pat, p)) {
-			enddir = stnputs(dname, len, enddir);
+		if (pmatch(sh, pat, p)) {
+			enddir = stnputs(sh, dname, len, enddir);
 			if (!c)
-				cp = addfnamealt(enddir, expdir_len);
+				cp = addfnamealt(sh, enddir, expdir_len);
 			else {
 				enddir[-1] = '/';
 				len += expdir_len;
-				cp = expmeta(endname, name_len, len);
+				cp = expmeta(sh, endname, name_len, len);
 			}
 			enddir = cp + expdir_len;
 		}
@@ -1767,9 +1798,9 @@ check_int:
 out:
 	closedir(*(DIR *volatile *)&dirp);
 out_opendir:
-	handler = savehandler;
+	sh.handler = savehandler;
 	if (err)
-		longjmp(handler->loc, 1);
+		longjmp(sh.handler->loc, 1);
 	return cp;
 }
 
@@ -1778,10 +1809,10 @@ out_opendir:
  * Add a file name to the list.
  */
 
- void
-ShellContext::addfname(char *name)
+static void
+addfname(ShellContext &sh, char *name)
 {
-	addfname_common(sstrdup(name));
+	addfname_common(sh, sstrdup(sh, name));
 }
 
 
@@ -1791,8 +1822,8 @@ ShellContext::addfname(char *name)
  * work.
  */
 
- struct strlist *
-ShellContext::expsort(struct strlist *str)
+static struct strlist *
+expsort(ShellContext &sh, struct strlist *str)
 {
 	int len;
 	struct strlist *sp;
@@ -1800,12 +1831,12 @@ ShellContext::expsort(struct strlist *str)
 	len = 0;
 	for (sp = str ; sp ; sp = sp->next)
 		len++;
-	return msort(str, len);
+	return msort(sh, str, len);
 }
 
 
- struct strlist *
-ShellContext::msort(struct strlist *list, int len)
+static struct strlist *
+msort(ShellContext &sh, struct strlist *list, int len)
 {
 	struct strlist *p, *q = NULL;
 	struct strlist **lpp;
@@ -1821,8 +1852,8 @@ ShellContext::msort(struct strlist *list, int len)
 		p = p->next;
 	}
 	q->next = NULL;			/* terminate first half of list */
-	q = msort(list, half);		/* sort first half of list */
-	p = msort(p, len - half);		/* sort second half */
+	q = msort(sh, list, half);		/* sort first half of list */
+	p = msort(sh, p, len - half);		/* sort second half */
 	lpp = &list;
 	for (;;) {
 		if (strcoll(p->text, q->text) < 0) {
@@ -1849,14 +1880,15 @@ ShellContext::msort(struct strlist *list, int len)
  * Returns true if the pattern matches the string.
  */
 
- inline int
-ShellContext::patmatch(char *pattern, const char *string)
+static inline int
+patmatch(ShellContext &sh, char *pattern, const char *string)
 {
-	return pmatch(preglob(pattern, 0), string);
+	return pmatch(sh, preglob(sh, pattern, 0), string);
 }
 
 
- __attribute__((noinline)) int ShellContext::ccmatch(char *p, const char *mbc, int ml,
+static __attribute__((noinline)) int
+ccmatch(ShellContext &sh, char *p, const char *mbc, int ml,
 					     char **r)
 {
 	mbstate_t mbst = {};
@@ -1888,7 +1920,8 @@ ShellContext::patmatch(char *pattern, const char *string)
 	return iswctype(wc, type);
 }
 
- int ShellContext::pmatch(char *pattern, const char *string)
+static int
+pmatch(ShellContext &sh, char *pattern, const char *string)
 {
 	const char *q;
 	unsigned mb;
@@ -1910,7 +1943,7 @@ ShellContext::patmatch(char *pattern, const char *string)
 		case '?':
 			if (*q == '\0')
 				return 0;
-			mb = mbnext(q);
+			mb = mbnext(sh, q);
 			q += (mb >> 8) + (mb & 0xff);
 			continue;
 		case '*':
@@ -1934,11 +1967,11 @@ ShellContext::patmatch(char *pattern, const char *string)
 					if (!q)
 						return 0;
 				}
-				if (pmatch(p, q))
+				if (pmatch(sh, p, q))
 					return 1;
 				if (!*q)
 					break;
-				mb = mbnext(q);
+				mb = mbnext(sh, q);
 				q += (mb >> 8) + (mb & 0xff);
 			}
 			return 0;
@@ -1954,7 +1987,7 @@ ShellContext::patmatch(char *pattern, const char *string)
 				p++;
 			}
 			found = 0;
-			mb = mbnext(q);
+			mb = mbnext(sh, q);
 			q += mb & 0xff;
 			mb >>= 8;
 			chr = *q;
@@ -1973,7 +2006,7 @@ ShellContext::patmatch(char *pattern, const char *string)
 				if (c == '[') {
 					char *r;
 
-					found |= !!ccmatch(p, q, mb > 1 ?
+					found |= !!ccmatch(sh, p, q, mb > 1 ?
 								 mb - 2 : mb,
 							   &r);
 					if (r) {
@@ -1983,7 +2016,7 @@ ShellContext::patmatch(char *pattern, const char *string)
 				} else if (c == (char)CTLESC)
 					c = *p++;
 				else if (c == (char)CTLMBCHAR) {
-					mbp = mbnext(--p);
+					mbp = mbnext(sh, --p);
 					p += mbp & 0xff;
 					mbs = p;
 					mbp >>= 8;
@@ -1994,7 +2027,7 @@ ShellContext::patmatch(char *pattern, const char *string)
 					if (*p == (char)CTLESC)
 						p++;
 					else if (*p == (char)CTLMBCHAR) {
-						mbp = mbnext(p);
+						mbp = mbnext(sh, p);
 						p += mbp & 0xff;
 						p += mbp >> 8;
 						continue;
@@ -2012,9 +2045,9 @@ ShellContext::patmatch(char *pattern, const char *string)
 			continue;
 		}
 		case CTLMBCHAR:
-			mb = mbnext(--p);
+			mb = mbnext(sh, --p);
 			p += mb & 0xff;
-			mb = mbnext(q);
+			mb = mbnext(sh, q);
 			q += mb & 0xff;
 			mb >>= 8;
 
@@ -2026,7 +2059,7 @@ ShellContext::patmatch(char *pattern, const char *string)
 			continue;
 		}
 dft:
-		mb = mbnext(q);
+		mb = mbnext(sh, q);
 		if ((mb >> 8) > 1)
 			return 0;
 		q += mb & 0xff;
@@ -2047,7 +2080,7 @@ breakloop:
  */
 
 char *
-ShellContext::_rmescapes(char *str, int flag)
+_rmescapes(ShellContext &sh, char *str, int flag)
 {
 	char *p, *q, *r;
 	int notescaped;
@@ -2074,13 +2107,13 @@ ShellContext::_rmescapes(char *str, int flag)
 		if (flag & RMESCAPE_GROW) {
 			int strloc = str - (char *)stackblock();
 
-			r = makestrspace(fulllen, expdest);
+			r = makestrspace(sh, fulllen, sh.expdest);
 			str = (char *)stackblock() + strloc;
 			p = str + len;
 		} else if (flag & RMESCAPE_HEAP) {
-			r = ckmalloc(fulllen);
+			r = ckmalloc(sh, fulllen);
 		} else {
-			r = stalloc(fulllen);
+			r = stalloc(sh, fulllen);
 		}
 		q = r;
 		if (len > 0) {
@@ -2123,7 +2156,7 @@ ShellContext::_rmescapes(char *str, int flag)
 			if (!FNMATCH_IS_ENABLED && (globbing ^ notescaped))
 				q--;
 
-			mb = mbnext(p);
+			mb = mbnext(sh, p);
 			ml = mb >> 8;
 
 			if (!globbing || FNMATCH_IS_ENABLED) {
@@ -2149,8 +2182,8 @@ setnesc:
 		q[-1] = '\\';
 	*q = '\0';
 	if (flag & (RMESCAPE_ALLOC | RMESCAPE_GROW)) {
-		expdest = r;
-		STADJUST(q - r + 1, expdest);
+		sh.expdest = r;
+		STADJUST(q - r + 1, sh.expdest);
 	}
 	return r;
 }
@@ -2162,22 +2195,22 @@ setnesc:
  */
 
 int
-ShellContext::casematch(union node *pattern, char *val)
+casematch(ShellContext &sh, union node *pattern, char *val)
 {
 	int result;
-	std::size_t su = stackstr.used;
-	std::size_t hc = stackheaps.size();
+	std::size_t su = sh.stackstr.used;
+	std::size_t hc = sh.stackheaps.size();
 
-	argbackq = pattern->narg.backquote;
-	STARTSTACKSTR(expdest);
-	argstr(pattern->narg.text, EXP_TILDE | EXP_CASE);
-	ifsfree();
-	result = patmatch(stackblock(), val);
-	while (stackheaps.size() > hc) {
-		ckfree(stackheaps.back());
-		stackheaps.pop_back();
+	sh.argbackq = pattern->narg.backquote;
+	STARTSTACKSTR(sh.expdest);
+	argstr(sh, pattern->narg.text, EXP_TILDE | EXP_CASE);
+	ifsfree(sh);
+	result = patmatch(sh, stackblock(), val);
+	while (sh.stackheaps.size() > hc) {
+		ckfree(sh.stackheaps.back());
+		sh.stackheaps.pop_back();
 	}
-	stackstr.rewind(su);
+	sh.stackstr.rewind(su);
 	return result;
 }
 
@@ -2185,17 +2218,18 @@ ShellContext::casematch(union node *pattern, char *val)
  * Our own itoa().
  */
 
- size_t ShellContext::cvtnum(intmax_t num, int flags)
+static size_t
+cvtnum(ShellContext &sh, intmax_t num, int flags)
 {
 	int len = max_int_length(sizeof(num));
 	char buf[len];
 
-	len = fmtstr(buf, len, "%" PRIdMAX, num);
-	return memtodest(buf, len, flags);
+	len = fmtstr(sh, buf, len, "%" PRIdMAX, num);
+	return memtodest(sh, buf, len, flags);
 }
 
- void
-ShellContext::varunset(const char *end, const char *var, const char *umsg, int varflags)
+static void
+varunset(ShellContext &sh, const char *end, const char *var, const char *umsg, int varflags)
 {
 	const char *msg;
 	const char *tail;
@@ -2209,16 +2243,17 @@ ShellContext::varunset(const char *end, const char *var, const char *umsg, int v
 		} else
 			msg = umsg;
 	}
-	sh_error("%.*s: %s%s", end - var - 1, var, msg, tail);
+	sh_error(sh, "%.*s: %s%s", end - var - 1, var, msg, tail);
 }
 
-void ShellContext::restore_handler_expandarg(struct jmploc *savehandler, int err)
+void
+restore_handler_expandarg(ShellContext &sh, struct jmploc *savehandler, int err)
 {
-	handler = savehandler;
+	sh.handler = savehandler;
 	if (err) {
-		if (exception != EXERROR)
-			longjmp(handler->loc, 1);
-		ifsfree();
+		if (sh.exception != EXERROR)
+			longjmp(sh.handler->loc, 1);
+		ifsfree(sh);
 	}
 }
 
@@ -2227,7 +2262,7 @@ void ShellContext::restore_handler_expandarg(struct jmploc *savehandler, int err
 INCLUDE "expand.h"
 
 EXITRESET {
-	ifsfree();
+	ifsfree(sh);
 }
 
 #endif

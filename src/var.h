@@ -60,7 +60,7 @@ struct var {
 	struct var *next;		/* next entry in hash list */
 	int flags;			/* flags are defined above */
 	const char *text;		/* name=value */
-	void (ShellContext::*func)(const char *);
+	void (*func)(ShellContext &, const char *);
 					/* function to be called when  */
 					/* the variable gets set/unset */
 };
@@ -76,14 +76,13 @@ struct localvar {
 struct localvar_list;
 
 
-extern struct localvar *localvars;
-extern struct var varinit[];
+/* varinit / defifsvar / linenovar live on ShellContext; macros require &sh. */
 
 #if ATTY
-#define vatty varinit[0]
-#define vifs varinit[1]
+#define vatty (sh.varinit[0])
+#define vifs (sh.varinit[1])
 #else
-#define vifs varinit[0]
+#define vifs (sh.varinit[0])
 #endif
 #define vmail (&vifs)[1]
 #define vmpath (&vmail)[1]
@@ -104,13 +103,9 @@ extern struct var varinit[];
 #define vhistsize (&vterm)[1]
 #endif
 
-extern char defifsvar[];
-#define defifs (defifsvar + 4)
 extern const char defpathvar[];
+#define defifs (sh.defifsvar + 4)
 #define defpath (defpathvar + 36)
-
-extern int lineno;
-extern char linenovar[];
 
 /*
  * The following macros access the values of the above variables.
@@ -138,23 +133,24 @@ extern char linenovar[];
 #endif
 #define mpathset()	((vmpath.flags & VUNSET) == 0)
 
-void initvar(void);
-struct var *setvar(const char *name, const char *val, int flags);
-intmax_t setvarint(const char *, intmax_t, int);
-struct var *setvareq(char *s, int flags);
+struct ShellContext;
+void initvar(ShellContext &sh);
+struct var *setvar(ShellContext &sh, const char *name, const char *val, int flags);
+intmax_t setvarint(ShellContext &sh, const char *, intmax_t, int);
+struct var *setvareq(ShellContext &sh, char *s, int flags);
 struct strlist;
-char *lookupvar(const char *);
-intmax_t lookupvarint(const char *);
-char **listvars(int, int, char ***);
-#define environment() listvars(VEXPORT, VUNSET, 0)
-int showvars(const char *, int, int);
-int exportcmd(int, char **);
-int localcmd(int, char **);
-void mklocal(char *name, int flags);
-struct localvar_list *pushlocalvars(int push);
-void unwindlocalvars(struct localvar_list *stop);
-int unsetcmd(int, char **);
-void unsetvar(const char *);
+char *lookupvar(ShellContext &sh, const char *);
+intmax_t lookupvarint(ShellContext &sh, const char *);
+char **listvars(ShellContext &sh, int, int, char ***);
+#define environment() listvars(sh, VEXPORT, VUNSET, 0)
+int showvars(ShellContext &sh, const char *, int, int);
+int exportcmd(ShellContext &sh, int, char **);
+int localcmd(ShellContext &sh, int, char **);
+void mklocal(ShellContext &sh, char *name, int flags);
+struct localvar_list *pushlocalvars(ShellContext &sh, int push);
+void unwindlocalvars(ShellContext &sh, struct localvar_list *stop);
+int unsetcmd(ShellContext &sh, int, char **);
+void unsetvar(ShellContext &sh, const char *);
 int varcmp(const char *, const char *);
 
 static inline unsigned int hashval(const char *p)

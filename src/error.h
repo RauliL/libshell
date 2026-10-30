@@ -62,9 +62,6 @@ struct jmploc {
 	jmp_buf loc;
 };
 
-extern struct jmploc *handler;
-extern int exception;
-
 /* exceptions */
 #define EXINT 0		/* SIGINT received */
 #define EXERROR 1	/* a generic error */
@@ -79,50 +76,56 @@ extern int exception;
  * more fun than worrying about efficiency and portability. :-))
  */
 
-extern int suppressint;
-extern volatile sig_atomic_t intpending;
+/*
+ * Interrupt deferral macros require ShellContext &sh in scope (same as the
+ * former ash globals suppressint / sh.intpending, now fields of ShellContext).
+ */
+struct ShellContext;
+void onint(ShellContext &sh) __attribute__((__noreturn__));
 
+/*
+ * INTOFF/INTON use suppressint/sh.intpending, which shell_access.h maps to
+ * suppressint / sh.intpending when ShellContext &sh is in scope.
+ */
 #define barrier() ({ __asm__ __volatile__ ("": : :"memory"); })
 #define INTOFF \
 	({ \
-		suppressint++; \
+		sh.suppressint++; \
 		barrier(); \
 		0; \
 	})
 #ifdef REALLY_SMALL
-void __inton(void);
-#define INTON __inton()
+void __inton(ShellContext &sh);
+#define INTON __inton(sh)
 #else
 #define INTON \
 	({ \
 		barrier(); \
-		if (--suppressint == 0 && intpending) onint(); \
+		if (--sh.suppressint == 0 && sh.intpending) onint(sh); \
 		0; \
 	})
 #endif
 #define FORCEINTON \
 	({ \
 		barrier(); \
-		suppressint = 0; \
-		if (intpending) onint(); \
+		sh.suppressint = 0; \
+		if (sh.intpending) onint(sh); \
 		0; \
 	})
-#define SAVEINT(v) ((v) = suppressint)
+#define SAVEINT(v) ((v) = sh.suppressint)
 #define RESTOREINT(v) \
 	({ \
 		barrier(); \
-		if ((suppressint = (v)) == 0 && intpending) onint(); \
+		if ((sh.suppressint = (v)) == 0 && sh.intpending) onint(sh); \
 		0; \
 	})
-#define CLEAR_PENDING_INT intpending = 0
-#define int_pending() intpending
+#define CLEAR_PENDING_INT sh.intpending = 0
+#define int_pending() sh.intpending
 
-void exraise(int) __attribute__((__noreturn__));
-void onint(void) __attribute__((__noreturn__));
-extern int errlinno;
-void sh_error(const char *, ...) __attribute__((__noreturn__));
-void exerror(int, const char *, ...) __attribute__((__noreturn__));
-const char *errmsg(int, int);
+void exraise(ShellContext &sh, int) __attribute__((__noreturn__));
+void sh_error(ShellContext &sh, const char *, ...) __attribute__((__noreturn__));
+void exerror(ShellContext &sh, int, const char *, ...) __attribute__((__noreturn__));
+const char *errmsg(ShellContext &sh, int, int);
 
-void sh_warnx(const char *, ...);
+void sh_warnx(ShellContext &sh, const char *, ...);
 #endif

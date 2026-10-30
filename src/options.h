@@ -46,45 +46,38 @@ struct shparam {
 
 
 
-#define eflag optlist[0]
-#define fflag optlist[1]
-#define Iflag optlist[2]
-#define iflag optlist[3]
-#define mflag optlist[4]
-#define nflag optlist[5]
-#define sflag optlist[6]
-#define xflag optlist[7]
-#define vflag optlist[8]
-#define Vflag optlist[9]
-#define	Eflag optlist[10]
-#define	Cflag optlist[11]
-#define	aflag optlist[12]
-#define	bflag optlist[13]
-#define	uflag optlist[14]
-#define	nolog optlist[15]
-#define	pipefail optlist[16]
-#define	debug optlist[17]
+#define eflag (sh.optlist[0])
+#define fflag (sh.optlist[1])
+#define Iflag (sh.optlist[2])
+#define iflag (sh.optlist[3])
+#define mflag (sh.optlist[4])
+#define nflag (sh.optlist[5])
+#define sflag (sh.optlist[6])
+#define xflag (sh.optlist[7])
+#define vflag (sh.optlist[8])
+#define Vflag (sh.optlist[9])
+#define	Eflag (sh.optlist[10])
+#define	Cflag (sh.optlist[11])
+#define	aflag (sh.optlist[12])
+#define	bflag (sh.optlist[13])
+#define	uflag (sh.optlist[14])
+#define	nolog (sh.optlist[15])
+#define	pipefail (sh.optlist[16])
+#define	debug (sh.optlist[17])
 
 #define NOPTS	18
 
 extern const char optletters[NOPTS];
-extern char optlist[NOPTS];
+/* optlist, minusc, arg0, shellparam, argptr, optionarg, optptr: ShellContext fields */
 
-
-extern char *minusc;		/* argument to -c option */
-extern char *arg0;		/* $0 */
-extern struct shparam shellparam;  /* $@ */
-extern char **argptr;		/* argument list for builtin commands */
-extern char *optionarg;		/* set by nextopt */
-extern char *optptr;		/* used by nextopt */
-
-int procargs(char **);
-void optschanged(void);
-void setparam(char **);
-void freeparam(volatile struct shparam *);
-int shiftcmd(int, char **);
-int setcmd(int, char **);
-int getoptscmd(int, char **);
-int nextopt(const char *);
-void getoptsreset(const char *);
+struct ShellContext;
+int procargs(ShellContext &sh, char **);
+void optschanged(ShellContext &sh);
+void setparam(ShellContext &sh, char **);
+void freeparam(ShellContext &sh, volatile struct shparam *);
+int shiftcmd(ShellContext &sh, int, char **);
+int setcmd(ShellContext &sh, int, char **);
+int getoptscmd(ShellContext &sh, int, char **);
+int nextopt(ShellContext &sh, const char *);
+void getoptsreset(ShellContext &sh, const char *);
 #endif

@@ -34,6 +34,7 @@
 
 #include <stdlib.h>
 #include "shell.h"
+#include "shell_context.h"
 #include "input.h"
 #include "output.h"
 #include "error.h"
@@ -48,13 +49,13 @@
 
 
 
-STATIC void setalias(const char *, const char *);
-STATIC struct alias *freealias(struct alias *);
-STATIC struct alias **__lookupalias(const char *);
+static void setalias(ShellContext &sh, const char *, const char *);
+static struct alias * freealias(ShellContext &sh, struct alias *);
+static struct alias ** __lookupalias(ShellContext &sh, const char *);
 
 
-void
-ShellContext::setalias(const char *name, const char *val)
+static void
+setalias(ShellContext &sh, const char *name, const char *val)
 {
 	struct alias *ap, **app;
 	const char *p = name;
@@ -62,10 +63,10 @@ ShellContext::setalias(const char *name, const char *val)
 
 	do {
 		if (BASESYNTAX[(signed char)*p] != CWORD)
-			sh_error("Invalid alias name: %s", name);
+			sh_error(sh, "Invalid alias name: %s", name);
 	} while (*++p != '=');
 
-	app = __lookupalias(name);
+	app = __lookupalias(sh, name);
 	ap = *app;
 	INTOFF;
 	if (ap) {
@@ -74,27 +75,27 @@ ShellContext::setalias(const char *name, const char *val)
 		ap->flag &= ~ALIASDEAD;
 	} else {
 		/* not found */
-		ap = ckmalloc(sizeof (struct alias));
+		ap = ckmalloc(sh, sizeof (struct alias));
 		ap->flag = 0;
 		ap->next = 0;
 		*app = ap;
 	}
 	namelen = val - name;
-	ap->name = savestr(name);
+	ap->name = savestr(sh, name);
 	ap->val = ap->name + namelen;
 	INTON;
 }
 
 int
-ShellContext::unalias(const char *name)
+unalias(ShellContext &sh, const char *name)
 {
 	struct alias **app;
 
-	app = __lookupalias(name);
+	app = __lookupalias(sh, name);
 
 	if (*app) {
 		INTOFF;
-		*app = freealias(*app);
+		*app = freealias(sh, *app);
 		INTON;
 		return (0);
 	}
@@ -102,17 +103,17 @@ ShellContext::unalias(const char *name)
 	return (1);
 }
 
-void
-ShellContext::rmaliases(void)
+static void
+rmaliases(ShellContext &sh)
 {
 	struct alias *ap, **app;
 	int i;
 
 	INTOFF;
 	for (i = 0; i < ATABSIZE; i++) {
-		app = &atab[i];
+		app = &sh.atab[i];
 		for (ap = *app; ap; ap = *app) {
-			*app = freealias(*app);
+			*app = freealias(sh, *app);
 			if (ap == *app) {
 				app = &ap->next;
 			}
@@ -122,9 +123,9 @@ ShellContext::rmaliases(void)
 }
 
 struct alias *
-ShellContext::lookupalias(const char *name, int check)
+lookupalias(ShellContext &sh, const char *name, int check)
 {
-	struct alias *ap = *__lookupalias(name);
+	struct alias *ap = *__lookupalias(sh, name);
 
 	if (check && ap && (ap->flag & ALIASINUSE))
 		return (NULL);
@@ -132,10 +133,10 @@ ShellContext::lookupalias(const char *name, int check)
 }
 
 /*
- * TODO - sort output
+ * TODO - sort sh.output
  */
 int
-ShellContext::aliascmd(int argc, char **argv)
+aliascmd(ShellContext &sh, int argc, char **argv)
 {
 	char *n, *v;
 	int ret = 0;
@@ -145,21 +146,21 @@ ShellContext::aliascmd(int argc, char **argv)
 		int i;
 
 		for (i = 0; i < ATABSIZE; i++)
-			for (ap = atab[i]; ap; ap = ap->next) {
-				printalias(ap);
+			for (ap = sh.atab[i]; ap; ap = ap->next) {
+				printalias(sh, ap);
 			}
 		return (0);
 	}
 	while ((n = *++argv) != NULL) {
 		/* n + 1: funny ksh stuff (from 44lite) */
 		if (!*n || !(v = strchr(n + 1, '='))) {
-			if ((ap = *__lookupalias(n)) == NULL) {
-				outfmt(out2, "%s: %s not found\n", "alias", n);
+			if ((ap = *__lookupalias(sh, n)) == NULL) {
+				outfmt(sh, sh.out2, "%s: %s not found\n", "alias", n);
 				ret = 1;
 			} else
-				printalias(ap);
+				printalias(sh, ap);
 		} else {
-			setalias(n, v + 1);
+			setalias(sh, n, v + 1);
 		}
 	}
 
@@ -167,19 +168,19 @@ ShellContext::aliascmd(int argc, char **argv)
 }
 
 int
-ShellContext::unaliascmd(int argc, char **argv)
+unaliascmd(ShellContext &sh, int argc, char **argv)
 {
 	int i;
 
-	while ((i = nextopt("a")) != '\0') {
+	while ((i = nextopt(sh, "a")) != '\0') {
 		if (i == 'a') {
-			rmaliases();
+			rmaliases(sh);
 			return (0);
 		}
 	}
-	for (i = 0; *argptr; argptr++) {
-		if (unalias(*argptr)) {
-			outfmt(out2, "%s: %s not found\n", "unalias", *argptr);
+	for (i = 0; *sh.argptr; sh.argptr++) {
+		if (unalias(sh, *sh.argptr)) {
+			outfmt(sh, sh.out2, "%s: %s not found\n", "unalias", *sh.argptr);
 			i = 1;
 		}
 	}
@@ -187,8 +188,9 @@ ShellContext::unaliascmd(int argc, char **argv)
 	return (i);
 }
 
- struct alias *
-ShellContext::freealias(struct alias *ap) {
+static struct alias *
+freealias(ShellContext &sh, struct alias *ap)
+{
 	struct alias *next;
 
 	if (ap->flag & ALIASINUSE) {
@@ -202,15 +204,18 @@ ShellContext::freealias(struct alias *ap) {
 	return next;
 }
 
-void __attribute__((noinline)) ShellContext::printalias(const struct alias *ap) {
-	out1fmt(snlfmt, single_quote(ap->name));
+void __attribute__((noinline))
+printalias(ShellContext &sh, const struct alias *ap)
+{
+	out1fmt(sh, snlfmt, single_quote(sh, ap->name));
 }
 
- struct alias **
-ShellContext::__lookupalias(const char *name) {
+static struct alias **
+__lookupalias(ShellContext &sh, const char *name)
+{
 	struct alias **app;
 
-	app = &atab[hashval(name) % ATABSIZE];
+	app = &sh.atab[hashval(name) % ATABSIZE];
 
 	for (; *app; app = &(*app)->next) {
 		if (varequal(name, (*app)->name)) {

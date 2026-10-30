@@ -43,14 +43,15 @@ extern char sigmode[];
 extern volatile sig_atomic_t pending_sig;
 extern volatile sig_atomic_t gotsigchld;
 
-int trapcmd(int, char **);
-void setsignal(int);
-void ignoresig(int);
-void onsig(int);
-void dotrap(void);
-void setinteractive(int);
-void exitshell(void) __attribute__((__noreturn__));
-int decode_signal(const char *, int);
+struct ShellContext;
+int trapcmd(ShellContext &sh, int, char **);
+void setsignal(ShellContext &sh, int);
+void ignoresig(ShellContext &sh, int);
+void onsig(ShellContext &sh, int);
+void dotrap(ShellContext &sh);
+void setinteractive(ShellContext &sh, int);
+void exitshell(ShellContext &sh) __attribute__((__noreturn__));
+int decode_signal(ShellContext &sh, const char *, int);
 void sigblockall(sigset_t *oldmask);
 
 #endif

@@ -54,51 +54,44 @@ struct output {
 	int flags;
 };
 
-extern struct output output;
-extern struct output errout;
-extern struct output preverrout;
-#ifdef notyet
-extern struct output memout;
-#endif
-extern struct output *out1;
-extern struct output *out2;
+struct ShellContext;
 
-void outmem(const char *, size_t, struct output *);
-void outstr(const char *, struct output *);
+void outmem(ShellContext &sh, const char *, size_t, struct output *);
+void outstr(ShellContext &sh, const char *, struct output *);
 #ifndef USE_GLIBC_STDIO
-void outcslow(int, struct output *);
+void outcslow(ShellContext &sh, int, struct output *);
 #endif
-void flushall(void);
-void flushout(struct output *);
-void outfmt(struct output *, const char *, ...)
-    __attribute__((__format__(__printf__,2,3)));
-void out1fmt(const char *, ...)
-    __attribute__((__format__(__printf__,1,2)));
-int fmtstr(char *, size_t, const char *, ...)
+void flushall(ShellContext &sh);
+void flushout(ShellContext &sh, struct output *);
+void outfmt(ShellContext &sh, struct output *, const char *, ...)
     __attribute__((__format__(__printf__,3,4)));
-int xasprintf(char **, const char *, ...);
+void out1fmt(ShellContext &sh, const char *, ...)
+    __attribute__((__format__(__printf__,2,3)));
+int fmtstr(ShellContext &sh, char *, size_t, const char *, ...)
+    __attribute__((__format__(__printf__,4,5)));
+int xasprintf(ShellContext &sh, char **, const char *, ...);
 #ifndef USE_GLIBC_STDIO
-void doformat(struct output *, const char *, va_list);
+void doformat(ShellContext &sh, struct output *, const char *, va_list);
 #endif
-int xwrite(int, const void *, size_t);
+int xwrite(ShellContext &sh, int, const void *, size_t);
 #ifdef notyet
 #ifdef USE_GLIBC_STDIO
-void initstreams(void);
-void openmemout(void);
-int __closememout(void);
+void initstreams(ShellContext &sh);
+void openmemout(ShellContext &sh);
+int __closememout(ShellContext &sh);
 #endif
 #endif
 
 #define OUTPUT_ERR 01		/* error occurred on output */
 
 #ifdef USE_GLIBC_STDIO
-#define doformat(d, f, a)	vfprintf((d)->stream, (f), (a))
+#define doformat(sh, d, f, a)	vfprintf((d)->stream, (f), (a))
 #endif
-#define out1c(c)	outc((c), out1)
-#define out2c(c)	outcslow((c), out2)
-#define out1mem(s, l)	outmem((s), (l), out1)
-#define out1str(s)	outstr((s), out1)
-#define out2str(s)	outstr((s), out2)
+#define out1c(c)	outc(sh, (c), sh.out1)
+#define out2c(c)	outcslow(sh, (c), sh.out2)
+#define out1mem(s, l)	outmem(sh, (s), (l), sh.out1)
+#define out1str(s)	outstr(sh, (s), sh.out1)
+#define out2str(s)	outstr(sh, (s), sh.out2)
 #define outerr(f)	(f)->flags
 
 #define OUTPUT_INCL

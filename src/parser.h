@@ -36,6 +36,7 @@
  *	@(#)parser.h	8.3 (Berkeley) 5/4/95
  */
 
+#include <cstddef>
 #include "token.h"
 #include "result.h"
 
@@ -81,26 +82,23 @@ namespace dash { class ParseError; }
 
 /*
  * NEOF is returned by parsecmd when it encounters an end of file.  It
- * must be distinct from NULL, so we use the address of a variable that
- * happens to be handy.
+ * must be distinct from NULL, so we use the address of a ShellContext
+ * field that happens to be handy. Requires ShellContext &sh in scope.
  */
-extern int lasttoken;
-extern int tokpushback;
-#define NEOF ((union node *)&tokpushback)
-extern int whichprompt;		/* 1 == PS1, 2 == PS2 */
-extern int checkkwd;
+#define NEOF ((union node *)&sh.tokpushback)
 
+struct ShellContext;
 
 int isassignment(const char *p);
 int issimplecmd(union node *n, const char *name);
-union node *parsecmd(int);
-void fixredir(union node *, const char *, int);
-const char *getprompt(void *);
+union node *parsecmd(ShellContext &sh, int);
+void fixredir(ShellContext &sh, union node *, const char *, int);
+const char *getprompt(ShellContext &sh, void *);
 const char *const *findkwd(const char *);
-char *endofname(const char *);
-const char *expandstr(const char *);
-unsigned getmbc(int c, char *out, int mode);
+char *endofname(ShellContext &sh, const char *p);
+const char *expandstr(ShellContext &sh, const char *);
+unsigned getmbc(ShellContext &sh, int c, char *out, int mode);
 void report_parse_error(const dash::ParseError &e);
-dash::Result<void> try_parse_string(char *s);
+dash::Result<void> try_parse_string(ShellContext &sh, char *s);
 
 #endif

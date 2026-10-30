@@ -247,8 +247,9 @@ output(char *file)
 	fputs("\tint count;\n", hfile);
 	fputs("\tunion node n;\n", hfile);
 	fputs("};\n\n\n", hfile);
-	fputs("struct funcnode *copyfunc(union node *);\n", hfile);
-	fputs("void freefunc(struct funcnode *);\n", hfile);
+	fputs("struct ShellContext;\n", hfile);
+	fputs("struct funcnode *copyfunc(ShellContext &, union node *);\n", hfile);
+	fputs("void freefunc(ShellContext &, struct funcnode *);\n", hfile);
 
 	fputs(writer, cfile);
 	while (fgets(line, sizeof line, patfile) != NULL) {
@@ -310,22 +311,22 @@ outfunc(FILE *cfile, int calcsize)
 			case T_NODE:
 				if (calcsize) {
 					indent(12, cfile);
-					fprintf(cfile, "calcsize(n->%s.%s);\n",
+					fprintf(cfile, "calcsize(sh, n->%s.%s);\n",
 						sp->tag, fp->name);
 				} else {
 					indent(12, cfile);
-					fprintf(cfile, "copied->%s.%s = copynode(n->%s.%s);\n",
+					fprintf(cfile, "copied->%s.%s = copynode(sh, n->%s.%s);\n",
 						sp->tag, fp->name, sp->tag, fp->name);
 				}
 				break;
 			case T_NODELIST:
 				if (calcsize) {
 					indent(12, cfile);
-					fprintf(cfile, "sizenodelist(n->%s.%s);\n",
+					fprintf(cfile, "sizenodelist(sh, n->%s.%s);\n",
 						sp->tag, fp->name);
 				} else {
 					indent(12, cfile);
-					fprintf(cfile, "copied->%s.%s = copynodelist(n->%s.%s);\n",
+					fprintf(cfile, "copied->%s.%s = copynodelist(sh, n->%s.%s);\n",
 						sp->tag, fp->name, sp->tag, fp->name);
 				}
 				break;
@@ -336,7 +337,7 @@ outfunc(FILE *cfile, int calcsize)
 						sp->tag, fp->name);
 				} else {
 					indent(12, cfile);
-					fprintf(cfile, "copied->%s.%s = nodesavestr(n->%s.%s);\n",
+					fprintf(cfile, "copied->%s.%s = nodesavestr(sh, n->%s.%s);\n",
 						sp->tag, fp->name, sp->tag, fp->name);
 				}
 				break;

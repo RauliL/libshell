@@ -44,6 +44,7 @@
 #include <wctype.h>
 
 #include "shell.h"
+#include "shell_context.h"
 #include "parser.h"
 #include "nodes.h"
 #include "expand.h"	/* defines rmescapes() */
@@ -117,38 +118,41 @@ struct synstack {
 			/* set if (part of) last token was quoted */
 
 
-STATIC union node *list(int);
-STATIC union node *andor(void);
-STATIC union node *pipeline(void);
-STATIC union node *command(void);
-STATIC union node *simplecmd(void);
-STATIC union node *makename(void);
-STATIC void parsefname(void);
-STATIC void parseheredoc(void);
-STATIC int readtoken(void);
-STATIC int xxreadtoken(void);
-STATIC int pgetc_eatbnl();
-STATIC int readtoken1(int, char const *, char *, int);
-STATIC void synexpect(int) __attribute__((__noreturn__));
-STATIC void synerror(const char *) __attribute__((__noreturn__));
-STATIC void setprompt(int);
+union node * list(ShellContext &sh, int);
+static union node * andor(ShellContext &sh);
+static union node * pipeline(ShellContext &sh);
+union node * command(ShellContext &sh);
+static union node * simplecmd(ShellContext &sh);
+static union node * makename(ShellContext &sh);
+static void parsefname(ShellContext &sh);
+static void parseheredoc(ShellContext &sh);
+static int readtoken(ShellContext &sh);
+static int xxreadtoken(ShellContext &sh);
+static int pgetc_eatbnl(ShellContext &sh);
+static int readtoken1(ShellContext &sh, int, char const *, char *, int);
+static void synexpect(ShellContext &sh, int) __attribute__((__noreturn__));
+static void synerror(ShellContext &sh, const char *) __attribute__((__noreturn__));
+static void setprompt(ShellContext &sh, int);
 
 
-int ShellContext::isassignment(const char *p)
+int
+isassignment(ShellContext &sh, const char *p)
 {
-	const char *q = endofname(p);
+	const char *q = endofname(sh, p);
 	if (p == q)
 		return 0;
 	return *q == '=';
 }
 
-int ShellContext::issimplecmd(union node *n, const char *name)
+int
+issimplecmd(ShellContext &sh, union node *n, const char *name)
 {
 	return n && n->type == NCMD && n->ncmd.args &&
 	       equal(n->ncmd.args->narg.text, name);
 }
 
- inline int ShellContext::realeofmark(const char *eofmark)
+static inline int
+realeofmark(ShellContext &sh, const char *eofmark)
 {
 	return eofmark && eofmark != FAKEEOFMARK;
 }
@@ -160,21 +164,21 @@ int ShellContext::issimplecmd(union node *n, const char *name)
  */
 
 union node *
-ShellContext::parsecmd(int interact)
+parsecmd(ShellContext &sh, int interact)
 {
-	tokpushback = 0;
-	checkkwd = 0;
-	heredoclist = 0;
-	doprompt = interact;
-	if (doprompt)
-		setprompt(doprompt);
-	needprompt = 0;
-	return list(1);
+	sh.tokpushback = 0;
+	sh.checkkwd = 0;
+	sh.heredoclist = 0;
+	sh.doprompt = interact;
+	if (sh.doprompt)
+		setprompt(sh, sh.doprompt);
+	sh.needprompt = 0;
+	return list(sh, 1);
 }
 
 
- union node *
-ShellContext::list(int nlflag)
+union node *
+list(ShellContext &sh, int nlflag)
 {
 	int chknl = nlflag & 1 ? 0 : CHKNL;
 	union node *n1, *n2, *n3;
@@ -182,36 +186,36 @@ ShellContext::list(int nlflag)
 
 	n1 = NULL;
 	for (;;) {
-		checkkwd = chknl | CHKKWD | CHKALIAS;
-		tok = readtoken();
+		sh.checkkwd = chknl | CHKKWD | CHKALIAS;
+		tok = readtoken(sh);
 		switch (tok) {
 		case TNL:
-			parseheredoc();
+			parseheredoc(sh);
 			return n1;
 
 		case TEOF:
 			if (!n1 && !chknl)
 				n1 = NEOF;
 out_eof:
-			parseheredoc();
-			tokpushback++;
-			lasttoken = TEOF;
+			parseheredoc(sh);
+			sh.tokpushback++;
+			sh.lasttoken = TEOF;
 			return n1;
 		}
 
-		tokpushback++;
+		sh.tokpushback++;
 		if (nlflag == 2 && tokendlist[tok])
 			return n1;
 		nlflag |= 2;
 
-		n2 = andor();
-		tok = readtoken();
+		n2 = andor(sh);
+		tok = readtoken(sh);
 		if (tok == TBACKGND) {
 			if (n2->type == NPIPE) {
 				n2->npipe.backgnd = 1;
 			} else {
 				if (n2->type != NREDIR) {
-					n3 = astalloc(sizeof(struct nredir));
+					n3 = astalloc(sh, sizeof(struct nredir));
 					n3->nredir.n = n2;
 					n3->nredir.redirect = NULL;
 					n2 = n3;
@@ -223,7 +227,7 @@ out_eof:
 			n1 = n2;
 		}
 		else {
-			n3 = (union node *)astalloc(sizeof(struct nbinary));
+			n3 = (union node *)astalloc(sh, sizeof(struct nbinary));
 			n3->type = NSEMI;
 			n3->nbinary.ch1 = n1;
 			n3->nbinary.ch2 = n2;
@@ -233,15 +237,15 @@ out_eof:
 		case TEOF:
 			goto out_eof;
 		case TNL:
-			tokpushback++;
+			sh.tokpushback++;
 			/* fall through */
 		case TBACKGND:
 		case TSEMI:
 			break;
 		default:
 			if (!chknl)
-				synexpect(-1);
-			tokpushback++;
+				synexpect(sh, -1);
+			sh.tokpushback++;
 			return n1;
 		}
 	}
@@ -249,25 +253,25 @@ out_eof:
 
 
 
- union node *
-ShellContext::andor(void)
+static union node *
+andor(ShellContext &sh)
 {
 	union node *n1, *n2, *n3;
 	int t;
 
-	n1 = pipeline();
+	n1 = pipeline(sh);
 	for (;;) {
-		if ((t = readtoken()) == TAND) {
+		if ((t = readtoken(sh)) == TAND) {
 			t = NAND;
 		} else if (t == TOR) {
 			t = NOR;
 		} else {
-			tokpushback++;
+			sh.tokpushback++;
 			return n1;
 		}
-		checkkwd = CHKNL | CHKKWD | CHKALIAS;
-		n2 = pipeline();
-		n3 = (union node *)astalloc(sizeof(struct nbinary));
+		sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
+		n2 = pipeline(sh);
+		n3 = (union node *)astalloc(sh, sizeof(struct nbinary));
 		n3->type = t;
 		n3->nbinary.ch1 = n1;
 		n3->nbinary.ch2 = n2;
@@ -277,8 +281,8 @@ ShellContext::andor(void)
 
 
 
- union node *
-ShellContext::pipeline(void)
+static union node *
+pipeline(ShellContext &sh)
 {
 	union node *n1, *n2, *pipenode;
 	struct nodelist *lp, *prev;
@@ -286,32 +290,32 @@ ShellContext::pipeline(void)
 
 	negate = 0;
 	TRACE(("pipeline: entered\n"));
-	if (readtoken() == TNOT) {
+	if (readtoken(sh) == TNOT) {
 		negate = !negate;
-		checkkwd = CHKKWD | CHKALIAS;
+		sh.checkkwd = CHKKWD | CHKALIAS;
 	} else
-		tokpushback++;
-	n1 = command();
-	if (readtoken() == TPIPE) {
-		pipenode = (union node *)astalloc(sizeof(struct npipe));
+		sh.tokpushback++;
+	n1 = command(sh);
+	if (readtoken(sh) == TPIPE) {
+		pipenode = (union node *)astalloc(sh, sizeof(struct npipe));
 		pipenode->type = NPIPE;
 		pipenode->npipe.backgnd = 0;
-		lp = (struct nodelist *)astalloc(sizeof(struct nodelist));
+		lp = (struct nodelist *)astalloc(sh, sizeof(struct nodelist));
 		pipenode->npipe.cmdlist = lp;
 		lp->n = n1;
 		do {
 			prev = lp;
-			lp = (struct nodelist *)astalloc(sizeof(struct nodelist));
-			checkkwd = CHKNL | CHKKWD | CHKALIAS;
-			lp->n = command();
+			lp = (struct nodelist *)astalloc(sh, sizeof(struct nodelist));
+			sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
+			lp->n = command(sh);
 			prev->next = lp;
-		} while (readtoken() == TPIPE);
+		} while (readtoken(sh) == TPIPE);
 		lp->next = NULL;
 		n1 = pipenode;
 	}
-	tokpushback++;
+	sh.tokpushback++;
 	if (negate) {
-		n2 = (union node *)astalloc(sizeof(struct nnot));
+		n2 = (union node *)astalloc(sh, sizeof(struct nnot));
 		n2->type = NNOT;
 		n2->nnot.com = n1;
 		return n2;
@@ -321,8 +325,8 @@ ShellContext::pipeline(void)
 
 
 
- union node *
-ShellContext::command(void)
+union node *
+command(ShellContext &sh)
 {
 	union node *n1, *n2;
 	union node *ap, **app;
@@ -337,75 +341,75 @@ ShellContext::command(void)
 
 	savelinno = plinno;
 
-	switch (readtoken()) {
+	switch (readtoken(sh)) {
 	default:
-		synexpect(-1);
+		synexpect(sh, -1);
 		/* NOTREACHED */
 	case TIF:
-		n1 = (union node *)astalloc(sizeof(struct nif));
+		n1 = (union node *)astalloc(sh, sizeof(struct nif));
 		n1->type = NIF;
-		n1->nif.test = list(0);
-		if (readtoken() != TTHEN)
-			synexpect(TTHEN);
-		n1->nif.ifpart = list(0);
+		n1->nif.test = list(sh, 0);
+		if (readtoken(sh) != TTHEN)
+			synexpect(sh, TTHEN);
+		n1->nif.ifpart = list(sh, 0);
 		n2 = n1;
-		while (readtoken() == TELIF) {
-			n2->nif.elsepart = (union node *)astalloc(sizeof(struct nif));
+		while (readtoken(sh) == TELIF) {
+			n2->nif.elsepart = (union node *)astalloc(sh, sizeof(struct nif));
 			n2 = n2->nif.elsepart;
 			n2->type = NIF;
-			n2->nif.test = list(0);
-			if (readtoken() != TTHEN)
-				synexpect(TTHEN);
-			n2->nif.ifpart = list(0);
+			n2->nif.test = list(sh, 0);
+			if (readtoken(sh) != TTHEN)
+				synexpect(sh, TTHEN);
+			n2->nif.ifpart = list(sh, 0);
 		}
-		if (lasttoken == TELSE)
-			n2->nif.elsepart = list(0);
+		if (sh.lasttoken == TELSE)
+			n2->nif.elsepart = list(sh, 0);
 		else {
 			n2->nif.elsepart = NULL;
-			tokpushback++;
+			sh.tokpushback++;
 		}
 		t = TFI;
 		break;
 	case TWHILE:
 	case TUNTIL: {
 		int got;
-		n1 = (union node *)astalloc(sizeof(struct nbinary));
-		n1->type = (lasttoken == TWHILE)? NWHILE : NUNTIL;
-		n1->nbinary.ch1 = list(0);
-		if ((got=readtoken()) != TDO) {
-TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? wordtext : ""));
-			synexpect(TDO);
+		n1 = (union node *)astalloc(sh, sizeof(struct nbinary));
+		n1->type = (sh.lasttoken == TWHILE)? NWHILE : NUNTIL;
+		n1->nbinary.ch1 = list(sh, 0);
+		if ((got=readtoken(sh)) != TDO) {
+TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? sh.wordtext : ""));
+			synexpect(sh, TDO);
 		}
-		n1->nbinary.ch2 = list(0);
+		n1->nbinary.ch2 = list(sh, 0);
 		t = TDONE;
 		break;
 	}
 	case TFOR:
-		if (readtoken() != TWORD || quoteflag || ! goodname(wordtext))
-			synerror("Bad for loop variable");
-		n1 = (union node *)astalloc(sizeof(struct nfor));
+		if (readtoken(sh) != TWORD || sh.quoteflag || ! goodname(sh, sh.wordtext))
+			synerror(sh, "Bad for loop variable");
+		n1 = (union node *)astalloc(sh, sizeof(struct nfor));
 		n1->type = NFOR;
 		n1->nfor.linno = savelinno;
-		n1->nfor.var = savestr(wordtext);
-		checkkwd = CHKNL | CHKKWD | CHKALIAS;
-		if (readtoken() == TIN) {
+		n1->nfor.var = savestr(sh, sh.wordtext);
+		sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
+		if (readtoken(sh) == TIN) {
 			app = &ap;
-			while (readtoken() == TWORD) {
-				n2 = (union node *)astalloc(sizeof(struct narg));
+			while (readtoken(sh) == TWORD) {
+				n2 = (union node *)astalloc(sh, sizeof(struct narg));
 				n2->type = NARG;
-				n2->narg.text = savestr(wordtext);
-				n2->narg.backquote = backquotelist;
+				n2->narg.text = savestr(sh, sh.wordtext);
+				n2->narg.backquote = sh.backquotelist;
 				*app = n2;
 				app = &n2->narg.next;
 			}
 			*app = NULL;
 			n1->nfor.args = ap;
-			if (lasttoken != TNL && lasttoken != TSEMI)
-				synexpect(-1);
+			if (sh.lasttoken != TNL && sh.lasttoken != TSEMI)
+				synexpect(sh, -1);
 		} else {
-			n2 = (union node *)astalloc(sizeof(struct narg));
+			n2 = (union node *)astalloc(sh, sizeof(struct narg));
 			n2->type = NARG;
-			n2->narg.text = savestr(dolatstr);
+			n2->narg.text = savestr(sh, dolatstr);
 			n2->narg.backquote = NULL;
 			n2->narg.next = NULL;
 			n1->nfor.args = n2;
@@ -413,62 +417,62 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? wordtext : ""));
 			 * Newline or semicolon here is optional (but note
 			 * that the original Bourne shell only allowed NL).
 			 */
-			if (lasttoken != TSEMI)
-				tokpushback++;
+			if (sh.lasttoken != TSEMI)
+				sh.tokpushback++;
 		}
-		checkkwd = CHKNL | CHKKWD | CHKALIAS;
-		if (readtoken() != TDO)
-			synexpect(TDO);
-		n1->nfor.body = list(0);
+		sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
+		if (readtoken(sh) != TDO)
+			synexpect(sh, TDO);
+		n1->nfor.body = list(sh, 0);
 		t = TDONE;
 		break;
 	case TCASE:
-		n1 = (union node *)astalloc(sizeof(struct ncase));
+		n1 = (union node *)astalloc(sh, sizeof(struct ncase));
 		n1->type = NCASE;
 		n1->ncase.linno = savelinno;
-		if (readtoken() != TWORD)
-			synexpect(TWORD);
-		n1->ncase.expr = n2 = (union node *)astalloc(sizeof(struct narg));
+		if (readtoken(sh) != TWORD)
+			synexpect(sh, TWORD);
+		n1->ncase.expr = n2 = (union node *)astalloc(sh, sizeof(struct narg));
 		n2->type = NARG;
-		n2->narg.text = savestr(wordtext);
-		n2->narg.backquote = backquotelist;
+		n2->narg.text = savestr(sh, sh.wordtext);
+		n2->narg.backquote = sh.backquotelist;
 		n2->narg.next = NULL;
-		checkkwd = CHKNL | CHKKWD | CHKALIAS;
-		if (readtoken() != TIN)
-			synexpect(TIN);
+		sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
+		if (readtoken(sh) != TIN)
+			synexpect(sh, TIN);
 		cpp = &n1->ncase.cases;
 next_case:
-		checkkwd = CHKNL | CHKKWD;
-		t = readtoken();
+		sh.checkkwd = CHKNL | CHKKWD;
+		t = readtoken(sh);
 		while(t != TESAC) {
-			if (lasttoken == TLP)
-				readtoken();
-			*cpp = cp = (union node *)astalloc(sizeof(struct nclist));
+			if (sh.lasttoken == TLP)
+				readtoken(sh);
+			*cpp = cp = (union node *)astalloc(sh, sizeof(struct nclist));
 			cp->type = NCLIST;
 			app = &cp->nclist.pattern;
 			for (;;) {
-				if (lasttoken < TWORD)
-					synexpect(TWORD);
-				*app = ap = (union node *)astalloc(sizeof(struct narg));
+				if (sh.lasttoken < TWORD)
+					synexpect(sh, TWORD);
+				*app = ap = (union node *)astalloc(sh, sizeof(struct narg));
 				ap->type = NARG;
-				ap->narg.text = savestr(wordtext);
-				ap->narg.backquote = backquotelist;
-				if (readtoken() != TPIPE)
+				ap->narg.text = savestr(sh, sh.wordtext);
+				ap->narg.backquote = sh.backquotelist;
+				if (readtoken(sh) != TPIPE)
 					break;
 				app = &ap->narg.next;
-				readtoken();
+				readtoken(sh);
 			}
 			ap->narg.next = NULL;
-			if (lasttoken != TRP)
-				synexpect(TRP);
-			cp->nclist.body = list(2);
+			if (sh.lasttoken != TRP)
+				synexpect(sh, TRP);
+			cp->nclist.body = list(sh, 2);
 
 			cpp = &cp->nclist.next;
 
-			checkkwd = CHKNL | CHKKWD;
-			if ((t = readtoken()) != TESAC) {
+			sh.checkkwd = CHKNL | CHKKWD;
+			if ((t = readtoken(sh)) != TESAC) {
 				if (t != TENDCASE)
-					synexpect(TENDCASE);
+					synexpect(sh, TENDCASE);
 				else
 					goto next_case;
 			}
@@ -476,40 +480,40 @@ next_case:
 		*cpp = NULL;
 		goto redir;
 	case TLP:
-		n1 = (union node *)astalloc(sizeof(struct nredir));
+		n1 = (union node *)astalloc(sh, sizeof(struct nredir));
 		n1->type = NSUBSHELL;
 		n1->nredir.linno = savelinno;
-		n1->nredir.n = list(0);
+		n1->nredir.n = list(sh, 0);
 		n1->nredir.redirect = NULL;
 		t = TRP;
 		break;
 	case TBEGIN:
-		n1 = list(0);
+		n1 = list(sh, 0);
 		t = TEND;
 		break;
 	case TWORD:
 	case TREDIR:
-		tokpushback++;
-		return simplecmd();
+		sh.tokpushback++;
+		return simplecmd(sh);
 	}
 
-	if (readtoken() != t)
-		synexpect(t);
+	if (readtoken(sh) != t)
+		synexpect(sh, t);
 
 redir:
 	/* Now check for redirection which may follow command */
-	checkkwd = CHKKWD | CHKALIAS;
+	sh.checkkwd = CHKKWD | CHKALIAS;
 	rpp = rpp2;
-	while (readtoken() == TREDIR) {
-		*rpp = n2 = redirnode;
+	while (readtoken(sh) == TREDIR) {
+		*rpp = n2 = sh.redirnode;
 		rpp = &n2->nfile.next;
-		parsefname();
+		parsefname(sh);
 	}
-	tokpushback++;
+	sh.tokpushback++;
 	*rpp = NULL;
 	if (redir) {
 		if (n1->type != NSUBSHELL) {
-			n2 = (union node *)astalloc(sizeof(struct nredir));
+			n2 = (union node *)astalloc(sh, sizeof(struct nredir));
 			n2->type = NREDIR;
 			n2->nredir.linno = savelinno;
 			n2->nredir.n = n1;
@@ -522,8 +526,9 @@ redir:
 }
 
 
- union node *
-ShellContext::simplecmd(void) {
+static union node *
+simplecmd(ShellContext &sh)
+{
 	union node *args, **app;
 	union node *n = NULL;
 	union node *vars, **vpp;
@@ -541,14 +546,14 @@ ShellContext::simplecmd(void) {
 	savecheckkwd = CHKALIAS;
 	savelinno = plinno;
 	for (;;) {
-		checkkwd = savecheckkwd;
-		switch (readtoken()) {
+		sh.checkkwd = savecheckkwd;
+		switch (readtoken(sh)) {
 		case TWORD:
-			n = (union node *)astalloc(sizeof(struct narg));
+			n = (union node *)astalloc(sh, sizeof(struct narg));
 			n->type = NARG;
-			n->narg.text = savestr(wordtext);
-			n->narg.backquote = backquotelist;
-			if (savecheckkwd && isassignment(wordtext)) {
+			n->narg.text = savestr(sh, sh.wordtext);
+			n->narg.backquote = sh.backquotelist;
+			if (savecheckkwd && isassignment(sh, sh.wordtext)) {
 				*vpp = n;
 				vpp = &n->narg.next;
 			} else {
@@ -558,9 +563,9 @@ ShellContext::simplecmd(void) {
 			}
 			break;
 		case TREDIR:
-			*rpp = n = redirnode;
+			*rpp = n = sh.redirnode;
 			rpp = &n->nfile.next;
-			parsefname();	/* read name of redirection file */
+			parsefname(sh);	/* read name of redirection file */
 			break;
 		case TLP:
 			if (
@@ -571,26 +576,26 @@ ShellContext::simplecmd(void) {
 				const char *name;
 
 				/* We have a function */
-				if (readtoken() != TRP)
-					synexpect(TRP);
+				if (readtoken(sh) != TRP)
+					synexpect(sh, TRP);
 				name = n->narg.text;
 				if (
-					!goodname(name) || (
-						(bcmd = find_builtin(name)) &&
+					!goodname(sh, name) || (
+						(bcmd = find_builtin(sh, name)) &&
 						bcmd->flags & BUILTIN_SPECIAL
 					)
 				)
-					synerror("Bad function name");
+					synerror(sh, "Bad function name");
 				n->type = NDEFUN;
-				checkkwd = CHKNL | CHKKWD | CHKALIAS;
+				sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 				n->ndefun.text = n->narg.text;
 				n->ndefun.linno = plinno;
-				n->ndefun.body = command();
+				n->ndefun.body = command(sh);
 				return n;
 			}
 			/* fall through */
 		default:
-			tokpushback++;
+			sh.tokpushback++;
 			goto out;
 		}
 	}
@@ -598,7 +603,7 @@ out:
 	*app = NULL;
 	*vpp = NULL;
 	*rpp = NULL;
-	n = (union node *)astalloc(sizeof(struct ncmd));
+	n = (union node *)astalloc(sh, sizeof(struct ncmd));
 	n->type = NCMD;
 	n->ncmd.linno = savelinno;
 	n->ncmd.args = args;
@@ -607,21 +612,22 @@ out:
 	return n;
 }
 
- union node *
-ShellContext::makename(void)
+static union node *
+makename(ShellContext &sh)
 {
 	union node *n;
 
-	n = (union node *)astalloc(sizeof(struct narg));
+	n = (union node *)astalloc(sh, sizeof(struct narg));
 	n->type = NARG;
 	n->narg.next = NULL;
-	n->narg.text = savestr(wordtext);
-	n->narg.backquote = backquotelist;
+	n->narg.text = savestr(sh, sh.wordtext);
+	n->narg.backquote = sh.backquotelist;
 	return n;
 }
 
-void ShellContext::fixredir(union node *n, const char *text, int err)
-	{
+void
+fixredir(ShellContext &sh, union node *n, const char *text, int err)
+{
 	TRACE(("Fix redir %s %d\n", text, err));
 	if (!err)
 		n->ndup.vname = NULL;
@@ -636,41 +642,41 @@ void ShellContext::fixredir(union node *n, const char *text, int err)
 			throw dash::ParseError(
 				std::string("Bad fd number: ") + text, plinno);
 		else
-			n->ndup.vname = makename();
+			n->ndup.vname = makename(sh);
 	}
 }
 
 
- void
-ShellContext::parsefname(void)
+static void
+parsefname(ShellContext &sh)
 {
-	union node *n = redirnode;
+	union node *n = sh.redirnode;
 
 	if (n->type == NHERE)
-		checkkwd |= CHKEOFMARK;
-	if (readtoken() != TWORD)
-		synexpect(-1);
-	checkkwd &= ~CHKEOFMARK;
+		sh.checkkwd |= CHKEOFMARK;
+	if (readtoken(sh) != TWORD)
+		synexpect(sh, -1);
+	sh.checkkwd &= ~CHKEOFMARK;
 	if (n->type == NHERE) {
-		struct heredoc *here = heredoc;
+		struct heredoc *here = sh.heredoc;
 		struct heredoc *p;
 
-		if (quoteflag == 0)
+		if (sh.quoteflag == 0)
 			n->type = NXHERE;
 		TRACE(("Here document %d\n", n->type));
-		rmescapes(wordtext);
-		here->eofmark = wordtext;
+		rmescapes(sh.wordtext);
+		here->eofmark = sh.wordtext;
 		here->next = NULL;
-		if (heredoclist == NULL)
-			heredoclist = here;
+		if (sh.heredoclist == NULL)
+			sh.heredoclist = here;
 		else {
-			for (p = heredoclist ; p->next ; p = p->next);
+			for (p = sh.heredoclist ; p->next ; p = p->next);
 			p->next = here;
 		}
 	} else if (n->type == NTOFD || n->type == NFROMFD) {
-		fixredir(n, wordtext, 0);
+		fixredir(sh, n, sh.wordtext, 0);
 	} else {
-		n->nfile.fname = makename();
+		n->nfile.fname = makename(sh);
 	}
 }
 
@@ -679,60 +685,60 @@ ShellContext::parsefname(void)
  * Input any here documents.
  */
 
- void
-ShellContext::parseheredoc(void)
+static void
+parseheredoc(ShellContext &sh)
 {
 	struct heredoc *here;
 	union node *n;
 
-	here = heredoclist;
-	heredoclist = 0;
+	here = sh.heredoclist;
+	sh.heredoclist = 0;
 
 	while (here) {
-		if (needprompt) {
-			setprompt(2);
+		if (sh.needprompt) {
+			setprompt(sh, 2);
 		}
 		if (here->here->type == NHERE)
-			readtoken1(pgetc(), SQSYNTAX, here->eofmark, here->striptabs);
+			readtoken1(sh, pgetc(sh), SQSYNTAX, here->eofmark, here->striptabs);
 		else
-			readtoken1(pgetc_eatbnl(), DQSYNTAX, here->eofmark, here->striptabs);
-		n = (union node *)astalloc(sizeof(struct narg));
+			readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, here->eofmark, here->striptabs);
+		n = (union node *)astalloc(sh, sizeof(struct narg));
 		n->narg.type = NARG;
 		n->narg.next = NULL;
-		n->narg.text = savestr(wordtext);
-		n->narg.backquote = backquotelist;
+		n->narg.text = savestr(sh, sh.wordtext);
+		n->narg.backquote = sh.backquotelist;
 		here->here->nhere.doc = n;
 		here = here->next;
 	}
 }
 
- int
-ShellContext::readtoken(void)
+static int
+readtoken(ShellContext &sh)
 {
 	int t;
-	int kwd = checkkwd;
+	int kwd = sh.checkkwd;
 #ifdef DEBUG
-	int alreadyseen = tokpushback;
+	int alreadyseen = sh.tokpushback;
 #endif
 
 top:
-	t = xxreadtoken();
+	t = xxreadtoken(sh);
 
 	/*
 	 * eat newlines
 	 */
 	if (kwd & CHKNL) {
 		while (t == TNL) {
-			parseheredoc();
-			checkkwd = 0;
-			t = xxreadtoken();
+			parseheredoc(sh);
+			sh.checkkwd = 0;
+			t = xxreadtoken(sh);
 		}
 	}
 
-	kwd |= checkkwd;
-	checkkwd = 0;
+	kwd |= sh.checkkwd;
+	sh.checkkwd = 0;
 
-	if (t != TWORD || quoteflag) {
+	if (t != TWORD || sh.quoteflag) {
 		goto out;
 	}
 
@@ -742,8 +748,8 @@ top:
 	if (kwd & CHKKWD) {
 		const char *const *pp;
 
-		if ((pp = findkwd(wordtext))) {
-			lasttoken = t = pp - parsekwd + KWDOFFSET;
+		if ((pp = findkwd(sh, sh.wordtext))) {
+			sh.lasttoken = t = pp - parsekwd + KWDOFFSET;
 			TRACE(("keyword %s recognized\n", tokname[t]));
 			goto out;
 		}
@@ -751,9 +757,9 @@ top:
 
 	if (kwd & CHKALIAS) {
 		struct alias *ap;
-		if ((ap = lookupalias(wordtext, 1)) != NULL) {
+		if ((ap = lookupalias(sh, sh.wordtext, 1)) != NULL) {
 			if (*ap->val) {
-				pushstring(ap->val, ap);
+				pushstring(sh, ap->val, ap);
 			}
 			goto top;
 		}
@@ -761,33 +767,35 @@ top:
 out:
 #ifdef DEBUG
 	if (!alreadyseen)
-	    TRACE(("token %s %s\n", tokname[t], t == TWORD ? wordtext : ""));
+	    TRACE(("token %s %s\n", tokname[t], t == TWORD ? sh.wordtext : ""));
 	else
-	    TRACE(("reread token %s %s\n", tokname[t], t == TWORD ? wordtext : ""));
+	    TRACE(("reread token %s %s\n", tokname[t], t == TWORD ? sh.wordtext : ""));
 #endif
 	return (t);
 }
 
- void ShellContext::nlprompt(void)
+static void
+nlprompt(ShellContext &sh)
 {
 	plinno++;
-	if (doprompt)
-		setprompt(2);
+	if (sh.doprompt)
+		setprompt(sh, 2);
 }
 
- void ShellContext::nlnoprompt(void)
+static void
+nlnoprompt(ShellContext &sh)
 {
 	plinno++;
-	needprompt = doprompt;
+	sh.needprompt = sh.doprompt;
 }
 
 
 /*
  * Read the next input token.
- * If the token is a word, we set backquotelist to the list of cmds in
- *	backquotes.  We set quoteflag to true if any part of the word was
+ * If the token is a word, we set sh.backquotelist to the list of cmds in
+ *	backquotes.  We set sh.quoteflag to true if any part of the word was
  *	quoted.
- * If the token is TREDIR, then we set redirnode to a structure containing
+ * If the token is TREDIR, then we set sh.redirnode to a structure containing
  *	the redirection.
  *
  * [Change comment:  here documents and internal procedures]
@@ -798,85 +806,88 @@ out:
  *  have parseword (readtoken1?) handle both words and redirection.]
  */
 
-#define RETURN(token)	return lasttoken = token
+#define RETURN(token)	return sh.lasttoken = token
 
- int
-ShellContext::xxreadtoken(void)
+static int
+xxreadtoken(ShellContext &sh)
 {
 	int c;
 
-	if (tokpushback) {
-		tokpushback = 0;
-		return lasttoken;
+	if (sh.tokpushback) {
+		sh.tokpushback = 0;
+		return sh.lasttoken;
 	}
-	if (needprompt) {
-		setprompt(2);
+	if (sh.needprompt) {
+		setprompt(sh, 2);
 	}
 	for (;;) {	/* until token or start of word found */
 		int tok;
 
-		c = pgetc_eatbnl();
+		c = pgetc_eatbnl(sh);
 		switch (c) {
 		case ' ': case '\t':
 			continue;
 		case '#':
-			while ((c = pgetc()) != '\n' && c != PEOF);
-			pungetc();
+			while ((c = pgetc(sh)) != '\n' && c != PEOF);
+			pungetc(sh);
 			continue;
 		case '\n':
-			nlnoprompt();
+			nlnoprompt(sh);
 			RETURN(TNL);
 		case PEOF:
 			RETURN(TEOF);
 		case '&':
-			if (pgetc_eatbnl() == '&')
+			if (pgetc_eatbnl(sh) == '&')
 				RETURN(TAND);
-			pungetc();
+			pungetc(sh);
 			RETURN(TBACKGND);
 		case '|':
-			if (pgetc_eatbnl() == '|')
+			if (pgetc_eatbnl(sh) == '|')
 				RETURN(TOR);
-			pungetc();
+			pungetc(sh);
 			RETURN(TPIPE);
 		case ';':
-			if (pgetc_eatbnl() == ';')
+			if (pgetc_eatbnl(sh) == ';')
 				RETURN(TENDCASE);
-			pungetc();
+			pungetc(sh);
 			RETURN(TSEMI);
 		case '(':
 			RETURN(TLP);
 		case ')':
 			RETURN(TRP);
 		}
-		tok = readtoken1(c, BASESYNTAX, (char *)NULL, 0);
+		tok = readtoken1(sh, c, BASESYNTAX, (char *)NULL, 0);
 		if (tok != TBLANK)
 			return tok;
 	}
 #undef RETURN
 }
 
- int ShellContext::pgetc_eatbnl(void)
+static int
+pgetc_eatbnl(ShellContext &sh)
 {
 	int c;
 
-	while ((c = pgetc()) == '\\') {
-		if (pgetc() != '\n') {
-			pungetc();
+	while ((c = pgetc(sh)) == '\\') {
+		if (pgetc(sh) != '\n') {
+			pungetc(sh);
 			break;
 		}
 
-		nlprompt();
+		nlprompt(sh);
 	}
 
 	return c;
 }
 
- int ShellContext::pgetc_top(struct synstack *stack)
+static int
+pgetc_top(ShellContext &sh, struct synstack *stack)
 {
-	return stack->syntax == SQSYNTAX ? pgetc() : pgetc_eatbnl();
+	return stack->syntax == SQSYNTAX ? pgetc(sh) : pgetc_eatbnl(sh);
 }
 
- void ShellContext::synstack_push(struct synstack **stack, struct synstack *next,
+static void
+synstack_push(ShellContext &sh, struct synstack **stack, struct synstack *next,
 			  const char *syntax)
 {
 	memset(next, 0, sizeof(*next));
@@ -886,12 +897,14 @@ ShellContext::xxreadtoken(void)
 	*stack = next;
 }
 
- void ShellContext::synstack_pop(struct synstack **stack)
+static void
+synstack_pop(ShellContext &sh, struct synstack **stack)
 {
 	*stack = (*stack)->next;
 }
 
-unsigned ShellContext::getmbc(int c, char *out, int mode)
+unsigned
+getmbc(ShellContext &sh, int c, char *out, int mode)
 {
 	char *const start = out;
 	mbstate_t mbst = {};
@@ -908,7 +921,7 @@ unsigned ShellContext::getmbc(int c, char *out, int mode)
 	while ((ml2 = mbrtowc(&wc, mbc + ml++, 1, &mbst)) == -2) {
 		if (ml >= MB_LEN_MAX)
 			break;
-		c = pgetc_eoa();
+		c = pgetc_eoa(sh);
 		if (c == PEOA || c == PEOF)
 			break;
 		mbc[ml] = c;
@@ -934,12 +947,13 @@ unsigned ShellContext::getmbc(int c, char *out, int mode)
 	}
 
 	if (ml > 1)
-		pungetn(ml - 1);
+		pungetn(sh, ml - 1);
 
 	return 0;
 }
 
- char *ShellContext::dollarsq_escape(char *out)
+static char *
+dollarsq_escape(ShellContext &sh, char *out)
 {
 	/* 10 = length of UXXXXXXXX + NUL */
 	char str[10];
@@ -947,7 +961,7 @@ unsigned ShellContext::getmbc(int c, char *out, int mode)
 	char *p;
 
 	for (len = 0; len < sizeof(str) - 1;) {
-		int c = pgetc();
+		int c = pgetc(sh);
 
 		if (c <= PEOF)
 			break;
@@ -963,7 +977,7 @@ unsigned ShellContext::getmbc(int c, char *out, int mode)
 	if (*p != 'c') {
 		unsigned ret;
 
-		ret = conv_escape(p, out, true);
+		ret = conv_escape(sh, p, out, true);
 		p += ret >> 4;
 		out += ret & 15;
 	} else if (*++p) {
@@ -978,7 +992,7 @@ unsigned ShellContext::getmbc(int c, char *out, int mode)
 		USTPUTC(conv_ch, out);
 	}
 
-	pungetn(len - (p - str));
+	pungetn(sh, len - (p - str));
 	return out;
 }
 
@@ -1001,14 +1015,14 @@ unsigned ShellContext::getmbc(int c, char *out, int mode)
 #define PARSEBACKQNEW()	{oldstyle = 0; goto parsebackq; parsebackq_newreturn:;}
 #define	PARSEARITH()	{goto parsearith; parsearith_return:;}
 
- int
-ShellContext::readtoken1(int firstc, char const *syntax, char *eofmark, int striptabs)
+static int
+readtoken1(ShellContext &sh, int firstc, char const *syntax, char *eofmark, int striptabs)
 {
 	struct synstack synbase = {
 		.syntax = syntax,
 		.dblquote = syntax == DQSYNTAX,
 	};
-	int chkeofmark = checkkwd & CHKEOFMARK;
+	int chkeofmark = sh.checkkwd & CHKEOFMARK;
 	struct synstack *synstack = &synbase;
 	bool printesc = syntax == SQSYNTAX;
 	const char *newsyn = nullptr;
@@ -1023,18 +1037,18 @@ ShellContext::readtoken1(int firstc, char const *syntax, char *eofmark, int stri
 	STARTSTACKSTR(out);
 	loop: {	/* for each line, until end of word */
 #if ATTY
-		if (c == '\034' && doprompt
+		if (c == '\034' && sh.doprompt
 		 && attyset() && ! equal(termval(), "emacs")) {
 			attyline();
 			if (synstack->syntax == BASESYNTAX)
-				return readtoken();
-			c = pgetc_top(synstack);
+				return readtoken(sh);
+			c = pgetc_top(sh, synstack);
 			goto loop;
 		}
 #endif
 		CHECKEND();	/* set c to PEOF if at end of here document */
 		/* Until end of line or end of word */
-		for (;; c = pgetc_top(synstack)) {
+		for (;; c = pgetc_top(sh, synstack)) {
 			int fieldsplitting;
 			unsigned ml;
 
@@ -1044,12 +1058,12 @@ ShellContext::readtoken1(int firstc, char const *syntax, char *eofmark, int stri
 			fieldsplitting = synstack->syntax == BASESYNTAX &&
 					 !(synstack->varnest |
 					   synstack->backq) ? 4 : 0;
-			ml = getmbc(c, out, fieldsplitting |
+			ml = getmbc(sh, c, out, fieldsplitting |
 					    (printesc ? 2 : 0));
 			if (ml == 1) {
 				if (out == stackblock())
 					return TBLANK;
-				c = pgetc();
+				c = pgetc(sh);
 				break;
 			}
 			out += ml;
@@ -1060,15 +1074,15 @@ ShellContext::readtoken1(int firstc, char const *syntax, char *eofmark, int stri
 				if (fieldsplitting)
 					goto endword;	/* exit outer loop */
 				USTPUTC(c, out);
-				nlprompt();
-				c = pgetc_top(synstack);
+				nlprompt(sh);
+				c = pgetc_top(sh, synstack);
 				goto loop;		/* continue outer loop */
 			case CWORD:
 				USTPUTC(c, out);
 				break;
 			case CCTL:
 				if (c == dollarsq) {
-					out = dollarsq_escape(out);
+					out = dollarsq_escape(sh, out);
 					break;
 				}
 				if ((!eofmark) | synstack->dblquote |
@@ -1078,11 +1092,11 @@ ShellContext::readtoken1(int firstc, char const *syntax, char *eofmark, int stri
 				break;
 			/* backslash */
 			case CBACK:
-				c = pgetc();
+				c = pgetc(sh);
 				if (c == PEOF) {
 					USTPUTC(CTLESC, out);
 					USTPUTC('\\', out);
-					pungetc();
+					pungetc(sh);
 					break;
 				}
 
@@ -1104,7 +1118,7 @@ ShellContext::readtoken1(int firstc, char const *syntax, char *eofmark, int stri
 				}
 				quotef++;
 
-				ml = getmbc(c, out, 1);
+				ml = getmbc(sh, c, out, 1);
 				out += ml;
 				if (ml)
 					break;
@@ -1160,7 +1174,7 @@ toggledq:
 				    synstack->varnest > 0) {
 					if (!--synstack->varnest &&
 					    synstack->varpushed)
-						synstack_pop(&synstack);
+						synstack_pop(sh, &synstack);
 					else if (synstack->dqvarnest > 0)
 						synstack->dqvarnest--;
 					if (!chkeofmark)
@@ -1175,8 +1189,8 @@ toggledq:
 			case CRP:	/* ')' in arithmetic */
 				if (synstack->parenlevel > 0)
 					--synstack->parenlevel;
-				else if (pgetc_eatbnl() == ')') {
-					synstack_pop(&synstack);
+				else if (pgetc_eatbnl(sh) == ')') {
+					synstack_pop(sh, &synstack);
 					if (chkeofmark)
 						USTPUTC(c, out);
 					else
@@ -1186,7 +1200,7 @@ toggledq:
 					 * unbalanced parens
 					 *  (don't 2nd guess - no error)
 					 */
-					pungetc();
+					pungetc(sh);
 				}
 				USTPUTC(c, out);
 				break;
@@ -1201,7 +1215,7 @@ toggledq:
 			default:
 				if (c == ')' && synstack->backq == 1) {
 end_backq:
-					synstack_pop(&synstack);
+					synstack_pop(sh, &synstack);
 					printesc = 0;
 				} else if (fieldsplitting)
 					goto endword;	/* exit outer loop */
@@ -1211,13 +1225,13 @@ end_backq:
 	}
 endword:
 	if (synstack->syntax == ARISYNTAX)
-		synerror("Missing '))'");
+		synerror(sh, "Missing '))'");
 	if ((synstack->syntax != BASESYNTAX && eofmark == NULL) ||
 	    synstack->backq)
-		synerror("Unterminated quoted string");
+		synerror(sh, "Unterminated quoted string");
 	if (synstack->varnest != 0) {
 		/* { */
-		synerror("Missing '}'");
+		synerror(sh, "Missing '}'");
 	}
 	USTPUTC('\0', out);
 	len = out - (char *)stackblock();
@@ -1228,16 +1242,16 @@ endword:
 		 && len <= 2
 		 && (*out == '\0' || is_digit(*out))) {
 			PARSEREDIR();
-			return lasttoken = TREDIR;
+			return sh.lasttoken = TREDIR;
 		} else {
-			pungetc();
+			pungetc(sh);
 		}
 	}
-	quoteflag = quotef;
-	backquotelist = bqlist;
-	grabstackblock(len);
-	wordtext = out;
-	return lasttoken = TWORD;
+	sh.quoteflag = quotef;
+	sh.backquotelist = bqlist;
+	grabstackblock(sh, len);
+	sh.wordtext = out;
+	return sh.lasttoken = TWORD;
 /* end of readtoken routine */
 
 
@@ -1249,13 +1263,13 @@ endword:
  */
 
 checkend: {
-	if (realeofmark(eofmark)) {
+	if (realeofmark(sh, eofmark)) {
 		int markloc;
 		char *p;
 
 		if (striptabs) {
 			while (c == '\t')
-				c = pgetc();
+				c = pgetc(sh);
 		}
 
 		markloc = out - (char *)stackblock();
@@ -1263,12 +1277,12 @@ checkend: {
 			if (c != (signed char)*p)
 				goto more_heredoc;
 
-			c = pgetc();
+			c = pgetc(sh);
 		}
 
 		if (c == '\n' || c == PEOF) {
 			c = PEOF;
-			nlnoprompt();
+			nlnoprompt(sh);
 		} else {
 			int len;
 
@@ -1286,7 +1300,7 @@ more_heredoc:
 					str = static_cast<char *>(alloca(len + 1));
 					*(char *)mempcpy(str, p, len) = 0;
 
-					pushstring(str, NULL);
+					pushstring(sh, str, NULL);
 				}
 			}
 		}
@@ -1307,10 +1321,10 @@ parseredir: {
 	char fd = *out;
 	union node *np;
 
-	np = (union node *)astalloc(sizeof(struct nfile));
+	np = (union node *)astalloc(sh, sizeof(struct nfile));
 	if (c == '>') {
 		np->nfile.fd = 1;
-		c = pgetc_eatbnl();
+		c = pgetc_eatbnl(sh);
 		if (c == '>')
 			np->type = NAPPEND;
 		else if (c == '|')
@@ -1319,24 +1333,24 @@ parseredir: {
 			np->type = NTOFD;
 		else {
 			np->type = NTO;
-			pungetc();
+			pungetc(sh);
 		}
 	} else {	/* c == '<' */
 		np->nfile.fd = 0;
-		switch (c = pgetc_eatbnl()) {
+		switch (c = pgetc_eatbnl(sh)) {
 		case '<':
 			if (sizeof (struct nfile) != sizeof (struct nhere)) {
-				np = (union node *)astalloc(sizeof(struct nhere));
+				np = (union node *)astalloc(sh, sizeof(struct nhere));
 				np->nfile.fd = 0;
 			}
 			np->type = NHERE;
-			heredoc = (struct heredoc *)stalloc(sizeof(struct heredoc));
-			heredoc->here = np;
-			if ((c = pgetc_eatbnl()) == '-') {
-				heredoc->striptabs = 1;
+			sh.heredoc = (struct heredoc *)stalloc(sh, sizeof(struct heredoc));
+			sh.heredoc->here = np;
+			if ((c = pgetc_eatbnl(sh)) == '-') {
+				sh.heredoc->striptabs = 1;
 			} else {
-				heredoc->striptabs = 0;
-				pungetc();
+				sh.heredoc->striptabs = 0;
+				pungetc(sh);
 			}
 			break;
 
@@ -1350,13 +1364,13 @@ parseredir: {
 
 		default:
 			np->type = NFROM;
-			pungetc();
+			pungetc(sh);
 			break;
 		}
 	}
 	if (fd != '\0')
 		np->nfile.fd = digit_val(fd);
-	redirnode = np;
+	sh.redirnode = np;
 	goto parseredir_return;
 }
 
@@ -1374,13 +1388,13 @@ parsesub: {
 
 	USTPUTC('$', out);
 
-	c = pgetc_eatbnl();
+	c = pgetc_eatbnl(sh);
 	if (c == '(') {		/* $(command) or $((arith)) */
 		USTPUTC(c, out);
-		if (pgetc_eatbnl() == '(') {
+		if (pgetc_eatbnl(sh) == '(') {
 			PARSEARITH();
 		} else {
-			pungetc();
+			pungetc(sh);
 			PARSEBACKQNEW();
 		}
 	} else if (c == '\'' && newsyn['&']) {
@@ -1395,25 +1409,25 @@ parsesub: {
 		if (likely(c == '{')) {
 			if (chkeofmark)
 				USTPUTC('{', out);
-			c = pgetc_eatbnl();
+			c = pgetc_eatbnl(sh);
 			subtype = 0;
 		}
 varname:
 		if (is_name(c)) {
 			do {
 				STPUTC(c, out);
-				c = pgetc_eatbnl();
+				c = pgetc_eatbnl(sh);
 			} while (is_in_name(c));
 		} else if (is_digit(c)) {
 			do {
 				STPUTC(c, out);
-				c = pgetc_eatbnl();
+				c = pgetc_eatbnl(sh);
 			} while ((subtype <= 0 || subtype >= VSLENGTH) &&
 				 is_digit(c));
 		} else if (c != '}') {
 			int cc = c;
 
-			c = pgetc_eatbnl();
+			c = pgetc_eatbnl(sh);
 
 			if (!subtype && cc == '#') {
 				subtype = VSLENGTH;
@@ -1425,9 +1439,9 @@ varname:
 				}
 
 				cc = c;
-				c = pgetc_eatbnl();
+				c = pgetc_eatbnl(sh);
 				if (cc == '}' || c != '}') {
-					pungetc();
+					pungetc(sh);
 					subtype = 0;
 					c = cc;
 					cc = '#';
@@ -1454,7 +1468,7 @@ varname:
 			switch (c) {
 			case ':':
 				subtype = VSNUL;
-				c = pgetc_eatbnl();
+				c = pgetc_eatbnl(sh);
 				if (chkeofmark)
 					STPUTC(c, out);
 				/*FALLTHROUGH*/
@@ -1468,13 +1482,13 @@ varname:
 			case '#':
 				subtype = c == '#' ? VSTRIMLEFT :
 						     VSTRIMRIGHT;
-				c = pgetc_eatbnl();
+				c = pgetc_eatbnl(sh);
 				if (c == cc) {
 					if (chkeofmark)
 						STPUTC(c, out);
 					subtype++;
 				} else
-					pungetc();
+					pungetc(sh);
 
 				newsyn = BASESYNTAX;
 				break;
@@ -1483,7 +1497,7 @@ varname:
 			if (subtype == VSLENGTH && c != '}')
 				subtype = 0;
 badsub:
-			pungetc();
+			pungetc(sh);
 		}
 
 		if (newsyn == ARISYNTAX)
@@ -1491,7 +1505,7 @@ badsub:
 
 		if ((newsyn != synstack->syntax || synstack->innerdq) &&
 		    subtype != VSNORMAL) {
-			synstack_push(&synstack,
+			synstack_push(sh, &synstack,
 				      synstack->prev ?:
 				      static_cast<struct synstack *>(alloca(sizeof(*synstack))),
 				      newsyn);
@@ -1513,7 +1527,7 @@ badsub:
 			STPUTC('=', out);
 		}
 	} else
-		pungetc();
+		pungetc(sh);
 
 	goto parsesub_return;
 }
@@ -1537,7 +1551,7 @@ parsebackq: {
 	char *str;
 
 	if (chkeofmark) {
-		synstack_push(&synstack,
+		synstack_push(sh, &synstack,
 			      synstack->prev ?: static_cast<struct synstack *>(alloca(sizeof(*synstack))),
 			      BASESYNTAX);
 		synstack->backq = oldstyle + 1;
@@ -1548,7 +1562,7 @@ parsebackq: {
 	out[-1] = CTLBACKQ;
 	str = stackblock();
 	savelen = out - (char *)stackblock();
-	grabstackblock(savelen);
+	grabstackblock(sh, savelen);
 	STARTSTACKSTR(out);
         if (oldstyle) {
                 /* We must read until the closing backquote, giving special
@@ -1560,30 +1574,30 @@ parsebackq: {
 
 		while (!done) {
 			CHECKSTRSPACE(MB_LEN_MAX + 1, pout);
-			if (needprompt) {
-				setprompt(2);
+			if (sh.needprompt) {
+				setprompt(sh, 2);
 			}
-			switch (pc = pgetc_eatbnl()) {
+			switch (pc = pgetc_eatbnl(sh)) {
 			case '`':
 				done = true;
 				break;
 
 			case '\\':
-                                pc = pgetc();
+                                pc = pgetc(sh);
                                 if (pc != '\\' && pc != '`' && pc != '$'
                                     && (!synstack->dblquote || pc != '"'))
                                         USTPUTC('\\', pout);
-				ml = getmbc(pc, pout, 2);
+				ml = getmbc(sh, pc, pout, 2);
 				pout += ml;
 				if (ml)
 					continue;
 				break;
 
 			case PEOF:
-				synerror("EOF in backquote substitution");
+				synerror(sh, "EOF in backquote substitution");
 
 			case '\n':
-				nlnoprompt();
+				nlnoprompt(sh);
 				break;
 
 			default:
@@ -1593,47 +1607,47 @@ parsebackq: {
                 }
 		pout[-1] = 0;
 		pstr = grabstackstr(pout);
-		setinputstring(pstr);
+		setinputstring(sh, pstr);
         }
 	nlpp = &bqlist;
 	while (*nlpp)
 		nlpp = &(*nlpp)->next;
-	*nlpp = (struct nodelist *)astalloc(sizeof(struct nodelist));
+	*nlpp = (struct nodelist *)astalloc(sh, sizeof(struct nodelist));
 	(*nlpp)->next = NULL;
 
-	saveheredoclist = heredoclist;
-	heredoclist = NULL;
+	saveheredoclist = sh.heredoclist;
+	sh.heredoclist = NULL;
 
 	if (oldstyle) {
-		saveprompt = doprompt;
-		doprompt = 0;
+		saveprompt = sh.doprompt;
+		sh.doprompt = 0;
 	}
 
-	n = list(2);
+	n = list(sh, 2);
 
 	if (oldstyle)
-		doprompt = saveprompt;
+		sh.doprompt = saveprompt;
 	else {
-		if (readtoken() != TRP)
-			synexpect(TRP);
-		setinputstring(nullstr);
+		if (readtoken(sh) != TRP)
+			synexpect(sh, TRP);
+		setinputstring(sh, nullstr);
 	}
 
-	parseheredoc();
-	heredoclist = saveheredoclist;
+	parseheredoc(sh);
+	sh.heredoclist = saveheredoclist;
 
 	(*nlpp)->n = n;
 	/* Start reading from old file again. */
-	popfile();
+	popfile(sh);
 
-	out = stnputs(str, savelen, stackblock());
+	out = stnputs(sh, str, savelen, stackblock());
 
 parsebackq_out:
 	if (oldstyle) {
 		/* Ignore any pushed back tokens left from the backquote
 		 * parsing.
 		 */
-		tokpushback = 0;
+		sh.tokpushback = 0;
 		goto parsebackq_oldreturn;
 	} else {
 		goto parsebackq_newreturn;
@@ -1645,7 +1659,7 @@ parsebackq_out:
  */
 parsearith: {
 
-	synstack_push(&synstack,
+	synstack_push(sh, &synstack,
 		      synstack->prev ?: static_cast<struct synstack *>(alloca(sizeof(*synstack))),
 		      ARISYNTAX);
 	synstack->dblquote = 1;
@@ -1673,8 +1687,8 @@ INCLUDE "parser.h"
  */
 
 char *
-ShellContext::endofname(const char *name)
-	{
+endofname(ShellContext &sh, const char *name)
+{
 	char *p;
 
 	p = (char *) name;
@@ -1694,92 +1708,95 @@ ShellContext::endofname(const char *name)
  * occur at this point.
  */
 
- void
-ShellContext::synexpect(int token)
+static void
+synexpect(ShellContext &sh, int token)
 {
 	char msg[64];
 
 	if (token >= 0) {
-		fmtstr(msg, 64, "%s unexpected (expecting %s)",
-			tokname[lasttoken], tokname[token]);
+		fmtstr(sh, msg, 64, "%s unexpected (expecting %s)",
+			tokname[sh.lasttoken], tokname[token]);
 	} else {
-		fmtstr(msg, 64, "%s unexpected", tokname[lasttoken]);
+		fmtstr(sh, msg, 64, "%s unexpected", tokname[sh.lasttoken]);
 	}
-	synerror(msg);
+	synerror(sh, msg);
 	/* NOTREACHED */
 }
 
 
- void
-ShellContext::synerror(const char *msg)
+static void
+synerror(ShellContext &sh, const char *msg)
 {
-	errlinno = plinno;
+	sh.errlinno = plinno;
 	throw dash::ParseError(std::string("Syntax error: ") + msg, plinno);
 }
 
-void ShellContext::report_parse_error(const dash::ParseError &e)
+void
+report_parse_error(ShellContext &sh, const dash::ParseError &e)
 {
-	errlinno = e.lineno();
-	exitstatus = 2;
-	sh_warnx("%s", e.what());
+	sh.errlinno = e.lineno();
+	sh.exitstatus = 2;
+	sh_warnx(sh, "%s", e.what());
 }
 
-dash::Result<void> ShellContext::try_parse_string(char *s)
+dash::Result<void>
+try_parse_string(ShellContext &sh, char *s)
 {
 	union node *n;
 	char save_nflag = nflag;
 
-	s = savestr(s);
-	setinputstring(s);
+	s = savestr(sh, s);
+	setinputstring(sh, s);
 	nflag = 1;
 
 	try {
-		for (; (n = parsecmd(0)) != NEOF; clear_stack_temps()) {
+		for (; (n = parsecmd(sh, 0)) != NEOF; clear_stack_temps(sh)) {
 			if (n && n != NEOF)
 				freenode(n);
 		}
-		clear_stack_temps();
-		popfile();
+		clear_stack_temps(sh);
+		popfile(sh);
 		ckfree(s);
 		nflag = save_nflag;
 		return dash::Result<void>::Ok();
 	} catch (const dash::ParseError &e) {
-		errlinno = e.lineno();
-		clear_stack_temps();
-		popfile();
+		sh.errlinno = e.lineno();
+		clear_stack_temps(sh);
+		popfile(sh);
 		ckfree(s);
 		nflag = save_nflag;
 		return dash::Result<void>::Err(e.what());
 	}
 }
 
- void __attribute__((noinline)) ShellContext::setprompt(int which)
+static void __attribute__((noinline))
+setprompt(ShellContext &sh, int which)
 {
 	int show;
 
-	needprompt = 0;
-	whichprompt = which;
+	sh.needprompt = 0;
+	sh.whichprompt = which;
 
 #ifdef SMALL
 	show = 1;
 #else
-	show = !el;
+	show = !sh.el;
 #endif
-	if (show && !parsefile->nleft) {
-		std::size_t su = stackstr.used;
-		std::size_t hc = stackheaps.size();
-		stackstr.commit(stackblocksize());
-		out2str(getprompt(NULL));
-		while (stackheaps.size() > hc) {
-			ckfree(stackheaps.back());
-			stackheaps.pop_back();
+	if (show && !sh.parsefile->nleft) {
+		std::size_t su = sh.stackstr.used;
+		std::size_t hc = sh.stackheaps.size();
+		sh.stackstr.commit(stackblocksize());
+		out2str(getprompt(sh, NULL));
+		while (sh.stackheaps.size() > hc) {
+			ckfree(sh.stackheaps.back());
+			sh.stackheaps.pop_back();
 		}
-		stackstr.rewind(su);
+		sh.stackstr.rewind(su);
 	}
 }
 
 const char *
-ShellContext::expandstr(const char *ps)
+expandstr(ShellContext &sh, const char *ps)
 {
 	struct parsefile *file_stop;
 	struct jmploc *volatile savehandler;
@@ -1790,43 +1807,43 @@ ShellContext::expandstr(const char *ps)
 	union node n;
 	int err;
 
-	file_stop = parsefile;
+	file_stop = sh.parsefile;
 
 	/* XXX Fix (char *) cast. */
-	setinputstring((char *)ps);
+	setinputstring(sh, (char *)ps);
 
-	saveheredoclist = heredoclist;
-	heredoclist = NULL;
-	saveprompt = doprompt;
-	doprompt = 0;
-	needprompt = 0;
+	saveheredoclist = sh.heredoclist;
+	sh.heredoclist = NULL;
+	saveprompt = sh.doprompt;
+	sh.doprompt = 0;
+	sh.needprompt = 0;
 	result = ps;
-	savehandler = handler;
+	savehandler = sh.handler;
 	err = 0;
 	try {
 		if (unlikely(err = setjmp(jmploc.loc)))
 			goto out;
-		handler = &jmploc;
+		sh.handler = &jmploc;
 
-		readtoken1(pgetc_eatbnl(), DQSYNTAX, FAKEEOFMARK, 0);
+		readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, FAKEEOFMARK, 0);
 
 		n.narg.type = NARG;
 		n.narg.next = NULL;
-		n.narg.text = wordtext;
-		n.narg.backquote = backquotelist;
+		n.narg.text = sh.wordtext;
+		n.narg.backquote = sh.backquotelist;
 
-		expandarg(&n, NULL, EXP_QUOTED);
+		expandarg(sh, &n, NULL, EXP_QUOTED);
 		result = stackblock();
 	} catch (const dash::ParseError &) {
 		err = 1;
 	}
 
 out:
-	restore_handler_expandarg(savehandler, err);
+	restore_handler_expandarg(sh, savehandler, err);
 
-	doprompt = saveprompt;
-	unwindfiles(file_stop);
-	heredoclist = saveheredoclist;
+	sh.doprompt = saveprompt;
+	unwindfiles(sh, file_stop);
+	sh.heredoclist = saveheredoclist;
 
 	return result;
 }
@@ -1836,11 +1853,11 @@ out:
  *    should be added here.
  */
 const char *
-ShellContext::getprompt(void *unused)
+getprompt(ShellContext &sh, void *unused)
 {
 	const char *prompt;
 
-	switch (whichprompt) {
+	switch (sh.whichprompt) {
 	default:
 #ifdef DEBUG
 		return "<internal prompt error>";
@@ -1855,11 +1872,11 @@ ShellContext::getprompt(void *unused)
 		break;
 	}
 
-	return expandstr(prompt);
+	return expandstr(sh, prompt);
 }
 
 const char *const *
-ShellContext::findkwd(const char *s)
+findkwd(ShellContext &sh, const char *s)
 {
 	return findstring(
 		s, parsekwd, sizeof(parsekwd) / sizeof(const char *)

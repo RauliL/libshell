@@ -45,6 +45,7 @@
  */
 
 #include "shell.h"
+#include "shell_context.h"
 #include "output.h"
 #include "expand.h"
 #include "nodes.h"	/* for other headers */
@@ -82,7 +83,8 @@ const char defpathvar[] =
 
 
 
- void ShellContext::changelocale(const char *val)
+void
+changelocale(ShellContext &sh, const char *val)
 {
 	putenv((char *)val);
 	setlocale(LC_ALL, nullstr);
@@ -93,9 +95,9 @@ const char defpathvar[] =
 
 
 
-STATIC struct var **hashvar(const char *);
+static struct var ** hashvar(ShellContext &sh, const char *);
 STATIC int vpcmp(const void *, const void *);
-STATIC struct var **findvar(const char *);
+static struct var ** findvar(ShellContext &sh, const char *);
 
 /*
  * Initialize the varable symbol tables and import the environment
@@ -114,40 +116,42 @@ INIT {
 	const char *p;
 	struct stat64 st1, st2;
 
-	initvar();
+	initvar(sh);
 	for (envp = environ ; *envp ; envp++) {
-		p = endofname(*envp);
+		p = endofname(sh, *envp);
 		if (p != *envp && *p == '=') {
-			setvareq(*envp, VEXPORT|VTEXTFIXED);
+			setvareq(sh, *envp, VEXPORT|VTEXTFIXED);
 		}
 	}
 
-	setvareq(defifsvar, VTEXTFIXED);
-	setvareq(defoptindvar, VTEXTFIXED);
+	setvareq(sh, sh.defifsvar, VTEXTFIXED);
+	setvareq(sh, sh.defoptindvar, VTEXTFIXED);
 
-	fmtstr(ppidbuf + 5, sizeof(ppidbuf) - 5, "%ld", (long) getppid());
-	setvareq(ppidbuf, VTEXTFIXED);
+	fmtstr(sh, sh.ppidbuf + 5, sizeof(sh.ppidbuf) - 5, "%ld", (long) getppid());
+	setvareq(sh, sh.ppidbuf, VTEXTFIXED);
 
-	p = lookupvar("PWD");
+	p = lookupvar(sh, "PWD");
 	if (p)
 		if (*p != '/' || stat64(p, &st1) || stat64(dotdir, &st2) ||
 		    st1.st_dev != st2.st_dev || st1.st_ino != st2.st_ino)
 			p = 0;
-	setpwd(p, 0);
+	setpwd(sh, p, 0);
 }
 
 RESET {
-	unwindlocalvars(0);
+	unwindlocalvars(sh, 0);
 }
 #endif
 
- char *ShellContext::varnull(const char *s)
+static char *
+varnull(ShellContext &sh, const char *s)
 {
 	/* Unset variables always end with two NUL chars. */
 	return const_cast<char *>(strchrnul(s, '=')) + 1;
 }
 
- void ShellContext::varfunc(struct var *vp)
+static void
+varfunc(ShellContext &sh, struct var *vp)
 {
 	const char *s;
 
@@ -156,8 +160,8 @@ RESET {
 
 	s = vp->text;
 	if (!(vp->flags & VFULL))
-		s = varnull(s);
-	(this->*vp->func)(s);
+		s = varnull(sh, s);
+	vp->func(sh, s);
 }
 
 /*
@@ -166,16 +170,16 @@ RESET {
  */
 
 void
-ShellContext::initvar(void)
+initvar(ShellContext &sh)
 {
 	struct var *vp;
 	struct var *end;
 	struct var **vpp;
 
-	vp = varinit;
-	end = vp + sizeof(varinit) / sizeof(varinit[0]);
+	vp = sh.varinit;
+	end = vp + sizeof(sh.varinit) / sizeof(sh.varinit[0]);
 	do {
-		vpp = hashvar(vp->text);
+		vpp = hashvar(sh, vp->text);
 		vp->next = *vpp;
 		*vpp = vp;
 	} while (++vp < end);
@@ -191,7 +195,8 @@ ShellContext::initvar(void)
  * flags of the variable.  If val is NULL, the variable is unset.
  */
 
-struct var *ShellContext::setvar(const char *name, const char *val, int flags)
+struct var *
+setvar(ShellContext &sh, const char *name, const char *val, int flags)
 {
 	char *p, *q;
 	size_t namelen;
@@ -199,11 +204,11 @@ struct var *ShellContext::setvar(const char *name, const char *val, int flags)
 	size_t vallen;
 	struct var *vp;
 
-	q = endofname(name);
+	q = endofname(sh, name);
 	p = strchrnul(q, '=');
 	namelen = p - name;
 	if (!namelen || p != q)
-		sh_error("%.*s: bad variable name", namelen, name);
+		sh_error(sh, "%.*s: bad variable name", namelen, name);
 	vallen = 0;
 	if (val == NULL) {
 		flags |= VUNSET;
@@ -211,13 +216,13 @@ struct var *ShellContext::setvar(const char *name, const char *val, int flags)
 		vallen = strlen(val);
 	}
 	INTOFF;
-	p = static_cast<char *>(mempcpy(nameeq = ckmalloc(namelen + vallen + 2), name, namelen + 1));
+	p = static_cast<char *>(mempcpy(nameeq = ckmalloc(sh, namelen + vallen + 2), name, namelen + 1));
 	if (val) {
 		p[-1] = '=';
 		p = static_cast<char *>(mempcpy(p, val, vallen));
 	}
 	*p = '\0';
-	vp = setvareq(nameeq, flags | VNOSAVE);
+	vp = setvareq(sh, nameeq, flags | VNOSAVE);
 	INTON;
 
 	return vp;
@@ -228,13 +233,14 @@ struct var *ShellContext::setvar(const char *name, const char *val, int flags)
  * ored with the flags of the variable.
  */
 
-intmax_t ShellContext::setvarint(const char *name, intmax_t val, int flags)
+intmax_t
+setvarint(ShellContext &sh, const char *name, intmax_t val, int flags)
 {
 	int len = max_int_length(sizeof(val));
 	char buf[len];
 
-	fmtstr(buf, len, "%" PRIdMAX, val);
-	setvar(name, buf, flags);
+	fmtstr(sh, buf, len, "%" PRIdMAX, val);
+	setvar(sh, name, buf, flags);
 	return val;
 }
 
@@ -248,12 +254,13 @@ intmax_t ShellContext::setvarint(const char *name, intmax_t val, int flags)
  * Called with interrupts off.
  */
 
-struct var *ShellContext::setvareq(char *s, int flags)
+struct var *
+setvareq(ShellContext &sh, char *s, int flags)
 {
 	struct var *vp, **vpp;
 
 	flags |= (VEXPORT & (((unsigned) (1 - aflag)) - 1));
-	vpp = findvar(s);
+	vpp = findvar(sh, s);
 	vp = *vpp;
 	if (vp) {
 		unsigned bits;
@@ -264,7 +271,7 @@ struct var *ShellContext::setvareq(char *s, int flags)
 			if (flags & VNOSAVE)
 				free(s);
 			n = vp->text;
-			sh_error("%.*s: is read only", strchrnul(n, '=') - n,
+			sh_error(sh, "%.*s: is read only", strchrnul(n, '=') - n,
 				 n);
 		}
 
@@ -289,18 +296,18 @@ out_free:
 		if ((flags & (VEXPORT|VREADONLY|VSTRFIXED|VUNSET)) == VUNSET)
 			goto out_free;
 		/* not found */
-		vp = ckmalloc(sizeof (*vp));
+		vp = ckmalloc(sh, sizeof (*vp));
 		vp->next = *vpp;
 		vp->func = NULL;
 		*vpp = vp;
 	}
 	if (!(flags & (VTEXTFIXED|VSTACK|VNOSAVE)))
-		s = savestr(s);
+		s = savestr(sh, s);
 	vp->text = s;
 	vp->flags = flags;
 
 	if (!(flags & VNOFUNC))
-		varfunc(vp);
+		varfunc(sh, vp);
 
 out:
 	return vp;
@@ -311,14 +318,14 @@ out:
  */
 
 char *
-ShellContext::lookupvar(const char *name)
+lookupvar(ShellContext &sh, const char *name)
 {
 	struct var *v;
 
-	if ((v = *findvar(name)) && !(v->flags & VUNSET)) {
+	if ((v = *findvar(sh, name)) && !(v->flags & VUNSET)) {
 #ifdef WITH_LINENO
-		if (v == &vlineno && v->text == linenovar) {
-			fmtstr(linenovar+7, sizeof(linenovar)-7, "%d", lineno);
+		if (v == &vlineno && v->text == sh.linenovar) {
+			fmtstr(sh, sh.linenovar+7, sizeof(sh.linenovar)-7, "%d", sh.lineno);
 		}
 #endif
 		return const_cast<char *>(strchrnul(v->text, '=')) + 1;
@@ -326,9 +333,10 @@ ShellContext::lookupvar(const char *name)
 	return NULL;
 }
 
-intmax_t ShellContext::lookupvarint(const char *name)
+intmax_t
+lookupvarint(ShellContext &sh, const char *name)
 {
-	return atomax(lookupvar(name) ?: nullstr, 0);
+	return atomax(sh, lookupvar(sh, name) ?: nullstr, 0);
 }
 
 
@@ -338,7 +346,7 @@ intmax_t ShellContext::lookupvarint(const char *name)
  */
 
 char **
-ShellContext::listvars(int on, int off, char ***end)
+listvars(ShellContext &sh, int on, int off, char ***end)
 {
 	struct var **vpp;
 	struct var *vp;
@@ -346,18 +354,18 @@ ShellContext::listvars(int on, int off, char ***end)
 	int mask;
 
 	STARTSTACKSTR(ep);
-	vpp = vartab;
+	vpp = sh.vartab;
 	mask = on | off;
 	do {
 		for (vp = *vpp ; vp ; vp = vp->next)
 			if ((vp->flags & mask) == on) {
 				if (ep == stackstrend())
-					ep = growstackstr();
+					ep = growstackstr(sh);
 				*ep++ = (char *) vp->text;
 			}
-	} while (++vpp < vartab + VTABSIZE);
+	} while (++vpp < sh.vartab + VTABSIZE);
 	if (ep == stackstrend())
-		ep = growstackstr();
+		ep = growstackstr(sh);
 	if (end)
 		*end = ep;
 	*ep++ = NULL;
@@ -367,7 +375,7 @@ ShellContext::listvars(int on, int off, char ***end)
 
 
 /*
- * POSIX requires that 'set' (but not export or readonly) output the
+ * POSIX requires that 'set' (but not export or readonly) sh.output the
  * variables in lexicographic order - by the locale's collating order (sigh).
  * Maybe we could keep them in an ordered balanced binary tree
  * instead of hashed lists.
@@ -375,12 +383,12 @@ ShellContext::listvars(int on, int off, char ***end)
  */
 
 int
-ShellContext::showvars(const char *prefix, int on, int off)
+showvars(ShellContext &sh, const char *prefix, int on, int off)
 {
 	const char *sep;
 	char **ep, **epend;
 
-	ep = listvars(on, off, &epend);
+	ep = listvars(sh, on, off, &epend);
 	qsort(ep, epend - ep, sizeof(char *), vpcmp);
 
 	sep = *prefix ? spcstr : prefix;
@@ -392,9 +400,9 @@ ShellContext::showvars(const char *prefix, int on, int off)
 		p = strchrnul(*ep, '=');
 		q = nullstr;
 		if (*p)
-			q = single_quote(++p);
+			q = single_quote(sh, ++p);
 
-		out1fmt("%s%s%.*s%s\n", prefix, sep, (int)(p - *ep), *ep, q);
+		out1fmt(sh, "%s%s%.*s%s\n", prefix, sep, (int)(p - *ep), *ep, q);
 	}
 
 	return 0;
@@ -407,7 +415,7 @@ ShellContext::showvars(const char *prefix, int on, int off)
  */
 
 int
-ShellContext::exportcmd(int argc, char **argv)
+exportcmd(ShellContext &sh, int argc, char **argv)
 {
 	struct var *vp;
 	char *name;
@@ -416,21 +424,21 @@ ShellContext::exportcmd(int argc, char **argv)
 	int flag = argv[0][0] == 'r'? VREADONLY : VEXPORT;
 	int notp;
 
-	notp = nextopt("p") - 'p';
-	if (notp && ((name = *(aptr = argptr)))) {
+	notp = nextopt(sh, "p") - 'p';
+	if (notp && ((name = *(aptr = sh.argptr)))) {
 		do {
 			if ((p = strchr(name, '=')) != NULL) {
 				p++;
 			} else {
-				if ((vp = *findvar(name))) {
+				if ((vp = *findvar(sh, name))) {
 					vp->flags |= flag;
 					continue;
 				}
 			}
-			setvar(name, p, flag);
+			setvar(sh, name, p, flag);
 		} while ((name = *++aptr) != NULL);
 	} else {
-		showvars(argv[0], flag, 0);
+		showvars(sh, argv[0], flag, 0);
 	}
 	return 0;
 }
@@ -441,16 +449,16 @@ ShellContext::exportcmd(int argc, char **argv)
  */
 
 int
-ShellContext::localcmd(int argc, char **argv)
+localcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *name;
 
-	if (!localvar_stack)
-		sh_error("not in a function");
+	if (!sh.localvar_stack)
+		sh_error(sh, "not in a function");
 
-	argv = argptr;
+	argv = sh.argptr;
 	while ((name = *argv++) != NULL) {
-		mklocal(name, 0);
+		mklocal(sh, name, 0);
 	}
 	return 0;
 }
@@ -463,40 +471,41 @@ ShellContext::localcmd(int argc, char **argv)
  * "-" as a special case.
  */
 
-void ShellContext::mklocal(char *name, int flags)
+void
+mklocal(ShellContext &sh, char *name, int flags)
 {
 	struct localvar *lvp;
 	struct var *vp;
 
 	INTOFF;
-	lvp = ckmalloc(sizeof (struct localvar));
+	lvp = ckmalloc(sh, sizeof (struct localvar));
 	if (name[0] == '-' && name[1] == '\0') {
 		char *p;
-		p = ckmalloc(sizeof(optlist));
-		lvp->text = static_cast<char *>(std::memcpy(p, optlist, sizeof(optlist)));
+		p = ckmalloc(sh, sizeof(sh.optlist));
+		lvp->text = static_cast<char *>(std::memcpy(p, sh.optlist, sizeof(sh.optlist)));
 		vp = NULL;
 	} else {
 		char *eq;
 
-		vp = *findvar(name);
+		vp = *findvar(sh, name);
 		eq = strchr(name, '=');
 		if (vp == NULL) {
 			if (eq)
-				vp = setvareq(name, VSTRFIXED | flags);
+				vp = setvareq(sh, name, VSTRFIXED | flags);
 			else
-				vp = setvar(name, NULL, VSTRFIXED | flags);
+				vp = setvar(sh, name, NULL, VSTRFIXED | flags);
 			lvp->flags = VUNSET;
 		} else {
 			lvp->text = vp->text;
 			lvp->flags = vp->flags;
 			vp->flags |= VSTRFIXED|VTEXTFIXED;
 			if (eq)
-				setvareq(name, flags);
+				setvareq(sh, name, flags);
 		}
 	}
 	lvp->vp = vp;
-	lvp->next = localvar_stack->lv;
-	localvar_stack->lv = lvp;
+	lvp->next = sh.localvar_stack->lv;
+	sh.localvar_stack->lv = lvp;
 	INTON;
 }
 
@@ -506,16 +515,16 @@ void ShellContext::mklocal(char *name, int flags)
  * Interrupts must be off.
  */
 
- void
-ShellContext::poplocalvars(void)
+static void
+poplocalvars(ShellContext &sh)
 {
 	struct localvar_list *ll;
 	struct localvar *lvp, *next;
 	struct var *vp;
 
 	INTOFF;
-	ll = localvar_stack;
-	localvar_stack = ll->next;
+	ll = sh.localvar_stack;
+	sh.localvar_stack = ll->next;
 
 	next = ll->lv;
 	ckfree(ll);
@@ -525,19 +534,19 @@ ShellContext::poplocalvars(void)
 		vp = lvp->vp;
 		TRACE(("poplocalvar %s\n", vp ? vp->text : "-"));
 		if (vp == NULL) {	/* $- saved */
-			memcpy(optlist, lvp->text, sizeof(optlist));
+			memcpy(sh.optlist, lvp->text, sizeof(sh.optlist));
 			ckfree(lvp->text);
-			optschanged();
+			optschanged(sh);
 		} else if (lvp->flags == VUNSET) {
 			vp->flags &= ~(VSTRFIXED|VREADONLY);
-			unsetvar(vp->text);
+			unsetvar(sh, vp->text);
 		} else {
 			if ((vp->flags & (VTEXTFIXED|VSTACK)) == 0)
 				ckfree(vp->text);
 			vp->flags = lvp->flags;
 			vp->text = lvp->text;
 			if (!(vp->flags & VNOFUNC))
-				varfunc(vp);
+				varfunc(sh, vp);
 		}
 		ckfree(lvp);
 	}
@@ -548,20 +557,21 @@ ShellContext::poplocalvars(void)
 /*
  * Create a new localvar environment.
  */
-struct localvar_list *ShellContext::pushlocalvars(int push)
+struct localvar_list *
+pushlocalvars(ShellContext &sh, int push)
 {
 	struct localvar_list *ll;
 	struct localvar_list *top;
 
-	top = localvar_stack;
+	top = sh.localvar_stack;
 	if (!push)
 		goto out;
 
 	INTOFF;
-	ll = ckmalloc(sizeof(*ll));
+	ll = ckmalloc(sh, sizeof(*ll));
 	ll->lv = NULL;
 	ll->next = top;
-	localvar_stack = ll;
+	sh.localvar_stack = ll;
 	INTON;
 
 out:
@@ -569,10 +579,11 @@ out:
 }
 
 
-void ShellContext::unwindlocalvars(struct localvar_list *stop)
+void
+unwindlocalvars(ShellContext &sh, struct localvar_list *stop)
 {
-	while (localvar_stack != stop)
-		poplocalvars();
+	while (sh.localvar_stack != stop)
+		poplocalvars(sh);
 }
 
 
@@ -583,23 +594,23 @@ void ShellContext::unwindlocalvars(struct localvar_list *stop)
  */
 
 int
-ShellContext::unsetcmd(int argc, char **argv)
+unsetcmd(ShellContext &sh, int argc, char **argv)
 {
 	char **ap;
 	int i;
 	int flag = 0;
 
-	while ((i = nextopt("vf")) != '\0') {
+	while ((i = nextopt(sh, "vf")) != '\0') {
 		flag = i;
 	}
 
-	for (ap = argptr; *ap ; ap++) {
+	for (ap = sh.argptr; *ap ; ap++) {
 		if (flag != 'f') {
-			unsetvar(*ap);
+			unsetvar(sh, *ap);
 			continue;
 		}
 		if (flag != 'v')
-			unsetfunc(*ap);
+			unsetfunc(sh, *ap);
 	}
 	return 0;
 }
@@ -609,9 +620,10 @@ ShellContext::unsetcmd(int argc, char **argv)
  * Unset the specified variable.
  */
 
-void ShellContext::unsetvar(const char *s)
+void
+unsetvar(ShellContext &sh, const char *s)
 {
-	setvar(s, 0, 0);
+	setvar(sh, s, 0, 0);
 }
 
 
@@ -620,10 +632,10 @@ void ShellContext::unsetvar(const char *s)
  * Find the appropriate entry in the hash table from the name.
  */
 
- struct var **
-ShellContext::hashvar(const char *p)
+static struct var **
+hashvar(ShellContext &sh, const char *p)
 {
-	return &vartab[hashval(p) % VTABSIZE];
+	return &sh.vartab[hashval(p) % VTABSIZE];
 }
 
 
@@ -659,12 +671,12 @@ vpcmp(const void *a, const void *b)
 	return varcmp(*(const char **)a, *(const char **)b);
 }
 
- struct var **
-ShellContext::findvar(const char *name)
+static struct var **
+findvar(ShellContext &sh, const char *name)
 {
 	struct var **vpp;
 
-	for (vpp = hashvar(name); *vpp; vpp = &(*vpp)->next) {
+	for (vpp = hashvar(sh, name); *vpp; vpp = &(*vpp)->next) {
 		if (varequal((*vpp)->text, name)) {
 			break;
 		}

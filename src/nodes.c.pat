@@ -40,6 +40,8 @@
  */
 
 #include "shell.h"
+#include "shell_context.h"
+#include "shell_access.h"
 #include "nodes.h"
 #include "memalloc.h"
 #include "machdep.h"
@@ -55,11 +57,11 @@
 %SIZES
 
 
-STATIC void calcsize(union node *);
-STATIC void sizenodelist(struct nodelist *);
-STATIC union node *copynode(union node *);
-STATIC struct nodelist *copynodelist(struct nodelist *);
-STATIC char *nodesavestr(char *);
+static void calcsize(ShellContext &sh, union node *);
+static void sizenodelist(ShellContext &sh, struct nodelist *);
+static union node *copynode(ShellContext &sh, union node *);
+static struct nodelist *copynodelist(ShellContext &sh, struct nodelist *);
+static char *nodesavestr(ShellContext &sh, char *);
 
 
 
@@ -68,44 +70,44 @@ STATIC char *nodesavestr(char *);
  */
 
 struct funcnode *
-ShellContext::copyfunc(union node *n)
+copyfunc(ShellContext &sh, union node *n)
 {
 	struct funcnode *f;
 	size_t blocksize;
 
 	funcblocksize = offsetof(struct funcnode, n);
 	funcstringsize = 0;
-	calcsize(n);
+	calcsize(sh, n);
 	blocksize = funcblocksize;
-	f = ckmalloc(blocksize + funcstringsize);
+	f = ckmalloc(sh, blocksize + funcstringsize);
 	funcblock = (char *) f + offsetof(struct funcnode, n);
 	funcstring = (char *) f + blocksize;
-	copynode(n);
+	copynode(sh, n);
 	f->count = 0;
 	return f;
 }
 
 
 
- void ShellContext::calcsize(union node *n)
+static void calcsize(ShellContext &sh, union node *n)
 {
 	%CALCSIZE
 }
 
 
 
- void ShellContext::sizenodelist(struct nodelist *lp)
+static void sizenodelist(ShellContext &sh, struct nodelist *lp)
 {
 	while (lp) {
 		funcblocksize += SHELL_ALIGN(sizeof(struct nodelist));
-		calcsize(lp->n);
+		calcsize(sh, lp->n);
 		lp = lp->next;
 	}
 }
 
 
 
- union node *ShellContext::copynode(union node *n)
+static union node *copynode(ShellContext &sh, union node *n)
 {
 	union node *copied;
 
@@ -114,7 +116,7 @@ ShellContext::copyfunc(union node *n)
 }
 
 
- struct nodelist *ShellContext::copynodelist(struct nodelist *lp)
+static struct nodelist *copynodelist(ShellContext &sh, struct nodelist *lp)
 {
 	struct nodelist *start;
 	struct nodelist **lpp;
@@ -124,7 +126,7 @@ ShellContext::copyfunc(union node *n)
 		*lpp = static_cast<struct nodelist *>(funcblock);
 		funcblock = (char *) funcblock +
 		    SHELL_ALIGN(sizeof(struct nodelist));
-		(*lpp)->n = copynode(lp->n);
+		(*lpp)->n = copynode(sh, lp->n);
 		lp = lp->next;
 		lpp = &(*lpp)->next;
 	}
@@ -134,7 +136,7 @@ ShellContext::copyfunc(union node *n)
 
 
 
- char *ShellContext::nodesavestr(char *s)
+static char *nodesavestr(ShellContext &sh, char *s)
 {
 	char   *rtn = funcstring;
 
@@ -149,8 +151,9 @@ ShellContext::copyfunc(union node *n)
  */
 
 void
-ShellContext::freefunc(struct funcnode *f)
+freefunc(ShellContext &sh, struct funcnode *f)
 {
+	(void)sh;
 	if (f && --f->count < 0)
 		ckfree(f);
 }

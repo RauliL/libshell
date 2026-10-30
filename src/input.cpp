@@ -56,6 +56,7 @@
 #include "parser.h"
 #include "redir.h"
 #include "shell.h"
+#include "shell_context.h"
 #include "syntax.h"
 #include "system.h"
 #include "trap.h"
@@ -68,11 +69,11 @@
 		/* 1 == PS1, 2 == PS2 */
 
 
- void pushfile(void);
-static void popstring(void);
-static int preadfd(void);
-static void setinputfd(int fd, int push);
-static int preadbuffer(void);
+static void pushfile(ShellContext &sh);
+static void popstring(ShellContext &sh);
+static int preadfd(ShellContext &sh);
+static void setinputfd(ShellContext &sh, int fd, int push);
+static int preadbuffer(ShellContext &sh);
 
 #ifdef mkinit
 INCLUDE <stdio.h>
@@ -84,49 +85,50 @@ INCLUDE "error.h"
 INCLUDE "syntax.h"
 
 INIT {
-	basepf.nextc = basepf.buf = basebuf;
-	basepf.linno = 1;
+	sh.basepf.nextc = sh.basepf.buf = sh.basebuf;
+	sh.basepf.linno = 1;
 }
 
 RESET {
 	int c;
 
 	/* clear input buffer */
-	popallfiles();
+	popallfiles(sh);
 
 	c = PEOF;
-	if (toppf->nextc - toppf->buf > toppf->unget)
-		c = toppf->nextc[-toppf->unget - 1];
+	if (sh.toppf->nextc - sh.toppf->buf > sh.toppf->unget)
+		c = sh.toppf->nextc[-sh.toppf->unget - 1];
 	while (c != '\n' && c != PEOF && !int_pending())
-		c = pgetc();
+		c = pgetc(sh);
 }
 
 FORKRESET {
-	popallfiles();
-	if (parsefile->fd > 0) {
-		close(parsefile->fd);
-		parsefile->fd = 0;
+	popallfiles(sh);
+	if (sh.parsefile->fd > 0) {
+		close(sh.parsefile->fd);
+		sh.parsefile->fd = 0;
 	}
-	if (stdin_state.pip[0]) {
-		close(stdin_state.pip[0]);
-		close(stdin_state.pip[1]);
-		memset(stdin_state.pip, 0, sizeof(stdin_state.pip));
+	if (sh.stdin_state.pip[0]) {
+		close(sh.stdin_state.pip[0]);
+		close(sh.stdin_state.pip[1]);
+		memset(sh.stdin_state.pip, 0, sizeof(sh.stdin_state.pip));
 	}
 }
 
 POSTEXITRESET {
-	flush_input();
+	flush_input(sh);
 }
 #endif
 
-void ShellContext::input_init(void)
+void
+input_init(ShellContext &sh)
 {
-	struct stdin_state *st = &stdin_state;
+	struct stdin_state *st = &sh.stdin_state;
 	struct termios tios;
 	int istty;
 
 	istty = tcgetattr(0, &tios) + 1;
-	stdin_istty = istty;
+	sh.stdin_istty = istty;
 	if (istty)
 		st->bufferable = tios.c_lflag & ICANON;
 	else {
@@ -135,17 +137,19 @@ void ShellContext::input_init(void)
 	}
 }
 
-bool ShellContext::stdin_bufferable(void)
+static bool
+stdin_bufferable(ShellContext &sh)
 {
-	struct stdin_state *st = &stdin_state;
+	struct stdin_state *st = &sh.stdin_state;
 
-	if (stdin_istty < 0)
-		input_init();
+	if (sh.stdin_istty < 0)
+		input_init(sh);
 
 	return st->bufferable;
 }
 
-void ShellContext::flush_tee(void *buf, int nr, int pending)
+static void
+flush_tee(ShellContext &sh, void *buf, int nr, int pending)
 {
 	while (pending > 0) {
 		int err;
@@ -156,33 +160,35 @@ void ShellContext::flush_tee(void *buf, int nr, int pending)
 	}
 }
 
-int ShellContext::stdin_tee(void *buf, int nr)
+static int
+stdin_tee(ShellContext &sh, void *buf, int nr)
 {
 	int err;
 
-	if (!stdin_state.pip[0]) {
-		sh_pipe(stdin_state.pip, 0);
-		if (stdin_state.pip[0] < 10)
-			stdin_state.pip[0] = savefd(stdin_state.pip[0],
-						    stdin_state.pip[0]);
-		if (stdin_state.pip[1] < 10)
-			stdin_state.pip[1] = savefd(stdin_state.pip[1],
-						    stdin_state.pip[1]);
+	if (!sh.stdin_state.pip[0]) {
+		sh_pipe(sh, sh.stdin_state.pip, 0);
+		if (sh.stdin_state.pip[0] < 10)
+			sh.stdin_state.pip[0] = savefd(sh, sh.stdin_state.pip[0],
+						    sh.stdin_state.pip[0]);
+		if (sh.stdin_state.pip[1] < 10)
+			sh.stdin_state.pip[1] = savefd(sh, sh.stdin_state.pip[1],
+						    sh.stdin_state.pip[1]);
 	}
 
-	flush_tee(buf, nr, stdin_state.pending);
+	flush_tee(sh, buf, nr, sh.stdin_state.pending);
 
 	if (USE_TEE)
-		err = tee(0, stdin_state.pip[1], nr, 0);
+		err = tee(0, sh.stdin_state.pip[1], nr, 0);
 	else {
 		errno = EINVAL;
 		err = -1;
 	}
-	stdin_state.pending = err;
+	sh.stdin_state.pending = err;
 	return err;
 }
 
-void ShellContext::freestrings(struct strpush *sp)
+static void
+freestrings(ShellContext &sh, struct strpush *sp)
 {
 	INTOFF;
 	do {
@@ -191,18 +197,18 @@ void ShellContext::freestrings(struct strpush *sp)
 		if (sp->ap) {
 			sp->ap->flag &= ~ALIASINUSE;
 			if (sp->ap->flag & ALIASDEAD) {
-				unalias(sp->ap->name);
+				unalias(sh, sp->ap->name);
 			}
 		}
 
 		psp = sp;
 		sp = sp->spfree;
 
-		if (psp != &(parsefile->basestrpush))
+		if (psp != &(sh.parsefile->basestrpush))
 			ckfree(psp);
 	} while (sp);
 
-	parsefile->spfree = NULL;
+	sh.parsefile->spfree = NULL;
 	INTON;
 }
 
@@ -212,51 +218,54 @@ void ShellContext::freestrings(struct strpush *sp)
  * Nul characters in the input are silently discarded.
  */
 
-int __attribute__((noinline)) ShellContext::pgetc(void)
+int __attribute__((noinline))
+pgetc(ShellContext &sh)
 {
-	struct strpush *sp = parsefile->spfree;
+	struct strpush *sp = sh.parsefile->spfree;
 	int c;
 
 	if (unlikely(sp))
-		freestrings(sp);
+		freestrings(sh, sp);
 
 again:
-	if (parsefile->unget) {
-		long unget = -(long)(unsigned)parsefile->unget--;
+	if (sh.parsefile->unget) {
+		long unget = -(long)(unsigned)sh.parsefile->unget--;
 
-		return (signed char)parsefile->nextc[unget];
+		return (signed char)sh.parsefile->nextc[unget];
 	}
 
 nextc:
-	if (likely(parsefile->nleft > 0)) {
-		parsefile->nleft--;
-		c = (signed char)*parsefile->nextc++;
-	} else if (unlikely(parsefile->strpush)) {
-		popstring();
+	if (likely(sh.parsefile->nleft > 0)) {
+		sh.parsefile->nleft--;
+		c = (signed char)*sh.parsefile->nextc++;
+	} else if (unlikely(sh.parsefile->strpush)) {
+		popstring(sh);
 		/* The freestrings call must be delayed til the next
 		 * pgetc call for PEOA to work properly.
 		 */
 		goto again;
 	} else
-		c = preadbuffer();
+		c = preadbuffer(sh);
 
 	/* delete nul characters */
 	if (IS_DEFINED_SMALL && unlikely(!c)) {
-		parsefile->nextc = static_cast<char *>(memmove(
-			parsefile->nextc - 1, parsefile->nextc, parsefile->nleft));
+		sh.parsefile->nextc = static_cast<char *>(memmove(
+			sh.parsefile->nextc - 1, sh.parsefile->nextc, sh.parsefile->nleft));
 		goto nextc;
 	}
 
 	return c;
 }
 
-int ShellContext::pgetc_eoa(void)
+int
+pgetc_eoa(ShellContext &sh)
 {
-	return parsefile->strpush && parsefile->nleft == -1 &&
-	       parsefile->strpush->ap ? PEOA : pgetc();
+	return sh.parsefile->strpush && sh.parsefile->nleft == -1 &&
+	       sh.parsefile->strpush->ap ? PEOA : pgetc(sh);
 }
 
-int ShellContext::stdin_clear_nonblock(void)
+static int
+stdin_clear_nonblock(ShellContext &sh)
 {
 	int flags = fcntl(0, F_GETFL, 0);
 
@@ -268,25 +277,25 @@ int ShellContext::stdin_clear_nonblock(void)
 	return flags;
 }
 
-int
-ShellContext::preadfd(void)
+static int
+preadfd(ShellContext &sh)
 {
-	char *buf = parsefile->buf;
-	int fd = parsefile->fd;
+	char *buf = sh.parsefile->buf;
+	int fd = sh.parsefile->fd;
 	bool use_tee;
 	int unget;
 	int pnr;
 	int nr;
 
-	nr = input_get_lleft(parsefile);
+	nr = input_get_lleft(sh.parsefile);
 
-	unget = parsefile->nextc - buf;
+	unget = sh.parsefile->nextc - buf;
 	if (unget > PUNGETC_MAX)
 		unget = PUNGETC_MAX;
 
-	memmove(buf, parsefile->nextc - unget, unget + nr);
+	memmove(buf, sh.parsefile->nextc - unget, unget + nr);
 	buf += unget;
-	parsefile->nextc = buf;
+	sh.parsefile->nextc = buf;
 	buf += nr;
 
 	nr = BUFSIZ - nr;
@@ -295,38 +304,38 @@ ShellContext::preadfd(void)
 
 	use_tee = likely(!fd) &&
 #ifndef SMALL
-		  !el &&
+		  !sh.el &&
 #endif
-		  !stdin_bufferable();
+		  !stdin_bufferable(sh);
 
 	pnr = nr;
 retry:
 	nr = pnr;
 #ifndef SMALL
-	if (fd == 0 && el) {
+	if (fd == 0 && sh.el) {
 
-		if (rl_cp == NULL) {
-			std::size_t su = stackstr.used;
-			std::size_t hc = stackheaps.size();
-			stackstr.commit(stackblocksize());
-			rl_cp = el_gets(el, &el_len);
-			while (stackheaps.size() > hc) {
-				ckfree(stackheaps.back());
-				stackheaps.pop_back();
+		if (sh.rl_cp == NULL) {
+			std::size_t su = sh.stackstr.used;
+			std::size_t hc = sh.stackheaps.size();
+			sh.stackstr.commit(stackblocksize());
+			sh.rl_cp = el_gets(sh.el, &sh.el_len);
+			while (sh.stackheaps.size() > hc) {
+				ckfree(sh.stackheaps.back());
+				sh.stackheaps.pop_back();
 			}
-			stackstr.rewind(su);
+			sh.stackstr.rewind(su);
 		}
-		if (rl_cp == NULL)
+		if (sh.rl_cp == NULL)
 			nr = 0;
 		else {
-			if (nr > el_len)
-				nr = el_len;
-			memcpy(buf, rl_cp, nr);
-			if (nr != el_len) {
-				el_len -= nr;
-				rl_cp += nr;
+			if (nr > sh.el_len)
+				nr = sh.el_len;
+			memcpy(buf, sh.rl_cp, nr);
+			if (nr != sh.el_len) {
+				sh.el_len -= nr;
+				sh.rl_cp += nr;
 			} else
-				rl_cp = 0;
+				sh.rl_cp = 0;
 		}
 
 		return nr;
@@ -334,9 +343,9 @@ retry:
 #endif
 
 	if (likely(use_tee)) {
-		nr = stdin_tee(buf, nr);
+		nr = stdin_tee(sh, buf, nr);
 		if (nr >= 0)
-			fd = stdin_state.pip[0];
+			fd = sh.stdin_state.pip[0];
 		else if (errno == EINVAL) {
 			use_tee = false;
 			nr = pnr = 1;
@@ -347,10 +356,10 @@ retry:
 		nr = read(fd, buf, nr);
 
 	if (nr < 0) {
-		if (errno == EINTR && !(basepf.prev && pending_sig))
+		if (errno == EINTR && !(sh.basepf.prev && sh.pending_sig))
 			goto retry;
 		if (fd == 0 && errno == EWOULDBLOCK &&
-		    stdin_clear_nonblock() >= 0) {
+		    stdin_clear_nonblock(sh) >= 0) {
 			out2str("sh: turning off NDELAY mode\n");
 			goto retry;
 		}
@@ -367,37 +376,38 @@ retry:
  * 4) Process input up to the next newline, deleting nul characters.
  */
 
-int ShellContext::preadbuffer(void)
+static int
+preadbuffer(ShellContext &sh)
 {
-	int first = whichprompt == 1;
+	int first = sh.whichprompt == 1;
 	int something;
 	char savec;
 	int more;
 	char *q;
 
-	if (parsefile->eof & 2) {
+	if (sh.parsefile->eof & 2) {
 eof:
-		parsefile->eof = 3;
+		sh.parsefile->eof = 3;
 		return PEOF;
 	}
-	flushall();
+	flushall(sh);
 
-	q = parsefile->nextc;
+	q = sh.parsefile->nextc;
 	something = !first;
 
-	more = input_get_lleft(parsefile);
+	more = input_get_lleft(sh.parsefile);
 
 	INTOFF;
 	if (more <= 0) {
 		int nr;
 
 again:
-		nr = q - parsefile->nextc;
-		input_set_lleft(parsefile, nr);
-		more = preadfd();
-		q = parsefile->nextc + nr;
+		nr = q - sh.parsefile->nextc;
+		input_set_lleft(sh.parsefile, nr);
+		more = preadfd(sh);
+		q = sh.parsefile->nextc + nr;
 		if (more <= 0) {
-			input_set_lleft(parsefile, parsefile->nleft = 0);
+			input_set_lleft(sh.parsefile, sh.parsefile->nleft = 0);
 			if (!IS_DEFINED_SMALL && nr > 0)
 				goto save;
 			INTON;
@@ -443,37 +453,40 @@ check:
 			goto again;
 	}
 done:
-	input_set_lleft(parsefile, more);
+	input_set_lleft(sh.parsefile, more);
 
 save:
-	parsefile->nleft = q - parsefile->nextc - 1;
+	sh.parsefile->nleft = q - sh.parsefile->nextc - 1;
 	if (!IS_DEFINED_SMALL)
 		savec = *q;
 	*q = '\0';
 
-	if (parsefile->fd == 0 && hist && something) {
+#ifndef SMALL
+	if (sh.parsefile->fd == 0 && sh.hist && something) {
 		HistEvent he;
-		history(hist, &he, first ? H_ENTER : H_APPEND,
-			parsefile->nextc);
+		history(sh.hist, &he, first ? H_ENTER : H_APPEND,
+			sh.parsefile->nextc);
 	}
+#endif
 	INTON;
 
 	if (vflag) {
-		out2str(parsefile->nextc);
+		out2str(sh.parsefile->nextc);
 #ifdef FLUSHERR
-		flushout(out2);
+		flushout(sh, sh.out2);
 #endif
 	}
 
 	if (!IS_DEFINED_SMALL)
 		*q = savec;
 
-	return (signed char)*parsefile->nextc++;
+	return (signed char)*sh.parsefile->nextc++;
 }
 
-void ShellContext::pungetn(int n)
+void
+pungetn(ShellContext &sh, int n)
 {
-	parsefile->unget += n;
+	sh.parsefile->unget += n;
 }
 
 /*
@@ -482,68 +495,69 @@ void ShellContext::pungetn(int n)
  */
 
 void
-ShellContext::pungetc(void)
+pungetc(ShellContext &sh)
 {
-	pungetn(1 - (parsefile->eof & 1));
-	parsefile->eof &= ~1;
+	pungetn(sh, 1 - (sh.parsefile->eof & 1));
+	sh.parsefile->eof &= ~1;
 }
 
 /*
- * Push a string back onto the input at this current parsefile level.
+ * Push a string back onto the input at this current sh.parsefile level.
  * We handle aliases this way.
  */
 void
-ShellContext::pushstring(char *s, void *ap)
+pushstring(ShellContext &sh, char *s, void *ap)
 {
 	struct strpush *sp;
 	size_t len;
 
 	len = strlen(s);
 	INTOFF;
-/*dprintf("*** calling pushstring: %s, %d\n", s, len);*/
-	if ((unsigned long)parsefile->strpush |
-	    (unsigned long)parsefile->spfree) {
-		sp = ckmalloc(sizeof (struct strpush));
-		sp->prev = parsefile->strpush;
-		parsefile->strpush = sp;
+/*dprintf(__STR21__, s, len);*/
+	if ((unsigned long)sh.parsefile->strpush |
+	    (unsigned long)sh.parsefile->spfree) {
+		sp = ckmalloc(sh, sizeof (struct strpush));
+		sp->prev = sh.parsefile->strpush;
+		sh.parsefile->strpush = sp;
 	} else
-		sp = parsefile->strpush = &(parsefile->basestrpush);
-	sp->prevstring = parsefile->nextc;
-	sp->prevnleft = parsefile->nleft;
-	sp->unget = parsefile->unget;
-	sp->spfree = parsefile->spfree;
+		sp = sh.parsefile->strpush = &(sh.parsefile->basestrpush);
+	sp->prevstring = sh.parsefile->nextc;
+	sp->prevnleft = sh.parsefile->nleft;
+	sp->unget = sh.parsefile->unget;
+	sp->spfree = sh.parsefile->spfree;
 	sp->ap = (struct alias *)ap;
 	if (ap) {
 		((struct alias *)ap)->flag |= ALIASINUSE;
 		sp->string = ((struct alias *)ap)->name;
 	}
-	parsefile->nextc = s;
-	parsefile->nleft = len;
-	parsefile->unget = 0;
-	parsefile->spfree = NULL;
+	sh.parsefile->nextc = s;
+	sh.parsefile->nleft = len;
+	sh.parsefile->unget = 0;
+	sh.parsefile->spfree = NULL;
 	INTON;
 }
 
- void ShellContext::popstring(void)
+static void
+popstring(ShellContext &sh)
 {
-	struct strpush *sp = parsefile->strpush;
+	struct strpush *sp = sh.parsefile->strpush;
 
 	INTOFF;
-	if (sp->ap && parsefile->nextc > sp->string) {
-		if (parsefile->nextc[-1] == ' ' ||
-		    parsefile->nextc[-1] == '\t') {
-			checkkwd |= CHKALIAS;
+	if (sp->ap && sh.parsefile->nextc > sp->string) {
+		if (sh.parsefile->nextc[-1] == ' ' ||
+		    sh.parsefile->nextc[-1] == '\t') {
+			sh.checkkwd |= CHKALIAS;
 		}
 		if (sp->string != sp->ap->name) {
 			ckfree(sp->string);
 		}
 	}
-	parsefile->nextc = sp->prevstring;
-	parsefile->nleft = sp->prevnleft;
-	parsefile->unget = sp->unget;
+	sh.parsefile->nextc = sp->prevstring;
+	sh.parsefile->nleft = sp->prevnleft;
+	sh.parsefile->unget = sp->unget;
 /*dprintf("*** calling popstring: restoring to '%s'\n", parsenextc);*/
-	parsefile->strpush = sp->prev;
-	parsefile->spfree = sp;
+	sh.parsefile->strpush = sp->prev;
+	sh.parsefile->spfree = sp;
 	INTON;
 }
 
@@ -553,17 +567,17 @@ ShellContext::pushstring(char *s, void *ap)
  */
 
 int
-ShellContext::setinputfile(const char *fname, int flags)
+setinputfile(ShellContext &sh, const char *fname, int flags)
 {
 	int fd;
 
 	INTOFF;
-	fd = sh_open(fname, O_RDONLY, flags & INPUT_NOFILE_OK);
+	fd = sh_open(sh, fname, O_RDONLY, flags & INPUT_NOFILE_OK);
 	if (fd < 0)
 		goto out;
 	if (fd < 10)
-		fd = savefd(fd, fd);
-	setinputfd(fd, flags & INPUT_PUSH_FILE);
+		fd = savefd(sh, fd, fd);
+	setinputfd(sh, fd, flags & INPUT_PUSH_FILE);
 out:
 	INTON;
 	return fd;
@@ -575,14 +589,14 @@ out:
  * interrupts off.
  */
 
- void
-ShellContext::setinputfd(int fd, int push)
+static void
+setinputfd(ShellContext &sh, int fd, int push)
 {
-	pushfile();
+	pushfile(sh);
 	if (!push)
-		toppf = parsefile;
-	parsefile->fd = fd;
-	parsefile->nextc = parsefile->buf = ckmalloc(IBUFSIZ);
+		sh.toppf = sh.parsefile;
+	sh.parsefile->fd = fd;
+	sh.parsefile->nextc = sh.parsefile->buf = ckmalloc(sh, IBUFSIZ);
 }
 
 
@@ -591,13 +605,13 @@ ShellContext::setinputfd(int fd, int push)
  */
 
 void
-ShellContext::setinputstring(char *string)
+setinputstring(ShellContext &sh, char *string)
 {
 	INTOFF;
-	pushfile();
-	parsefile->nextc = string;
-	parsefile->nleft = strlen(string);
-	parsefile->eof = 2;
+	pushfile(sh);
+	sh.parsefile->nextc = string;
+	sh.parsefile->nleft = strlen(string);
+	sh.parsefile->eof = 2;
 	INTON;
 }
 
@@ -608,46 +622,47 @@ ShellContext::setinputstring(char *string)
  * adds a new entry to the stack and popfile restores the previous level.
  */
 
- void
-ShellContext::pushfile(void)
+static void
+pushfile(ShellContext &sh)
 {
 	struct parsefile *pf;
 
-	pf = (struct parsefile *)ckmalloc(sizeof (struct parsefile));
+	pf = (struct parsefile *)ckmalloc(sh, sizeof (struct parsefile));
 	memset(pf, 0, sizeof(*pf));
-	pf->prev = parsefile;
+	pf->prev = sh.parsefile;
 	pf->linno = 1;
 	pf->fd = -1;
-	parsefile = pf;
+	sh.parsefile = pf;
 }
 
-void ShellContext::pushstdin(void)
+void
+pushstdin(ShellContext &sh)
 {
 	INTOFF;
-	basepf.prev = parsefile;
-	parsefile = &basepf;
+	sh.basepf.prev = sh.parsefile;
+	sh.parsefile = &sh.basepf;
 	INTON;
 }
 
 void
-ShellContext::popfile(void)
+popfile(ShellContext &sh)
 {
-	struct parsefile *pf = parsefile;
+	struct parsefile *pf = sh.parsefile;
 
 	INTOFF;
-	parsefile = pf->prev;
+	sh.parsefile = pf->prev;
 	pf->prev = NULL;
-	if (pf == &basepf)
+	if (pf == &sh.basepf)
 		goto out;
 
 	if (pf->fd >= 0)
 		close(pf->fd);
 	ckfree(pf->buf);
-	if (parsefile->spfree)
-		freestrings(parsefile->spfree);
+	if (sh.parsefile->spfree)
+		freestrings(sh, sh.parsefile->spfree);
 	while (pf->strpush) {
-		popstring();
-		freestrings(parsefile->spfree);
+		popstring(sh);
+		freestrings(sh, sh.parsefile->spfree);
 	}
 	ckfree(pf);
 
@@ -656,10 +671,11 @@ out:
 }
 
 
-void __attribute__((noinline)) ShellContext::unwindfiles(struct parsefile *stop)
+void __attribute__((noinline))
+unwindfiles(ShellContext &sh, struct parsefile *stop)
 {
-	while (basepf.prev || parsefile != stop)
-		popfile();
+	while (sh.basepf.prev || sh.parsefile != stop)
+		popfile(sh);
 }
 
 
@@ -668,29 +684,31 @@ void __attribute__((noinline)) ShellContext::unwindfiles(struct parsefile *stop)
  */
 
 void
-ShellContext::popallfiles(void)
+popallfiles(ShellContext &sh)
 {
-	unwindfiles(toppf);
+	unwindfiles(sh, sh.toppf);
 }
 
-void __attribute__((noinline)) ShellContext::flush_input(void)
+void __attribute__((noinline))
+flush_input(ShellContext &sh)
 {
-	int left = basepf.nleft + input_get_lleft(&basepf);
+	int left = sh.basepf.nleft + input_get_lleft(&sh.basepf);
 
 	INTOFF;
-	if (stdin_state.seekable && left)
+	if (sh.stdin_state.seekable && left)
 		lseek(0, -left, SEEK_CUR);
-	else if (stdin_state.pending > left) {
-		flush_tee(basebuf, BUFSIZ, stdin_state.pending - left);
-		stdin_state.pending = 0;
+	else if (sh.stdin_state.pending > left) {
+		flush_tee(sh, sh.basebuf, BUFSIZ, sh.stdin_state.pending - left);
+		sh.stdin_state.pending = 0;
 	}
-	input_set_lleft(&basepf, basepf.nleft = 0);
+	input_set_lleft(&sh.basepf, sh.basepf.nleft = 0);
 	INTON;
 }
 
-void ShellContext::reset_input(void)
+void
+reset_input(ShellContext &sh)
 {
-	stdin_istty = -1;
-	basepf.eof = 0;
-	flush_input();
+	sh.stdin_istty = -1;
+	sh.basepf.eof = 0;
+	flush_input(sh);
 }

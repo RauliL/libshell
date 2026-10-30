@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "shell.h"
+#include "shell_context.h"
 #include "output.h"
 #include "memalloc.h"
 #include "error.h"
@@ -14,32 +15,36 @@
 #include "mystring.h"
 #include "system.h"
 
-__attribute__((__always_inline__)) inline void ShellContext::outofspace(void)
+static __attribute__((__always_inline__)) inline void
+outofspace(ShellContext &sh)
 {
-	sh_error("Out of space");
+	sh_error(sh, "Out of space");
 }
 
-rawmem ShellContext::checknull(void *p)
+static rawmem
+checknull(ShellContext &sh, void *p)
 {
 	if (!p)
-		outofspace();
+		outofspace(sh);
 	return {p};
 }
 
-__attribute__((__noinline__)) rawmem ShellContext::ckmalloc(std::size_t nbytes)
+__attribute__((__noinline__)) rawmem
+ckmalloc(ShellContext &sh, std::size_t nbytes)
 {
-	return checknull(std::malloc(nbytes));
+	return checknull(sh, std::malloc(nbytes));
 }
 
-__attribute__((__noinline__)) rawmem ShellContext::ckrealloc(void *p, std::size_t nbytes)
+__attribute__((__noinline__)) rawmem
+ckrealloc(ShellContext &sh, void *p, std::size_t nbytes)
 {
-	return checknull(std::realloc(p, nbytes));
+	return checknull(sh, std::realloc(p, nbytes));
 }
 
 char *
-ShellContext::savestr(const char *s)
+savestr(ShellContext &sh, const char *s)
 {
-	return checknull(::strdup(s));
+	return checknull(sh, ::strdup(s));
 }
 
 /*
@@ -47,103 +52,115 @@ ShellContext::savestr(const char *s)
  * String commits go through stackstr_commit() (see grabstackstr).
  * AST nodes should use astalloc() so freenode() owns them.
  */
-rawmem ShellContext::stalloc(std::size_t nbytes)
+rawmem
+stalloc(ShellContext &sh, std::size_t nbytes)
 {
 	std::size_t aligned = SHELL_ALIGN(nbytes);
-	void *p = ckmalloc(aligned);
-	stackheaps.push_back(p);
+	void *p = ckmalloc(sh, aligned);
+	sh.stackheaps.push_back(p);
 	return {p};
 }
 
-rawmem ShellContext::astalloc(std::size_t nbytes)
+rawmem
+astalloc(ShellContext &sh, std::size_t nbytes)
 {
 	std::size_t n = SHELL_ALIGN(nbytes);
-	void *p = ckmalloc(n);
+	void *p = ckmalloc(sh, n);
 	std::memset(p, 0, n);
 	return {p};
 }
 
-void ShellContext::clear_stack_temps()
+void
+clear_stack_temps(ShellContext &sh)
 {
-	for (void *p : stackheaps)
+	for (void *p : sh.stackheaps)
 		ckfree(p);
-	stackheaps.clear();
-	stackstr.reset();
+	sh.stackheaps.clear();
+	sh.stackstr.reset();
 }
 
-rawmem ShellContext::stackstr_commit(std::size_t nbytes)
+rawmem
+stackstr_commit(ShellContext &sh, std::size_t nbytes)
 {
-	return {stackstr.commit(nbytes)};
+	return {sh.stackstr.commit(nbytes)};
 }
 
-void ShellContext::stunalloc(void *p)
+void
+stunalloc(ShellContext &sh, void *p)
 {
 	if (!p)
 		return;
 	/* Only supports un-commit of the trailing string region. */
-	char *base = stackstr.buf.data();
+	char *base = sh.stackstr.buf.data();
 	char *cp = static_cast<char *>(p);
-	if (cp >= base && cp <= base + stackstr.used)
-		stackstr.rewind(static_cast<std::size_t>(cp - base));
+	if (cp >= base && cp <= base + sh.stackstr.used)
+		sh.stackstr.rewind(static_cast<std::size_t>(cp - base));
 }
 
-char *ShellContext::growstackblock(size_t min)
+static char *
+growstackblock(ShellContext &sh, size_t min)
 {
 	std::size_t off = 0;
 	/* Preserve relative cursor if someone held a pointer into the buffer —
 	 * callers re-base via makestrspace return value. */
 	(void)off;
-	stackstr.ensure_avail(min < 128 ? 128 : min);
+	sh.stackstr.ensure_avail(min < 128 ? 128 : min);
 	/* Growing may reallocate; return new base of in-progress string. */
-	return stackstr.base();
+	return sh.stackstr.base();
 }
 
-rawmem ShellContext::growstackstr()
+rawmem
+growstackstr(ShellContext &sh)
 {
 	std::size_t len = stackblocksize();
-	growstackblock(len + 128);
-	return {stackstr.base() + len};
+	growstackblock(sh, len + 128);
+	return {sh.stackstr.base() + len};
 }
 
-__attribute__((__noinline__)) char *ShellContext::growstackto(size_t len)
+__attribute__((__noinline__)) char *
+growstackto(ShellContext &sh, size_t len)
 {
 	if (stackblocksize() < len)
-		growstackblock(len);
+		growstackblock(sh, len);
 	return stackblock();
 }
 
-__attribute__((__noinline__)) char *ShellContext::makestrspace(size_t newlen, char *p)
+__attribute__((__noinline__)) char *
+makestrspace(ShellContext &sh, size_t newlen, char *p)
 {
-	size_t len = static_cast<size_t>(p - stackstr.base());
-	growstackto(len + newlen);
-	return stackstr.base() + len;
+	size_t len = static_cast<size_t>(p - sh.stackstr.base());
+	growstackto(sh, len + newlen);
+	return sh.stackstr.base() + len;
 }
 
-__attribute__((__noinline__)) char *ShellContext::stnputs(const char *s, size_t n, char *p)
+__attribute__((__noinline__)) char *
+stnputs(ShellContext &sh, const char *s, size_t n, char *p)
 {
-	p = makestrspace(n, p);
+	p = makestrspace(sh, n, p);
 	p = static_cast<char *>(mempcpy(p, s, n));
 	return p;
 }
 
 char *
-ShellContext::stputs(const char *s, char *p)
+stputs(ShellContext &sh, const char *s, char *p)
 {
-	return stnputs(s, strlen(s), p);
+	return stnputs(sh, s, strlen(s), p);
 }
 
-char *ShellContext::_STPUTC(int c, char *p)
+char *
+_STPUTC(ShellContext &sh, int c, char *p)
 {
-	if (p >= stackstr.cap()) {
-		size_t off = static_cast<size_t>(p - stackstr.base());
-		growstackblock(off + 2);
-		p = stackstr.base() + off;
+	if (p >= sh.stackstr.cap()) {
+		size_t off = static_cast<size_t>(p - sh.stackstr.base());
+		growstackblock(sh, off + 2);
+		p = sh.stackstr.base() + off;
 	}
 	*p++ = static_cast<char>(c);
 	return p;
 }
 
-void ShellContext::grabstackblock(size_t len)
+void
+grabstackblock(ShellContext &sh, size_t len)
 {
-	stackstr_commit(len);
+	stackstr_commit(sh, len);
 }

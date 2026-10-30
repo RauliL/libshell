@@ -53,28 +53,28 @@
 #undef putc
 #undef putchar
 #undef fileno
-#define stdout out1
-#define stderr out2
-#define printf out1fmt
-#define putc(c, file)	outc(c, file)
+#define stdout (sh.out1)
+#define stderr (sh.out2)
+#define printf(...) out1fmt(sh, __VA_ARGS__)
+#define putc(c, file)	outc(sh, c, file)
 #define putchar(c)	out1c(c)
 #define FILE struct output
-#define fprintf outfmt
-#define fputs outstr
-#define fflush flushout
+#define fprintf(f, ...) outfmt(sh, f, __VA_ARGS__)
+#define fputs(s, f) outstr(sh, s, f)
+#define fflush(f) flushout(sh, f)
 #define fileno(f) ((f)->fd)
 #define ferror outerr
 #endif
 #define INITARGS(argv)
-#define	error sh_error
-#define	warn sh_warn
-#define	warnx sh_warnx
-#define exit sh_exit
+#define	error(...) sh_error(sh, __VA_ARGS__)
+#define	warn(...) sh_warnx(sh, __VA_ARGS__)
+#define	warnx(...) sh_warnx(sh, __VA_ARGS__)
+#define exit(status) exitshell(sh)
 #define setprogname(s)
-#define getprogname() commandname
+#define getprogname() (sh.commandname)
 #define setlocate(l,s) 0
 
-#define getenv(p) bltinlookup((p),0)
+#define getenv(p) bltinlookup(sh, (p))
 
 #else
 #undef NULL
@@ -83,7 +83,4 @@
 #define INITARGS(argv)	if ((commandname = argv[0]) == NULL) {fputs("Argc is zero\n", stderr); exit(2);} else
 #endif
 
-int echocmd(int, char **);
-
-
-extern char *commandname;
+int echocmd(ShellContext &sh, int, char **);

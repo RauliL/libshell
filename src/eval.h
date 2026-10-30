@@ -36,12 +36,6 @@
  *	@(#)eval.h	8.2 (Berkeley) 5/4/95
  */
 
-extern char *commandname;	/* currently executing command */
-extern int exitstatus;		/* exit status of last command */
-extern int back_exitstatus;	/* exit status of backquoted command */
-extern int savestatus;		/* exit status of last command outside traps */
-
-
 struct backcmd {		/* result of evalbackcmd */
 	int fd;			/* file descriptor to read from */
 	char *buf;		/* buffer */

@@ -37,6 +37,7 @@
 #include <stdlib.h>
 
 #include "shell.h"
+#include "shell_context.h"
 #define DEFINE_OPTIONS
 #include "options.h"
 #undef DEFINE_OPTIONS
@@ -108,10 +109,10 @@ const char optletters[NOPTS] = {
 
 
 
-static int options(int);
-STATIC void minus_o(char *, int);
-STATIC void setoption(int, int);
-STATIC int getopts(char *, char *, char **);
+static int options(ShellContext &sh, int);
+static void minus_o(ShellContext &sh, char *, int);
+static void setoption(ShellContext &sh, int, int);
+static int getopts(ShellContext &sh, char *, char *, char **);
 
 
 /*
@@ -119,83 +120,83 @@ STATIC int getopts(char *, char *, char **);
  */
 
 int
-ShellContext::procargs(char **xargv)
+procargs(ShellContext &sh, char **xargv)
 {
 	int i;
 	int login;
 
 	login = xargv[0] && xargv[0][0] == '-';
-	arg0 = xargv[0];
+	sh.arg0 = xargv[0];
 	if (xargv[0])
 		xargv++;
 	for (i = 0; i < NOPTS; i++)
-		optlist[i] = 2;
-	argptr = xargv;
-	login |= options(1);
-	xargv = argptr;
+		sh.optlist[i] = 2;
+	sh.argptr = xargv;
+	login |= options(sh, 1);
+	xargv = sh.argptr;
 	if (*xargv == NULL) {
-		if (minusc)
-			sh_error("-c requires an argument");
+		if (sh.minusc)
+			sh_error(sh, "-c requires an argument");
 		sflag = 1;
 	}
 	if (iflag == 2 && sflag == 1) {
-		input_init();
-		if (stdin_istty && isatty(2))
+		input_init(sh);
+		if (sh.stdin_istty && isatty(2))
 			iflag = 1;
 	}
 	if (mflag == 2)
 		mflag = iflag;
 	for (i = 0; i < NOPTS; i++)
-		if (optlist[i] == 2)
-			optlist[i] = 0;
+		if (sh.optlist[i] == 2)
+			sh.optlist[i] = 0;
 #if DEBUG == 2
 	debug = 1;
 #endif
 	/* POSIX 1003.2: first arg after -c cmd is $0, remainder $1... */
-	if (minusc) {
-		minusc = *xargv++;
+	if (sh.minusc) {
+		sh.minusc = *xargv++;
 		if (*xargv)
 			goto setarg0;
 	} else if (!sflag) {
-		setinputfile(*xargv, 0);
+		setinputfile(sh, *xargv, 0);
 setarg0:
-		arg0 = *xargv++;
+		sh.arg0 = *xargv++;
 	}
 
-	shellparam.p = xargv;
-	shellparam.optind = 1;
-	shellparam.optoff = -1;
-	/* assert(shellparam.malloc == 0 && shellparam.nparam == 0); */
+	sh.shellparam.p = xargv;
+	sh.shellparam.optind = 1;
+	sh.shellparam.optoff = -1;
+	/* assert(sh.shellparam.malloc == 0 && sh.shellparam.nparam == 0); */
 	while (*xargv) {
-		shellparam.nparam++;
+		sh.shellparam.nparam++;
 		xargv++;
 	}
-	optschanged();
+	optschanged(sh);
 
 	return login;
 }
 
 
 void
-ShellContext::optschanged(void)
+optschanged(ShellContext &sh)
 {
 #ifdef DEBUG
-	opentrace();
+	opentrace(sh);
 #endif
-	setinteractive(iflag);
+	setinteractive(sh, iflag);
 #ifndef SMALL
-	histedit();
+	histedit(sh);
 #endif
-	setjobctl(mflag);
+	setjobctl(sh, mflag);
 }
 
 /*
- * Process shell options.  The global variable argptr contains a pointer
+ * Process shell options.  The global variable sh.argptr contains a pointer
  * to the argument list; we advance it past the options.
  */
 
- int
-ShellContext::options(int cmdline)
+static int
+options(ShellContext &sh, int cmdline)
 {
 	char *p;
 	int val;
@@ -203,9 +204,9 @@ ShellContext::options(int cmdline)
 	int login = 0;
 
 	if (cmdline)
-		minusc = NULL;
-	while ((p = *argptr) != NULL) {
-		argptr++;
+		sh.minusc = NULL;
+	while ((p = *sh.argptr) != NULL) {
+		sh.argptr++;
 		if ((c = *p++) == '-') {
 			val = 1;
                         if (p[0] == '\0' || (p[0] == '-' && p[1] == '\0')) {
@@ -214,28 +215,28 @@ ShellContext::options(int cmdline)
                                         if (p[0] == '\0')
                                                 xflag = vflag = 0;
                                         /* "--" means reset params */
-                                        else if (*argptr == NULL)
-						setparam(argptr);
+                                        else if (*sh.argptr == NULL)
+						setparam(sh, sh.argptr);
                                 }
 				break;	  /* "-" or  "--" terminates options */
 			}
 		} else if (c == '+') {
 			val = 0;
 		} else {
-			argptr--;
+			sh.argptr--;
 			break;
 		}
 		while ((c = *p++) != '\0') {
 			if (c == 'c' && cmdline) {
-				minusc = p;	/* command is after shell args*/
+				sh.minusc = p;	/* command is after shell args*/
 			} else if (c == 'l' && cmdline) {
 				login = 1;
 			} else if (c == 'o') {
-				minus_o(*argptr, val);
-				if (*argptr)
-					argptr++;
+				minus_o(sh, *sh.argptr, val);
+				if (*sh.argptr)
+					sh.argptr++;
 			} else {
-				setoption(c, val);
+				setoption(sh, c, val);
 			}
 		}
 	}
@@ -243,8 +244,8 @@ ShellContext::options(int cmdline)
 	return login;
 }
 
- void
-ShellContext::minus_o(char *name, int val)
+static void
+minus_o(ShellContext &sh, char *name, int val)
 {
 	int i;
 
@@ -252,34 +253,34 @@ ShellContext::minus_o(char *name, int val)
 		if (val) {
 			out1str("Current option settings\n");
 			for (i = 0; i < NOPTS; i++)
-				out1fmt("%-16s%s\n", optnames[i],
-					optlist[i] ? "on" : "off");
+				out1fmt(sh, "%-16s%s\n", optnames[i],
+					sh.optlist[i] ? "on" : "off");
 		} else {
 			for (i = 0; i < NOPTS; i++)
-				out1fmt("set %s %s\n",
-					optlist[i] ? "-o" : "+o",
+				out1fmt(sh, "set %s %s\n",
+					sh.optlist[i] ? "-o" : "+o",
 					optnames[i]);
 
 		}
 	} else {
 		for (i = 0; i < NOPTS; i++)
 			if (equal(name, optnames[i])) {
-				optlist[i] = val;
+				sh.optlist[i] = val;
 				return;
 			}
-		sh_error("Illegal option -o %s", name);
+		sh_error(sh, "Illegal option -o %s", name);
 	}
 }
 
 
- void
-ShellContext::setoption(int flag, int val)
+static void
+setoption(ShellContext &sh, int flag, int val)
 {
 	int i;
 
 	for (i = 0; i < NOPTS; i++)
 		if (optletters[i] == flag) {
-			optlist[i] = val;
+			sh.optlist[i] = val;
 			if (val) {
 				/* #%$ hack for ksh semantics */
 				if (flag == 'V')
@@ -289,7 +290,7 @@ ShellContext::setoption(int flag, int val)
 			}
 			return;
 		}
-	sh_error("Illegal option -%c", flag);
+	sh_error(sh, "Illegal option -%c", flag);
 	/* NOTREACHED */
 }
 
@@ -300,24 +301,24 @@ ShellContext::setoption(int flag, int val)
  */
 
 void
-ShellContext::setparam(char **argv)
+setparam(ShellContext &sh, char **argv)
 {
 	char **newparam;
 	char **ap;
 	int nparam;
 
 	for (nparam = 0 ; argv[nparam] ; nparam++);
-	ap = newparam = ckmalloc((nparam + 1) * sizeof *ap);
+	ap = newparam = ckmalloc(sh, (nparam + 1) * sizeof *ap);
 	while (*argv) {
-		*ap++ = savestr(*argv++);
+		*ap++ = savestr(sh, *argv++);
 	}
 	*ap = NULL;
-	freeparam(&shellparam);
-	shellparam.malloc = 1;
-	shellparam.nparam = nparam;
-	shellparam.p = newparam;
-	shellparam.optind = 1;
-	shellparam.optoff = -1;
+	freeparam(sh, &sh.shellparam);
+	sh.shellparam.malloc = 1;
+	sh.shellparam.nparam = nparam;
+	sh.shellparam.p = newparam;
+	sh.shellparam.optind = 1;
+	sh.shellparam.optoff = -1;
 }
 
 
@@ -326,7 +327,7 @@ ShellContext::setparam(char **argv)
  */
 
 void
-ShellContext::freeparam(volatile struct shparam *param)
+freeparam(ShellContext &sh, volatile struct shparam *param)
 {
 	char **ap;
 
@@ -344,26 +345,26 @@ ShellContext::freeparam(volatile struct shparam *param)
  */
 
 int
-ShellContext::shiftcmd(int argc, char **argv)
+shiftcmd(ShellContext &sh, int argc, char **argv)
 {
 	int n;
 	char **ap1, **ap2;
 
 	n = 1;
 	if (argc > 1)
-		n = number(argv[1]);
-	if (n > shellparam.nparam)
-		sh_error("can't shift that many");
+		n = number(sh, argv[1]);
+	if (n > sh.shellparam.nparam)
+		sh_error(sh, "can't shift that many");
 	INTOFF;
-	shellparam.nparam -= n;
-	for (ap1 = shellparam.p ; --n >= 0 ; ap1++) {
-		if (shellparam.malloc)
+	sh.shellparam.nparam -= n;
+	for (ap1 = sh.shellparam.p ; --n >= 0 ; ap1++) {
+		if (sh.shellparam.malloc)
 			ckfree(*ap1);
 	}
-	ap2 = shellparam.p;
+	ap2 = sh.shellparam.p;
 	while ((*ap2++ = *ap1++) != NULL);
-	shellparam.optind = 1;
-	shellparam.optoff = -1;
+	sh.shellparam.optind = 1;
+	sh.shellparam.optoff = -1;
 	INTON;
 	return 0;
 }
@@ -375,74 +376,75 @@ ShellContext::shiftcmd(int argc, char **argv)
  */
 
 int
-ShellContext::setcmd(int argc, char **argv)
+setcmd(ShellContext &sh, int argc, char **argv)
 {
 	if (argc == 1)
-		return showvars(nullstr, 0, VUNSET);
+		return showvars(sh, nullstr, 0, VUNSET);
 	INTOFF;
-	options(0);
-	optschanged();
-	if (*argptr != NULL) {
-		setparam(argptr);
+	options(sh, 0);
+	optschanged(sh);
+	if (*sh.argptr != NULL) {
+		setparam(sh, sh.argptr);
 	}
 	INTON;
 	return 0;
 }
 
 
-void ShellContext::getoptsreset(const char *value)
+void
+getoptsreset(ShellContext &sh, const char *value)
 {
-	shellparam.optind = 1;
-	shellparam.optoff = -1;
+	sh.shellparam.optind = 1;
+	sh.shellparam.optoff = -1;
 }
 
 /*
  * The getopts builtin.  Shellparam.optnext points to the next argument
  * to be processed.  Shellparam.optptr points to the next character to
- * be processed in the current argument.  If shellparam.optnext is NULL,
+ * be processed in the current argument.  If sh.shellparam.optnext is NULL,
  * then it's the first time getopts has been called.
  */
 
 int
-ShellContext::getoptscmd(int argc, char **argv)
+getoptscmd(ShellContext &sh, int argc, char **argv)
 {
 	char **optbase;
 
-	nextopt(nullstr);
-	argc -= argptr - argv - 1;
-	argv = argptr - 1;
+	nextopt(sh, nullstr);
+	argc -= sh.argptr - argv - 1;
+	argv = sh.argptr - 1;
 	if (argc < 3)
-		sh_error("Usage: getopts optstring var [arg...]");
+		sh_error(sh, "Usage: getopts optstring var [arg...]");
 	else if (argc == 3) {
-		optbase = shellparam.p;
-		if ((unsigned)shellparam.optind > shellparam.nparam + 1) {
-			shellparam.optind = 1;
-			shellparam.optoff = -1;
+		optbase = sh.shellparam.p;
+		if ((unsigned)sh.shellparam.optind > sh.shellparam.nparam + 1) {
+			sh.shellparam.optind = 1;
+			sh.shellparam.optoff = -1;
 		}
 	}
 	else {
 		optbase = &argv[3];
-		if ((unsigned)shellparam.optind > argc - 2) {
-			shellparam.optind = 1;
-			shellparam.optoff = -1;
+		if ((unsigned)sh.shellparam.optind > argc - 2) {
+			sh.shellparam.optind = 1;
+			sh.shellparam.optoff = -1;
 		}
 	}
 
-	return getopts(argv[1], argv[2], optbase);
+	return getopts(sh, argv[1], argv[2], optbase);
 }
 
- int
-ShellContext::getopts(char *optstr, char *optvar, char **optfirst)
+static int
+getopts(ShellContext &sh, char *optstr, char *optvar, char **optfirst)
 {
 	char *p, *q;
 	char c = '?';
 	int done = 0;
 	char s[2];
 	char **optnext;
-	int ind = shellparam.optind;
-	int off = shellparam.optoff;
+	int ind = sh.shellparam.optind;
+	int off = sh.shellparam.optoff;
 
-	shellparam.optind = -1;
+	sh.shellparam.optind = -1;
 	optnext = optfirst + ind - 1;
 
 	if (ind <= 1 || off < 0 || strlen(optnext[-1]) < off)
@@ -469,10 +471,10 @@ atend:
 			if (optstr[0] == ':') {
 				s[0] = c;
 				s[1] = '\0';
-				setvar("OPTARG", s, 0);
+				setvar(sh, "OPTARG", s, 0);
 			} else {
-				outfmt(&errout, "Illegal option -%c\n", c);
-				(void) unsetvar("OPTARG");
+				outfmt(sh, &sh.errout, "Illegal option -%c\n", c);
+				(void) unsetvar(sh, "OPTARG");
 			}
 			c = '?';
 			goto out;
@@ -486,11 +488,11 @@ atend:
 			if (optstr[0] == ':') {
 				s[0] = c;
 				s[1] = '\0';
-				setvar("OPTARG", s, 0);
+				setvar(sh, "OPTARG", s, 0);
 				c = ':';
 			} else {
-				outfmt(&errout, "No arg for -%c option\n", c);
-				(void) unsetvar("OPTARG");
+				outfmt(sh, &sh.errout, "No arg for -%c option\n", c);
+				(void) unsetvar(sh, "OPTARG");
 				c = '?';
 			}
 			goto out;
@@ -498,20 +500,20 @@ atend:
 
 		if (p == *optnext)
 			optnext++;
-		setvar("OPTARG", p, 0);
+		setvar(sh, "OPTARG", p, 0);
 		p = NULL;
 	} else
-		setvar("OPTARG", nullstr, 0);
+		setvar(sh, "OPTARG", nullstr, 0);
 
 out:
 	ind = optnext - optfirst + 1;
-	setvarint("OPTIND", ind, VNOFUNC);
+	setvarint(sh, "OPTIND", ind, VNOFUNC);
 	s[0] = c;
 	s[1] = '\0';
-	setvar(optvar, s, 0);
+	setvar(sh, optvar, s, 0);
 
-	shellparam.optoff = p ? p - *(optnext - 1) : -1;
-	shellparam.optind = ind;
+	sh.shellparam.optoff = p ? p - *(optnext - 1) : -1;
+	sh.shellparam.optind = ind;
 
 	return done;
 }
@@ -528,33 +530,33 @@ out:
  */
 
 int
-ShellContext::nextopt(const char *optstring)
+nextopt(ShellContext &sh, const char *optstring)
 {
 	char *p;
 	const char *q;
 	char c;
 
-	if ((p = optptr) == NULL || *p == '\0') {
-		p = *argptr;
+	if ((p = sh.optptr) == NULL || *p == '\0') {
+		p = *sh.argptr;
 		if (p == NULL || *p != '-' || *++p == '\0')
 			return '\0';
-		argptr++;
+		sh.argptr++;
 		if (p[0] == '-' && p[1] == '\0')	/* check for "--" */
 			return '\0';
 	}
 	c = *p++;
 	for (q = optstring ; *q != c ; ) {
 		if (*q == '\0')
-			sh_error("Illegal option -%c", c);
+			sh_error(sh, "Illegal option -%c", c);
 		if (*++q == ':')
 			q++;
 	}
 	if (*++q == ':') {
-		if (*p == '\0' && (p = *argptr++) == NULL)
-			sh_error("No arg for -%c option", c);
-		optionarg = p;
+		if (*p == '\0' && (p = *sh.argptr++) == NULL)
+			sh_error(sh, "No arg for -%c option", c);
+		sh.optionarg = p;
 		p = NULL;
 	}
-	optptr = p;
+	sh.optptr = p;
 	return c;
 }

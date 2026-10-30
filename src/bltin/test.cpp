@@ -1,3 +1,5 @@
+#include "shell.h"
+#include "shell_context.h"
 /*
  * test(1); version 7-like  --  author Erik Baalbergen
  * modified by Eric Gisin to be used as built-in.
@@ -139,33 +141,39 @@ static const struct t_op ops[] = {
 
 
 
-static void syntax(const char *, const char *);
-static int oexpr(enum token);
-static int aexpr(enum token);
-static int nexpr(enum token);
-static int primary(enum token);
-static int binop(void);
-static int filstat(char *, enum token);
-static enum token t_lex(char **);
-static int isoperand(char **);
-static bool newerf(const char *, const char *);
-static bool olderf(const char *, const char *);
-static int equalf(const char *, const char *);
+static void syntax(ShellContext &sh, const char *, const char *);
+static int oexpr(ShellContext &sh, enum token);
+static int aexpr(ShellContext &sh, enum token);
+static int nexpr(ShellContext &sh, enum token);
+static int primary(ShellContext &sh, enum token);
+static int binop(ShellContext &sh);
+static int filstat(ShellContext &sh, char *, enum token);
+static enum token t_lex(ShellContext &sh, char **);
+static int isoperand(ShellContext &sh, char **);
+static bool newerf(ShellContext &sh, const char *, const char *);
+static bool olderf(ShellContext &sh, const char *, const char *);
+static int equalf(ShellContext &sh, const char *, const char *);
 
 #ifdef HAVE_FACCESSAT
 # ifdef HAVE_TRADITIONAL_FACCESSAT
- inline int ShellContext::faccessat_confused_about_superuser(void) { return 1; }
+static inline int
+faccessat_confused_about_superuser(ShellContext &sh)
+{ return 1; }
 # else
- inline int ShellContext::faccessat_confused_about_superuser(void) { return 0; }
+static inline int
+faccessat_confused_about_superuser(ShellContext &sh)
+{ return 0; }
 # endif
 #endif
 
- inline intmax_t ShellContext::getn(const char *s)
+static inline intmax_t
+getn(ShellContext &sh, const char *s)
 {
-	return atomax10(s);
+	return atomax10(sh, s);
 }
 
- const struct t_op *ShellContext::getop(const char *s)
+const struct t_op *
+getop(ShellContext &sh, const char *s)
 {
 	const struct t_op *op;
 
@@ -178,7 +186,7 @@ static int equalf(const char *, const char *);
 }
 
 int
-ShellContext::testcmd(int argc, char **argv)
+testcmd(ShellContext &sh, int argc, char **argv)
 {
 	const struct t_op *op;
 	enum token n;
@@ -190,7 +198,7 @@ ShellContext::testcmd(int argc, char **argv)
 		argv[argc] = NULL;
 	}
 
-	t_wp_op = NULL;
+	sh.t_wp_op = NULL;
 
 recheck:
 	argv++;
@@ -205,7 +213,7 @@ recheck:
 	 */
 	switch (argc) {
 	case 3:
-		op = getop(argv[1]);
+		op = getop(sh, argv[1]);
 		if (op && op->op_type == BINOP) {
 			n = OPERAND;
 			goto eval;
@@ -223,21 +231,21 @@ recheck:
 		}
 	}
 
-	n = t_lex(argv);
+	n = t_lex(sh, argv);
 
 eval:
-	t_wp = argv;
-	res ^= oexpr(n);
-	argv = t_wp;
+	sh.t_wp = argv;
+	res ^= oexpr(sh, n);
+	argv = sh.t_wp;
 
 	if (argv[0] != NULL && argv[1] != NULL)
-		syntax(argv[0], "unexpected operator");
+		syntax(sh, argv[0], "unexpected operator");
 
 	return res;
 }
 
- void
-ShellContext::syntax(const char *op, const char *msg)
+static void
+syntax(ShellContext &sh, const char *op, const char *msg)
 {
 	if (op && *op)
 		error("%s: %s", op, msg);
@@ -245,55 +253,55 @@ ShellContext::syntax(const char *op, const char *msg)
 		error("%s", msg);
 }
 
- int
-ShellContext::oexpr(enum token n)
+static int
+oexpr(ShellContext &sh, enum token n)
 {
 	int res = 0;
 
 	for (;;) {
-		res |= aexpr(n);
-		if (!*t_wp)
+		res |= aexpr(sh, n);
+		if (!*sh.t_wp)
 			break;
-		n = t_lex(t_wp + 1);
+		n = t_lex(sh, sh.t_wp + 1);
 		if (n != BOR)
 			break;
-		n = t_lex(t_wp += 2);
+		n = t_lex(sh, sh.t_wp += 2);
 	}
 	return res;
 }
 
- int
-ShellContext::aexpr(enum token n)
+static int
+aexpr(ShellContext &sh, enum token n)
 {
 	int res = 1;
 
 	for (;;) {
-		if (!nexpr(n))
+		if (!nexpr(sh, n))
 			res = 0;
-		if (!*t_wp)
+		if (!*sh.t_wp)
 			break;
-		n = t_lex(t_wp + 1);
+		n = t_lex(sh, sh.t_wp + 1);
 		if (n != BAND)
 			break;
-		n = t_lex(t_wp += 2);
+		n = t_lex(sh, sh.t_wp += 2);
 	}
 	return res;
 }
 
- int
-ShellContext::nexpr(enum token n)
+static int
+nexpr(ShellContext &sh, enum token n)
 {
 	if (n != UNOT)
-		return primary(n);
+		return primary(sh, n);
 
-	n = t_lex(t_wp + 1);
+	n = t_lex(sh, sh.t_wp + 1);
 	if (n != EOI)
-		t_wp++;
-	return !nexpr(n);
+		sh.t_wp++;
+	return !nexpr(sh, n);
 }
 
- int
-ShellContext::primary(enum token n)
+static int
+primary(ShellContext &sh, enum token n)
 {
 	enum token nn;
 	int res;
@@ -301,56 +309,56 @@ ShellContext::primary(enum token n)
 	if (n == EOI)
 		return 0;		/* missing expression */
 	if (n == LPAREN) {
-		if ((nn = t_lex(++t_wp)) == RPAREN)
+		if ((nn = t_lex(sh, ++sh.t_wp)) == RPAREN)
 			return 0;	/* missing expression */
-		res = oexpr(nn);
-		if (t_lex(++t_wp) != RPAREN)
-			syntax(NULL, "closing paren expected");
+		res = oexpr(sh, nn);
+		if (t_lex(sh, ++sh.t_wp) != RPAREN)
+			syntax(sh, NULL, "closing paren expected");
 		return res;
 	}
-	if (t_wp_op && t_wp_op->op_type == UNOP) {
+	if (sh.t_wp_op && sh.t_wp_op->op_type == UNOP) {
 		/* unary expression */
-		if (*++t_wp == NULL)
-			syntax(t_wp_op->op_text, "argument expected");
+		if (*++sh.t_wp == NULL)
+			syntax(sh, sh.t_wp_op->op_text, "argument expected");
 		switch (n) {
 		case STREZ:
-			return strlen(*t_wp) == 0;
+			return strlen(*sh.t_wp) == 0;
 		case STRNZ:
-			return strlen(*t_wp) != 0;
+			return strlen(*sh.t_wp) != 0;
 		case FILTT:
-			return isatty(getn(*t_wp));
+			return isatty(getn(sh, *sh.t_wp));
 #ifdef HAVE_FACCESSAT
 		case FILRD:
-			return test_file_access(*t_wp, R_OK);
+			return test_file_access(sh, *sh.t_wp, R_OK);
 		case FILWR:
-			return test_file_access(*t_wp, W_OK);
+			return test_file_access(sh, *sh.t_wp, W_OK);
 		case FILEX:
-			return test_file_access(*t_wp, X_OK);
+			return test_file_access(sh, *sh.t_wp, X_OK);
 #endif
 		default:
-			return filstat(*t_wp, n);
+			return filstat(sh, *sh.t_wp, n);
 		}
 	}
 
-	if (t_lex(t_wp + 1), t_wp_op && t_wp_op->op_type == BINOP) {
-		return binop();
+	if (t_lex(sh, sh.t_wp + 1), sh.t_wp_op && sh.t_wp_op->op_type == BINOP) {
+		return binop(sh);
 	}
 
-	return strlen(*t_wp) > 0;
+	return strlen(*sh.t_wp) > 0;
 }
 
- int
-ShellContext::binop(void)
+static int
+binop(ShellContext &sh)
 {
 	const char *opnd1, *opnd2;
 	struct t_op const *op;
 
-	opnd1 = *t_wp;
-	(void) t_lex(++t_wp);
-	op = t_wp_op;
+	opnd1 = *sh.t_wp;
+	(void) t_lex(sh, ++sh.t_wp);
+	op = sh.t_wp_op;
 
-	if ((opnd2 = *++t_wp) == (char *)0)
-		syntax(op->op_text, "argument expected");
+	if ((opnd2 = *++sh.t_wp) == (char *)0)
+		syntax(sh, op->op_text, "argument expected");
 
 	switch (op->op_num) {
 	default:
@@ -367,28 +375,28 @@ ShellContext::binop(void)
 	case STRGT:
 		return strcoll(opnd1, opnd2) > 0;
 	case INTEQ:
-		return getn(opnd1) == getn(opnd2);
+		return getn(sh, opnd1) == getn(sh, opnd2);
 	case INTNE:
-		return getn(opnd1) != getn(opnd2);
+		return getn(sh, opnd1) != getn(sh, opnd2);
 	case INTGE:
-		return getn(opnd1) >= getn(opnd2);
+		return getn(sh, opnd1) >= getn(sh, opnd2);
 	case INTGT:
-		return getn(opnd1) > getn(opnd2);
+		return getn(sh, opnd1) > getn(sh, opnd2);
 	case INTLE:
-		return getn(opnd1) <= getn(opnd2);
+		return getn(sh, opnd1) <= getn(sh, opnd2);
 	case INTLT:
-		return getn(opnd1) < getn(opnd2);
+		return getn(sh, opnd1) < getn(sh, opnd2);
 	case FILNT:
-		return newerf (opnd1, opnd2);
+		return newerf(sh, opnd1, opnd2);
 	case FILOT:
-		return olderf (opnd1, opnd2);
+		return olderf(sh, opnd1, opnd2);
 	case FILEQ:
-		return equalf (opnd1, opnd2);
+		return equalf(sh, opnd1, opnd2);
 	}
 }
 
- int
-ShellContext::filstat(char *nm, enum token mode)
+static int
+filstat(ShellContext &sh, char *nm, enum token mode)
 {
 	struct stat64 s;
 
@@ -439,28 +447,30 @@ ShellContext::filstat(char *nm, enum token mode)
 	}
 }
 
- enum token ShellContext::t_lex(char **tp)
+static enum token
+t_lex(ShellContext &sh, char **tp)
 {
 	struct t_op const *op;
 	char *s = *tp;
 
 	if (s == 0) {
-		t_wp_op = (struct t_op *)0;
+		sh.t_wp_op = (struct t_op *)0;
 		return EOI;
 	}
 
-	op = getop(s);
-	if (op && !(op->op_type == UNOP && isoperand(tp)) &&
+	op = getop(sh, s);
+	if (op && !(op->op_type == UNOP && isoperand(sh, tp)) &&
 	    !(op->op_num == LPAREN && !tp[1])) {
-		t_wp_op = op;
+		sh.t_wp_op = op;
 		return static_cast<token>(op->op_num);
 	}
 
-	t_wp_op = (struct t_op *)0;
+	sh.t_wp_op = (struct t_op *)0;
 	return OPERAND;
 }
 
- int ShellContext::isoperand(char **tp)
+static int
+isoperand(ShellContext &sh, char **tp)
 {
 	struct t_op const *op;
 	char *s;
@@ -470,11 +480,12 @@ ShellContext::filstat(char *nm, enum token mode)
 	if (!tp[2])
 		return 0;
 
-	op = getop(s);
+	op = getop(sh, s);
 	return op && op->op_type == BINOP;
 }
 
- bool ShellContext::newerf(const char *f1, const char *f2)
+static bool
+newerf(ShellContext &sh, const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
 
@@ -492,7 +503,8 @@ ShellContext::filstat(char *nm, enum token mode)
 #endif
 }
 
- bool ShellContext::olderf(const char *f1, const char *f2)
+static bool
+olderf(ShellContext &sh, const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
 
@@ -510,8 +522,8 @@ ShellContext::filstat(char *nm, enum token mode)
 #endif
 }
 
- int
-ShellContext::equalf (const char *f1, const char *f2)
+static int
+equalf(ShellContext &sh, const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
 
@@ -522,7 +534,8 @@ ShellContext::equalf (const char *f1, const char *f2)
 }
 
 #ifdef HAVE_FACCESSAT
- int ShellContext::has_exec_bit_set(const char *path)
+static int
+has_exec_bit_set(ShellContext &sh, const char *path)
 {
 	struct stat64 st;
 
@@ -531,10 +544,11 @@ ShellContext::equalf (const char *f1, const char *f2)
 	return st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH);
 }
 
-int ShellContext::test_file_access(const char *path, int mode)
+int
+test_file_access(ShellContext &sh, const char *path, int mode)
 {
-	if (faccessat_confused_about_superuser() &&
-	    mode == X_OK && geteuid() == 0 && !has_exec_bit_set(path))
+	if (faccessat_confused_about_superuser(sh) &&
+	    mode == X_OK && geteuid() == 0 && !has_exec_bit_set(sh, path))
 		return 0;
 	return !faccessat(AT_FDCWD, path, mode, AT_EACCESS);
 }
@@ -638,7 +652,7 @@ int ShellContext::test_file_access(const char *path, int mode)
  * this means that if test '-r' and '-w' are to behave as if open() were called
  * then there's no way for a shell script running as root to check if a file
  * has certain access bits set other than by the grotty means of interpreting
- * the output of 'ls -l'.  This was widely considered to be a bug in V7's
+ * the sh.output of 'ls -l'.  This was widely considered to be a bug in V7's
  * "test" and is, I believe, one of the reasons why direct use of access() was
  * avoided in some more recent implementations!
  *

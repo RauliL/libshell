@@ -43,7 +43,7 @@
 #include <stdlib.h>
 
 /*
- * Code for dealing with input/output redirection.
+ * Code for dealing with input/sh.output redirection.
  */
 
 #include "error.h"
@@ -57,6 +57,7 @@
 #include "output.h"
 #include "redir.h"
 #include "shell.h"
+#include "shell_context.h"
 #include "system.h"
 #include "trap.h"
 
@@ -83,24 +84,25 @@ struct redirtab {
 /* Bit map of currently closed file descriptors. */
 
 
-STATIC int openredirect(union node *);
+static int openredirect(ShellContext &sh, union node *);
 #ifdef notyet
-STATIC void dupredirect(union node *, int, char[10]);
+static void dupredirect(ShellContext &sh, union node *, int, char[10]);
 #else
-STATIC void dupredirect(union node *, int);
+static void dupredirect(ShellContext &sh, union node *, int);
 #endif
-STATIC int openhere(union node *);
+static int openhere(ShellContext &sh, union node *);
 
 
- unsigned ShellContext::update_closed_redirs(int fd, int nfd)
+static unsigned
+update_closed_redirs(ShellContext &sh, int fd, int nfd)
 {
-	unsigned val = closed_redirs;
+	unsigned val = sh.closed_redirs;
 	unsigned bit = 1 << fd;
 
 	if (nfd >= 0)
-		closed_redirs &= ~bit;
+		sh.closed_redirs &= ~bit;
 	else
-		closed_redirs |= bit;
+		sh.closed_redirs |= bit;
 
 	return val & bit;
 }
@@ -110,12 +112,12 @@ STATIC int openhere(union node *);
  * Process a list of redirection commands.  If the REDIR_PUSH flag is set,
  * old file descriptors are stashed away so that the redirection can be
  * undone by calling popredir.  If the REDIR_BACKQ flag is set, then the
- * standard output, and the standard error if it becomes a duplicate of
+ * standard sh.output, and the standard error if it becomes a duplicate of
  * stdout, is saved in memory.
  */
 
 void
-ShellContext::redirect(union node *redir, int flags)
+redirect(ShellContext &sh, union node *redir, int flags)
 {
 	union node *n;
 	struct redirtab *sv;
@@ -135,16 +137,16 @@ ShellContext::redirect(union node *redir, int flags)
 	sv = NULL;
 	INTOFF;
 	if (likely(flags & REDIR_PUSH))
-		sv = redirlist;
+		sv = sh.redirlist;
 	n = redir;
 	do {
-		newfd = openredirect(n);
+		newfd = openredirect(sh, n);
 		if (newfd < -1)
 			continue;
 
 		fd = n->nfile.fd;
 		if (fd == 0)
-			reset_input();
+			reset_input(sh);
 
 		if (sv) {
 			int closed;
@@ -152,12 +154,12 @@ ShellContext::redirect(union node *redir, int flags)
 			p = &sv->renamed[fd];
 			i = *p;
 
-			closed = update_closed_redirs(fd, newfd);
+			closed = update_closed_redirs(sh, fd, newfd);
 
 			if (likely(i == EMPTY)) {
 				i = CLOSED;
 				if (fd != newfd && !closed) {
-					i = savefd(fd, fd);
+					i = savefd(sh, fd, fd);
 					fd = -1;
 				}
 			}
@@ -169,25 +171,26 @@ ShellContext::redirect(union node *redir, int flags)
 			continue;
 
 #ifdef notyet
-		dupredirect(n, newfd, memory);
+		dupredirect(sh, n, newfd, memory);
 #else
-		dupredirect(n, newfd);
+		dupredirect(sh, n, newfd);
 #endif
 	} while ((n = n->nfile.next));
 	INTON;
 #ifdef notyet
 	if (memory[1])
-		out1 = &memout;
+		sh.out1 = &memout;
 	if (memory[2])
-		out2 = &memout;
+		sh.out2 = &memout;
 #endif
 	if (flags & REDIR_SAVEFD2 && sv->renamed[2] >= 0)
-		preverrout.fd = sv->renamed[2];
+		sh.preverrout.fd = sv->renamed[2];
 }
 
 
-static int sh_open_fail(const char *, int, int) __attribute__((__noreturn__));
- int ShellContext::sh_open_fail(const char *pathname, int flags, int e)
+static int sh_open_fail(ShellContext &sh, const char *, int, int) __attribute__((__noreturn__));
+static int
+sh_open_fail(ShellContext &sh, const char *pathname, int flags, int e)
 {
 	const char *word;
 	int action;
@@ -199,11 +202,12 @@ static int sh_open_fail(const char *, int, int) __attribute__((__noreturn__));
 		action = E_CREAT;
 	}
 
-	sh_error("cannot %s %s: %s", word, pathname, errmsg(e, action));
+	sh_error(sh, "cannot %s %s: %s", word, pathname, errmsg(sh, e, action));
 }
 
 
-int ShellContext::sh_open(const char *pathname, int flags, int mayfail)
+int
+sh_open(ShellContext &sh, const char *pathname, int flags, int mayfail)
 {
 	int fd;
 	int e;
@@ -211,17 +215,17 @@ int ShellContext::sh_open(const char *pathname, int flags, int mayfail)
 	do {
 		fd = open64(pathname, flags, 0666);
 		e = errno;
-	} while (fd < 0 && e == EINTR && !pending_sig);
+	} while (fd < 0 && e == EINTR && !sh.pending_sig);
 
 	if (mayfail || fd >= 0)
 		return fd;
 
-	sh_open_fail(pathname, flags, e);
+	sh_open_fail(sh, pathname, flags, e);
 }
 
 
- int
-ShellContext::openredirect(union node *redir)
+static int
+openredirect(ShellContext &sh, union node *redir)
 {
 	struct stat64 sb;
 	char *fname;
@@ -232,7 +236,7 @@ ShellContext::openredirect(union node *redir)
 	case NFROM:
 		flags = O_RDONLY;
 do_open:
-		f = sh_open(redir->nfile.expfname, flags, 0);
+		f = sh_open(sh, redir->nfile.expfname, flags, 0);
 		break;
 	case NFROMTO:
 		flags = O_RDWR|O_CREAT;
@@ -249,7 +253,7 @@ do_open:
 			if (S_ISREG(sb.st_mode))
 				goto ecreate;
 
-			f = sh_open(fname, O_WRONLY, 0);
+			f = sh_open(sh, fname, O_WRONLY, 0);
 			if (!fstat64(f, &sb) && S_ISREG(sb.st_mode)) {
 				close(f);
 				goto ecreate;
@@ -276,16 +280,17 @@ do_open:
 		/* Fall through to eliminate warning. */
 	case NHERE:
 	case NXHERE:
-		f = openhere(redir);
+		f = openhere(sh, redir);
 		break;
 	}
 
 	return f;
 ecreate:
-	sh_open_fail(fname, O_CREAT, EEXIST);
+	sh_open_fail(sh, fname, O_CREAT, EEXIST);
 }
 
- int ShellContext::sh_dup2(int ofd, int nfd, int cfd)
+static int
+sh_dup2(ShellContext &sh, int ofd, int nfd, int cfd)
 {
 	if (nfd < 0) {
 		nfd = dup(ofd);
@@ -296,15 +301,15 @@ ecreate:
 	if (likely(cfd >= 0))
 		close(cfd);
 	if (nfd < 0)
-		sh_error("%d: %s", ofd, strerror(errno));
+		sh_error(sh, "%d: %s", ofd, strerror(errno));
 
 	return nfd;
 }
 
 #ifdef notyet
- void dupredirect(union node *redir, int f, char memory[10])
+static void dupredirect(ShellContext &sh, union node *redir, int f, char memory[10])
 #else
-void ShellContext::dupredirect(union node *redir, int f)
+static void dupredirect(ShellContext &sh, union node *redir, int f)
 #endif
 {
 	int fd = redir->nfile.fd;
@@ -320,26 +325,27 @@ void ShellContext::dupredirect(union node *redir, int f)
 				memory[fd] = 1;
 			else
 #endif
-				sh_dup2(f, fd, -1);
+				sh_dup2(sh, f, fd, -1);
 			return;
 		}
 		close(fd);
 	} else
-		sh_dup2(f, fd, f);
+		sh_dup2(sh, f, fd, f);
 }
 
-int ShellContext::sh_pipe(int pip[2], int memfd)
+int
+sh_pipe(ShellContext &sh, int pip[2], int memfd)
 {
 	if (memfd) {
 		pip[0] = USE_MEMFD_CREATE ? memfd_create("dash", 0) : -1;
 		if (pip[0] >= 0) {
-			pip[1] = sh_dup2(pip[0], -1, pip[0]);
+			pip[1] = sh_dup2(sh, pip[0], -1, pip[0]);
 			return 1;
 		}
 	}
 
 	if (pipe(pip) < 0)
-		sh_error("Pipe call failed");
+		sh_error(sh, "Pipe call failed");
 
 	return 0;
 }
@@ -350,8 +356,8 @@ int ShellContext::sh_pipe(int pip[2], int memfd)
  * the pipe without forking.
  */
 
- int
-ShellContext::openhere(union node *redir)
+static int
+openhere(ShellContext &sh, union node *redir)
 {
 	size_t len = 0;
 	int pip[2];
@@ -360,20 +366,20 @@ ShellContext::openhere(union node *redir)
 
 	p = redir->nhere.doc->narg.text;
 	if (redir->type == NXHERE) {
-		expandarg(redir->nhere.doc, NULL, EXP_QUOTED);
+		expandarg(sh, redir->nhere.doc, NULL, EXP_QUOTED);
 		p = stackblock();
 	}
 
 	len = strlen(p);
-	memfd = sh_pipe(pip, len > PIPESIZE);
+	memfd = sh_pipe(sh, pip, len > PIPESIZE);
 
 	if (memfd || len <= PIPESIZE) {
-		xwrite(pip[1], p, len);
+		xwrite(sh, pip[1], p, len);
 		lseek(pip[1], 0, SEEK_SET);
 		goto out;
 	}
 
-	if (forkshell((struct job *)NULL, (union node *)NULL, FORK_NOJOB) == 0) {
+	if (forkshell(sh, (struct job *)NULL, (union node *)NULL, FORK_NOJOB) == 0) {
 		close(pip[0]);
 		signal(SIGINT, SIG_IGN);
 		signal(SIGQUIT, SIG_IGN);
@@ -382,7 +388,7 @@ ShellContext::openhere(union node *redir)
 		signal(SIGTSTP, SIG_IGN);
 #endif
 		signal(SIGPIPE, SIG_DFL);
-		xwrite(pip[1], p, len);
+		xwrite(sh, pip[1], p, len);
 		_exit(0);
 	}
 out:
@@ -397,20 +403,20 @@ out:
  */
 
 void
-ShellContext::popredir(int drop)
+popredir(ShellContext &sh, int drop)
 {
 	struct redirtab *rp;
 	int i;
 
 	INTOFF;
-	rp = redirlist;
+	rp = sh.redirlist;
 	for (i = 0 ; i < 10 ; i++) {
 		int closed;
 
 		if (rp->renamed[i] == EMPTY)
 			continue;
 
-		closed = drop ? 1 : update_closed_redirs(i, rp->renamed[i]);
+		closed = drop ? 1 : update_closed_redirs(sh, i, rp->renamed[i]);
 
 		switch (rp->renamed[i]) {
 		case CLOSED:
@@ -420,14 +426,14 @@ ShellContext::popredir(int drop)
 		default:
 			if (!drop) {
 				if (i == 0)
-					reset_input();
+					reset_input(sh);
 				dup2(rp->renamed[i], i);
 			}
 			close(rp->renamed[i]);
 			break;
 		}
 	}
-	redirlist = rp->next;
+	sh.redirlist = rp->next;
 	ckfree(rp);
 	INTON;
 }
@@ -444,11 +450,11 @@ EXITRESET {
 	/*
 	 * Discard all saved file descriptors.
 	 */
-	unwindredir(0);
+	unwindredir(sh, 0);
 }
 
 FORKRESET {
-	redirlist = NULL;
+	sh.redirlist = NULL;
 }
 
 #endif
@@ -461,7 +467,7 @@ FORKRESET {
  */
 
 int
-ShellContext::savefd(int from, int ofd)
+savefd(ShellContext &sh, int from, int ofd)
 {
 	int newfd;
 	int err;
@@ -476,7 +482,7 @@ ShellContext::savefd(int from, int ofd)
 	if (err != EBADF) {
 		close(ofd);
 		if (err)
-			sh_error("%d: %s", from, strerror(err));
+			sh_error(sh, "%d: %s", from, strerror(err));
 		else if(!HAVE_F_DUPFD_CLOEXEC)
 			fcntl(newfd, F_SETFD, FD_CLOEXEC);
 	}
@@ -486,44 +492,46 @@ ShellContext::savefd(int from, int ofd)
 
 
 int
-ShellContext::redirectsafe(union node *redir, int flags)
+redirectsafe(ShellContext &sh, union node *redir, int flags)
 {
 	int err;
 	volatile int saveint;
-	struct jmploc *volatile savehandler = handler;
+	struct jmploc *volatile savehandler = sh.handler;
 	struct jmploc jmploc;
 
 	SAVEINT(saveint);
 	if (!(err = setjmp(jmploc.loc) * 2)) {
-		handler = &jmploc;
-		redirect(redir, flags);
+		sh.handler = &jmploc;
+		redirect(sh, redir, flags);
 	}
-	restore_handler_expandarg(savehandler, err);
+	restore_handler_expandarg(sh, savehandler, err);
 	RESTOREINT(saveint);
 	return err;
 }
 
 
-void ShellContext::unwindredir(struct redirtab *stop)
+void
+unwindredir(ShellContext &sh, struct redirtab *stop)
 {
-	while (redirlist != stop)
-		popredir(0);
+	while (sh.redirlist != stop)
+		popredir(sh, 0);
 }
 
 
-struct redirtab *ShellContext::pushredir(union node *redir)
+struct redirtab *
+pushredir(ShellContext &sh, union node *redir)
 {
 	struct redirtab *sv;
 	struct redirtab *q;
 	int i;
 
-	q = redirlist;
+	q = sh.redirlist;
 	if (!redir)
 		goto out;
 
-	sv = ckmalloc(sizeof (struct redirtab));
+	sv = ckmalloc(sh, sizeof (struct redirtab));
 	sv->next = q;
-	redirlist = sv;
+	sh.redirlist = sv;
 	for (i = 0; i < 10; i++)
 		sv->renamed[i] = EMPTY;
 

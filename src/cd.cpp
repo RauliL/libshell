@@ -47,6 +47,7 @@
  */
 
 #include "shell.h"
+#include "shell_context.h"
 #include "var.h"
 #include "nodes.h"	/* for jobs.h */
 #include "jobs.h"
@@ -64,22 +65,22 @@
 #define CD_PHYSICAL 1
 #define CD_PRINT 2
 
-STATIC int docd(const char *, int);
-STATIC const char *updatepwd(const char *);
-STATIC char *getpwd(void);
-STATIC int cdopt(void);
+static int docd(ShellContext &sh, const char *, int);
+static const char * updatepwd(ShellContext &sh, const char *);
+static char * getpwd(ShellContext &sh);
+static int cdopt(ShellContext &sh);
 
 		/* current working directory */
 		/* physical working directory */
 
- int
-ShellContext::cdopt()
+static int
+cdopt(ShellContext &sh)
 {
 	int flags = 0;
 	int i, j;
 
 	j = 'L';
-	while ((i = nextopt("LP"))) {
+	while ((i = nextopt(sh, "LP"))) {
 		if (i != j) {
 			flags ^= CD_PHYSICAL;
 			j = i;
@@ -90,7 +91,7 @@ ShellContext::cdopt()
 }
 
 int
-ShellContext::cdcmd(int argc, char **argv)
+cdcmd(ShellContext &sh, int argc, char **argv)
 {
 	const char *dest;
 	const char *path;
@@ -100,12 +101,12 @@ ShellContext::cdcmd(int argc, char **argv)
 	int flags;
 	int len;
 
-	flags = cdopt();
-	dest = *argptr;
+	flags = cdopt(sh);
+	dest = *sh.argptr;
 	if (!dest)
-		dest = bltinlookup(homestr);
+		dest = bltinlookup(sh, homestr);
 	else if (dest[0] == '-' && dest[1] == '\0') {
-		dest = bltinlookup("OLDPWD");
+		dest = bltinlookup(sh, "OLDPWD");
 		flags |= CD_PRINT;
 	}
 	if (!dest)
@@ -127,16 +128,16 @@ dotdot:
 	}
 	if (!*dest)
 		dest = dotdir;
-	path = bltinlookup("CDPATH");
-	while (p = path, (len = padvance_magic(&path, dest, 0)) >= 0) {
+	path = bltinlookup(sh, "CDPATH");
+	while (p = path, (len = padvance_magic(sh, &path, dest, 0)) >= 0) {
 		c = *p;
-		p = stalloc(len);
+		p = stalloc(sh, len);
 
 		if (stat64(p, &statb) >= 0 && S_ISDIR(statb.st_mode)) {
 			if (c && c != ':')
 				flags |= CD_PRINT;
 docd:
-			if (!docd(p, flags))
+			if (!docd(sh, p, flags))
 				goto out;
 			goto err;
 		}
@@ -147,22 +148,22 @@ step6:
 	goto docd;
 
 err:
-	sh_error("can't cd to %s", dest);
+	sh_error(sh, "can't cd to %s", dest);
 	/* NOTREACHED */
 out:
 	if (flags & CD_PRINT)
-		out1fmt(snlfmt, curdir);
+		out1fmt(sh, snlfmt, sh.curdir);
 	return 0;
 }
 
 
 /*
  * Actually do the chdir.  We also call hashcd to let the routines in exec.c
- * know that the current directory has changed.
+ * know that the current directory has sh.changed.
  */
 
- int
-ShellContext::docd(const char *dest, int flags)
+static int
+docd(ShellContext &sh, const char *dest, int flags)
 {
 	const char *dir = 0;
 	int err;
@@ -171,15 +172,15 @@ ShellContext::docd(const char *dest, int flags)
 
 	INTOFF;
 	if (!(flags & CD_PHYSICAL)) {
-		dir = updatepwd(dest);
+		dir = updatepwd(sh, dest);
 		if (dir)
 			dest = dir;
 	}
 	err = chdir(dest);
 	if (err)
 		goto out;
-	setpwd(dir, 1);
-	hashcd();
+	setpwd(sh, dir, 1);
+	hashcd(sh);
 out:
 	INTON;
 	return err;
@@ -191,8 +192,8 @@ out:
  * cd command.
  */
 
- const char *
-ShellContext::updatepwd(const char *dir)
+static const char *
+updatepwd(ShellContext &sh, const char *dir)
 {
 	char *updated;
 	char *p;
@@ -206,18 +207,18 @@ ShellContext::updatepwd(const char *dir)
 	char pathbuf[PATH_MAX];
 	if (cygwin_conv_path(CCP_WIN_A_TO_POSIX | CCP_RELATIVE, dir, pathbuf,
 			     sizeof(pathbuf)) < 0)
-		sh_error("can't normalize %s", dir);
+		sh_error(sh, "can't normalize %s", dir);
 	dir = pathbuf;
 #endif
 
-	cdcomppath = sstrdup(dir);
+	cdcomppath = sstrdup(sh, dir);
 	STARTSTACKSTR(updated);
 	if (*dir != '/') {
-		if (curdir == nullstr)
+		if (sh.curdir == nullstr)
 			return nullptr;
-		updated = stputs(curdir, updated);
+		updated = stputs(sh, sh.curdir, updated);
 	}
-	updated = makestrspace(std::strlen(dir) + 2, updated);
+	updated = makestrspace(sh, std::strlen(dir) + 2, updated);
 	lim = stackblock() + 1;
 	if (*dir != '/') {
 		if (updated[-1] != '/')
@@ -248,7 +249,7 @@ ShellContext::updatepwd(const char *dir)
 				break;
 			/* fall through */
 		default:
-			updated = stputs(p, updated);
+			updated = stputs(sh, p, updated);
 			USTPUTC('/', updated);
 		}
 		p = strtok(nullptr, "/");
@@ -264,9 +265,9 @@ ShellContext::updatepwd(const char *dir)
  * Find out what the current directory is. If we already know the current
  * directory, this routine returns immediately.
  */
-inline
+static inline
  char *
-ShellContext::getpwd()
+getpwd(ShellContext &sh)
 {
 #ifdef __GLIBC__
 	char *dir = getcwd(0, 0);
@@ -277,56 +278,56 @@ ShellContext::getpwd()
 	char buf[PATH_MAX];
 
 	if (getcwd(buf, sizeof(buf)))
-		return savestr(buf);
+		return savestr(sh, buf);
 #endif
 
-	sh_warnx("getcwd() failed: %s", strerror(errno));
+	sh_warnx(sh, "getcwd() failed: %s", strerror(errno));
 	return nullstr;
 }
 
 int
-ShellContext::pwdcmd(int argc, char **argv)
+pwdcmd(ShellContext &sh, int argc, char **argv)
 {
 	int flags;
-	const char *dir = curdir;
+	const char *dir = sh.curdir;
 
-	flags = cdopt();
+	flags = cdopt(sh);
 	if (flags) {
-		if (physdir == nullstr)
-			setpwd(dir, 0);
-		dir = physdir;
+		if (sh.physdir == nullstr)
+			setpwd(sh, dir, 0);
+		dir = sh.physdir;
 	}
-	out1fmt(snlfmt, dir);
+	out1fmt(sh, snlfmt, dir);
 	return 0;
 }
 
 void
-ShellContext::setpwd(const char *val, int setold)
+setpwd(ShellContext &sh, const char *val, int setold)
 {
 	char *oldcur, *dir;
 
-	oldcur = dir = curdir;
+	oldcur = dir = sh.curdir;
 
 	if (setold) {
-		setvar("OLDPWD", oldcur, VEXPORT);
+		setvar(sh, "OLDPWD", oldcur, VEXPORT);
 	}
 	INTOFF;
-	if (physdir != nullstr) {
-		if (physdir != oldcur)
-			free(physdir);
-		physdir = nullstr;
+	if (sh.physdir != nullstr) {
+		if (sh.physdir != oldcur)
+			free(sh.physdir);
+		sh.physdir = nullstr;
 	}
 	if (oldcur == val || !val) {
-		char *s = getpwd();
-		physdir = s;
+		char *s = getpwd(sh);
+		sh.physdir = s;
 		if (!val)
 			dir = s;
 	} else
-		dir = savestr(val);
+		dir = savestr(sh, val);
 	if (oldcur != dir && oldcur != nullstr) {
 		free(oldcur);
 	}
-	curdir = dir;
+	sh.curdir = dir;
 	INTON;
-	setvar("PWD", dir, VEXPORT);
+	setvar(sh, "PWD", dir, VEXPORT);
 }

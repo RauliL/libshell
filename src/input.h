@@ -99,30 +99,25 @@ struct parsefile {
 	int unget;
 };
 
-extern struct parsefile *parsefile;
-extern int stdin_istty;
-
 /*
- * The input line number.  Input.c just defines this variable, and saves
- * and restores it when files are pushed and popped.  The user of this
- * package must set its value.
+ * The input line number. Requires ShellContext &sh in scope.
  */
-#define plinno (parsefile->linno)
+#define plinno (sh.parsefile->linno) /* requires no #define parsefile */
 
-int pgetc(void);
-int pgetc_eoa(void);
-void pungetc(void);
-void pungetn(int);
-void pushstring(char *, void *);
-int setinputfile(const char *, int);
-void setinputstring(char *);
-void pushstdin(void);
-void popfile(void);
-void unwindfiles(struct parsefile *);
-void popallfiles(void);
-void flush_input(void);
-void reset_input(void);
-void input_init(void);
+struct ShellContext;
+int pgetc(ShellContext &sh);
+int pgetc_eoa(ShellContext &sh);
+void pungetc(ShellContext &sh);
+void pungetn(ShellContext &sh, int);
+void pushstring(ShellContext &sh, char *, void *);
+int setinputfile(ShellContext &sh, const char *, int);
+void setinputstring(ShellContext &sh, char *);
+void pushstdin(ShellContext &sh);
+void popfile(ShellContext &sh);
+void unwindfiles(ShellContext &sh, struct parsefile *);
+void popallfiles(ShellContext &sh);
+void flush_input(ShellContext &sh);
+void reset_input(ShellContext &sh);
 
 static inline int input_get_lleft(struct parsefile *pf)
 {

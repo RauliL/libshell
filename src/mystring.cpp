@@ -51,6 +51,7 @@
 #include <cstdlib>
 #include <cstring>
 #include "shell.h"
+#include "shell_context.h"
 #include "syntax.h"
 #include "error.h"
 #include "mystring.h"
@@ -88,8 +89,8 @@ const char dotdir[] = ".";
  *		truncation is performed.  "Size" is the size of "to".
  */
 
-void
-ShellContext::scopyn(const char *from, char *to, int size)
+static void
+scopyn(ShellContext &sh, const char *from, char *to, int size)
 {
 
 	while (--size > 0) {
@@ -115,15 +116,17 @@ prefix(const char *string, const char *pfx)
 	return const_cast<char *>(string + head.size());
 }
 
-void ShellContext::badnum(const char *s)
+void
+badnum(ShellContext &sh, const char *s)
 {
-	sh_error(illnum, s);
+	sh_error(sh, illnum, s);
 }
 
 /*
  * Convert a string into an integer of type intmax_t.  Alow trailing spaces.
  */
-intmax_t ShellContext::atomax(const char *s, int base)
+intmax_t
+atomax(ShellContext &sh, const char *s, int base)
 {
 	char *p;
 	intmax_t r;
@@ -136,20 +139,21 @@ intmax_t ShellContext::atomax(const char *s, int base)
 	 * contexts.
 	 */
 	if (p == s && base)
-		badnum(s);
+		badnum(sh, s);
 
 	while (std::isspace(static_cast<unsigned char>(*p)))
 	      p++;
 
 	if (*p)
-		badnum(s);
+		badnum(sh, s);
 
 	return r;
 }
 
-intmax_t ShellContext::atomax10(const char *s)
+intmax_t
+atomax10(ShellContext &sh, const char *s)
 {
-	return atomax(s, 10);
+	return atomax(sh, s, 10);
 }
 
 /*
@@ -158,12 +162,12 @@ intmax_t ShellContext::atomax10(const char *s)
  */
 
 int
-ShellContext::number(const char *s)
+number(ShellContext &sh, const char *s)
 {
-	intmax_t n = atomax10(s);
+	intmax_t n = atomax10(sh, s);
 
 	if (n < 0 || n > INT_MAX)
-		badnum(s);
+		badnum(sh, s);
 
 	return n;
 }
@@ -175,7 +179,7 @@ ShellContext::number(const char *s)
  */
 
 int
-ShellContext::is_number(const char *p)
+is_number(ShellContext &sh, const char *p)
 {
 	std::string_view text(p);
 	if (text.empty())
@@ -192,7 +196,8 @@ ShellContext::is_number(const char *p)
  */
 
 char *
-ShellContext::single_quote(const char *s) {
+single_quote(ShellContext &sh, const char *s)
+{
 	char *p;
 
 	STARTSTACKSTR(p);
@@ -203,7 +208,7 @@ ShellContext::single_quote(const char *s) {
 
 		len = strchrnul(s, '\'') - s;
 
-		q = p = makestrspace(len + 3, p);
+		q = p = makestrspace(sh, len + 3, p);
 
 		*q++ = '\'';
 		q = static_cast<char *>(mempcpy(q, s, len));
@@ -216,7 +221,7 @@ ShellContext::single_quote(const char *s) {
 		if (!len)
 			break;
 
-		q = p = makestrspace(len + 3, p);
+		q = p = makestrspace(sh, len + 3, p);
 
 		*q++ = '"';
 		q = static_cast<char *>(mempcpy(q, s, len));
@@ -236,10 +241,10 @@ ShellContext::single_quote(const char *s) {
  */
 
 char *
-ShellContext::sstrdup(const char *p)
+sstrdup(ShellContext &sh, const char *p)
 {
 	std::size_t len = std::strlen(p) + 1;
-	char *dst = stalloc(len);
+	char *dst = stalloc(sh, len);
 	std::memcpy(dst, p, len);
 	return dst;
 }

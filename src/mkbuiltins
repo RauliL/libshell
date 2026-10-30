@@ -86,7 +86,7 @@ awk '{	for (i = 2 ; i <= NF ; i++) {
 		mask = 0
 		cmd = $2
 		if (opt ~ /n/) { cmd = "nullptr" }
-		else { cmd = "&ShellContext::" cmd }
+		else { cmd = cmd }
 		if (opt ~ /s/) { mask += 1 }
 		if (opt ~ /[su]/) { mask += 2 }
 		if (opt ~ /a/) { mask += 4 }
@@ -115,7 +115,7 @@ struct ShellContext;
 
 struct builtincmd {
 	const char *name;
-	int (ShellContext::*builtin)(int, char **);
+	int (*builtin)(ShellContext &, int, char **);
 	unsigned flags;
 };
 

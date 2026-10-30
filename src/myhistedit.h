@@ -43,25 +43,21 @@ enum {
 	H_ENTER,
 };
 
-#define hist NULL
-
 static inline void history(History *h, HistEvent *he, int action, char *p)
 {
+	(void)h; (void)he; (void)action; (void)p;
 }
 #else
 #include <histedit.h>
-
-extern History *hist;
 #endif
 
-extern EditLine *el;
-extern int displayhist;
+struct ShellContext;
 
-void histedit(void);
-void sethistsize(const char *);
-void setterm(const char *);
-int histcmd(int, char **);
-int not_fcnumber(char *);
-int str_to_event(const char *, int);
+void histedit(ShellContext &sh);
+void sethistsize(ShellContext &sh, const char *);
+void setterm(ShellContext &sh, const char *);
+int histcmd(ShellContext &sh, int, char **);
+int not_fcnumber(ShellContext &sh, char *);
+int str_to_event(ShellContext &sh, const char *, int);
 
 #endif

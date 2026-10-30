@@ -52,6 +52,7 @@
  */
 
 #include "shell.h"
+#include "shell_context.h"
 #include "main.h"
 #include "nodes.h"
 #include "parser.h"
@@ -91,13 +92,13 @@ struct tblentry {
 		/* index in path of %builtin, or -1 */
 
 
-STATIC void tryexec(char *, char **, char **);
-STATIC void printentry(struct tblentry *);
-STATIC void clearcmdentry(void);
-STATIC struct tblentry *cmdlookup(const char *, int);
-STATIC void delete_cmd_entry(void);
-STATIC void addcmdentry(char *, struct cmdentry *);
-STATIC int describe_command(struct output *, char *, const char *, int);
+static void tryexec(ShellContext &sh, char *, char **, char **);
+static void printentry(ShellContext &sh, struct tblentry *);
+static void clearcmdentry(ShellContext &sh);
+static struct tblentry * cmdlookup(ShellContext &sh, const char *, int);
+static void delete_cmd_entry(ShellContext &sh);
+static void addcmdentry(ShellContext &sh, char *, struct cmdentry *);
+static int describe_command(ShellContext &sh, struct output *, char *, const char *, int);
 
 
 /*
@@ -106,7 +107,7 @@ STATIC int describe_command(struct output *, char *, const char *, int);
  */
 
 void
-ShellContext::shellexec(char **argv, const char *path, int idx)
+shellexec(ShellContext &sh, char **argv, const char *path, int idx)
 {
 	char *cmdname;
 	int e;
@@ -115,14 +116,14 @@ ShellContext::shellexec(char **argv, const char *path, int idx)
 
 	envp = environment();
 	if (strchr(argv[0], '/') != NULL) {
-		tryexec(argv[0], argv, envp);
+		tryexec(sh, argv[0], argv, envp);
 		e = errno;
 	} else {
 		e = ENOENT;
-		while (padvance(&path, argv[0]) >= 0) {
+		while (padvance(sh, &path, argv[0]) >= 0) {
 			cmdname = stackblock();
-			if (--idx < 0 && pathopt == NULL) {
-				tryexec(cmdname, argv, envp);
+			if (--idx < 0 && sh.pathopt == NULL) {
+				tryexec(sh, cmdname, argv, envp);
 				if (errno != ENOENT && errno != ENOTDIR)
 					e = errno;
 			}
@@ -141,16 +142,16 @@ ShellContext::shellexec(char **argv, const char *path, int idx)
 		exerrno = 127;
 		break;
 	}
-	exitstatus = exerrno;
+	sh.exitstatus = exerrno;
 	TRACE(("shellexec failed for %s, errno %d, suppressint %d\n",
-		argv[0], e, suppressint ));
-	exerror(EXEND, "%s: %s", argv[0], errmsg(e, E_EXEC));
+		argv[0], e, sh.suppressint ));
+	exerror(sh, EXEND, "%s: %s", argv[0], errmsg(sh, e, E_EXEC));
 	/* NOTREACHED */
 }
 
 
- void
-ShellContext::tryexec(char *cmd, char **argv, char **envp)
+static void
+tryexec(ShellContext &sh, char *cmd, char **argv, char **envp)
 {
 	char *const path_bshell = _PATH_BSHELL;
 
@@ -169,7 +170,8 @@ repeat:
 	}
 }
 
- const char *ShellContext::legal_pathopt(const char *opt, const char *term, int magic)
+static const char *
+legal_pathopt(ShellContext &sh, const char *opt, const char *term, int magic)
 {
 	switch (magic) {
 	case 0:
@@ -197,17 +199,18 @@ repeat:
  * this value as it proceeds.  Successive calls to padvance will return
  * the possible path expansions in sequence.  If an option (indicated by
  * a percent sign) appears in the path entry then the global variable
- * pathopt will be set to point to it; otherwise pathopt will be set to
+ * sh.pathopt will be set to point to it; otherwise sh.pathopt will be set to
  * NULL.
  *
- * If magic is 0 then pathopt recognition will be disabled.  If magic is
+ * If magic is 0 then sh.pathopt recognition will be disabled.  If magic is
  * 1 we shall recognise %builtin/%func.  Otherwise we shall accept any
- * pathopt.
+ * sh.pathopt.
  */
 
 
 
-int ShellContext::padvance_magic(const char **path, const char *name, int magic)
+int
+padvance_magic(ShellContext &sh, const char **path, const char *name, int magic)
 {
 	const char *term = "%:";
 	const char *lpathopt;
@@ -223,7 +226,7 @@ int ShellContext::padvance_magic(const char **path, const char *name, int magic)
 	lpathopt = NULL;
 	start = *path;
 
-	if (*start == '%' && (p = legal_pathopt(start + 1, term, magic))) {
+	if (*start == '%' && (p = legal_pathopt(sh, start + 1, term, magic))) {
 		lpathopt = start + 1;
 		start = p;
 		term = ":";
@@ -235,7 +238,7 @@ int ShellContext::padvance_magic(const char **path, const char *name, int magic)
 	if (*p == '%') {
 		size_t extra = strchrnul(p, ':') - p;
 
-		if (legal_pathopt(p + 1, term, magic))
+		if (legal_pathopt(sh, p + 1, term, magic))
 			lpathopt = p + 1;
 		else
 			len += extra;
@@ -243,12 +246,12 @@ int ShellContext::padvance_magic(const char **path, const char *name, int magic)
 		p += extra;
 	}
 
-	pathopt = lpathopt;
+	sh.pathopt = lpathopt;
 	*path = *p == ':' ? p + 1 : NULL;
 
 	/* "2" is for '/' and '\0' */
 	qlen = len + strlen(name) + 2;
-	q = growstackto(qlen);
+	q = growstackto(sh, qlen);
 
 	if (likely(len)) {
 		q = static_cast<char *>(mempcpy(q, start, len));
@@ -265,7 +268,7 @@ int ShellContext::padvance_magic(const char **path, const char *name, int magic)
 
 
 int
-ShellContext::hashcmd(int argc, char **argv)
+hashcmd(ShellContext &sh, int argc, char **argv)
 {
 	struct tblentry **pp;
 	struct tblentry *cmdp;
@@ -275,41 +278,41 @@ ShellContext::hashcmd(int argc, char **argv)
 	bool clear;
 
 	clear = false;
-	while ((c = nextopt("r")) != '\0')
+	while ((c = nextopt(sh, "r")) != '\0')
 		clear = true;
 	if(clear) {
-		clearcmdentry();
+		clearcmdentry(sh);
 		return 0;
 	}
 
-	if (*argptr == NULL) {
-		for (pp = cmdtable ; pp < &cmdtable[CMDTABLESIZE] ; pp++) {
+	if (*sh.argptr == NULL) {
+		for (pp = sh.cmdtable ; pp < &sh.cmdtable[CMDTABLESIZE] ; pp++) {
 			for (cmdp = *pp ; cmdp ; cmdp = cmdp->next) {
 				if (cmdp->cmdtype == CMDNORMAL)
-					printentry(cmdp);
+					printentry(sh, cmdp);
 			}
 		}
 		return 0;
 	}
 	c = 0;
-	while ((name = *argptr) != NULL) {
-		if ((cmdp = cmdlookup(name, 0)) &&
+	while ((name = *sh.argptr) != NULL) {
+		if ((cmdp = cmdlookup(sh, name, 0)) &&
 		    (cmdp->cmdtype == CMDNORMAL ||
 		     (cmdp->cmdtype == CMDBUILTIN &&
 		      !(cmdp->param.cmd->flags & BUILTIN_REGULAR) &&
-		      builtinloc > 0)))
-			delete_cmd_entry();
-		find_command(name, &entry, DO_ERR, pathval());
+		      sh.builtinloc > 0)))
+			delete_cmd_entry(sh);
+		find_command(sh, name, &entry, DO_ERR, pathval());
 		if (entry.cmdtype == CMDUNKNOWN)
 			c = 1;
-		argptr++;
+		sh.argptr++;
 	}
 	return c;
 }
 
 
- void
-ShellContext::printentry(struct tblentry *cmdp)
+static void
+printentry(ShellContext &sh, struct tblentry *cmdp)
 {
 	int idx;
 	const char *path;
@@ -318,21 +321,22 @@ ShellContext::printentry(struct tblentry *cmdp)
 	idx = cmdp->param.index;
 	path = pathval();
 	do {
-		padvance(&path, cmdp->cmdname);
+		padvance(sh, &path, cmdp->cmdname);
 	} while (--idx >= 0);
 	name = stackblock();
 	out1str(name);
-	out1fmt(snlfmt, cmdp->rehash ? "*" : nullstr);
+	out1fmt(sh, snlfmt, cmdp->rehash ? "*" : nullstr);
 }
 
- int ShellContext::test_exec(const char *fullname, struct stat64 *statb)
+static int
+test_exec(ShellContext &sh, const char *fullname, struct stat64 *statb)
 {
 	if (!S_ISREG(statb->st_mode))
 		return 0;
 
 	if ((statb->st_mode & 0111) != 0111 &&
 #ifdef HAVE_FACCESSAT
-	    !test_file_access(fullname, X_OK)
+	    !test_file_access(sh, fullname, X_OK)
 #else
 	    !test_access(statb, X_OK)
 #endif
@@ -348,7 +352,7 @@ ShellContext::printentry(struct tblentry *cmdp)
  */
 
 void
-ShellContext::find_command(char *name, struct cmdentry *entry, int act, const char *path)
+find_command(ShellContext &sh, char *name, struct cmdentry *entry, int act, const char *path)
 {
 	struct tblentry *cmdp;
 	int idx;
@@ -373,7 +377,7 @@ absfail:
 				entry->cmdtype = CMDUNKNOWN;
 				return;
 			}
-			if (!test_exec(name, &statb))
+			if (!test_exec(sh, name, &statb))
 				goto absfail;
 		}
 		entry->cmdtype = CMDNORMAL;
@@ -385,7 +389,7 @@ absfail:
 		act |= DO_ALTPATH;
 
 	/* If name is in the table, check answer will be ok */
-	if ((cmdp = cmdlookup(name, 0)) != NULL) {
+	if ((cmdp = cmdlookup(sh, name, 0)) != NULL) {
 		int bit;
 
 		switch (cmdp->cmdtype) {
@@ -416,9 +420,9 @@ absfail:
 	}
 
 	/* If %builtin not in path, check for builtin next */
-	bcmd = find_builtin(name);
+	bcmd = find_builtin(sh, name);
 	if (bcmd && ((bcmd->flags & BUILTIN_REGULAR) | (act & DO_ALTPATH) |
-		     (builtinloc <= 0)))
+		     (sh.builtinloc <= 0)))
 		goto builtin_success;
 
 	if (act & DO_REGBLTIN)
@@ -428,7 +432,7 @@ absfail:
 	prev = -1;		/* where to start */
 	if (cmdp && cmdp->rehash) {	/* doing a rehash */
 		if (cmdp->cmdtype == CMDBUILTIN)
-			prev = builtinloc;
+			prev = sh.builtinloc;
 		else
 			prev = cmdp->param.index;
 	}
@@ -436,8 +440,8 @@ absfail:
 	e = ENOENT;
 	idx = -1;
 loop:
-	while ((len = padvance(&path, name)) >= 0) {
-		const char *lpathopt = pathopt;
+	while ((len = padvance(sh, &path, name)) >= 0) {
+		const char *lpathopt = sh.pathopt;
 
 		fullname = stackblock();
 		idx++;
@@ -470,17 +474,17 @@ loop:
 			goto loop;
 		}
 		if (lpathopt) {		/* this is a %func directory */
-			stalloc(len);
-			readcmdfile(fullname);
-			if ((cmdp = cmdlookup(name, 0)) == NULL ||
+			stalloc(sh, len);
+			readcmdfile(sh, fullname);
+			if ((cmdp = cmdlookup(sh, name, 0)) == NULL ||
 			    cmdp->cmdtype != CMDFUNCTION)
-				sh_error("%s not defined in %s", name,
+				sh_error(sh, "%s not defined in %s", name,
 					 fullname);
-			stunalloc(fullname);
+			stunalloc(sh, fullname);
 			goto success;
 		}
 		e = EACCES;	/* if we fail, this will be the error */
-		if (!test_exec(fullname, &statb))
+		if (!test_exec(sh, fullname, &statb))
 			continue;
 		TRACE(("searchexec \"%s\" returns \"%s\"\n", name, fullname));
 		if (!updatetbl) {
@@ -489,7 +493,7 @@ loop:
 			return;
 		}
 		INTOFF;
-		cmdp = cmdlookup(name, 1);
+		cmdp = cmdlookup(sh, name, 1);
 		cmdp->cmdtype = CMDNORMAL;
 		cmdp->param.index = idx;
 		INTON;
@@ -498,9 +502,9 @@ loop:
 
 	/* We failed.  If there was an entry for this command, delete it */
 	if (cmdp && updatetbl)
-		delete_cmd_entry();
+		delete_cmd_entry(sh);
 	if (act & DO_ERR)
-		sh_warnx("%s: %s", name, errmsg(e, E_EXEC));
+		sh_warnx(sh, "%s: %s", name, errmsg(sh, e, E_EXEC));
 fail:
 	entry->cmdtype = CMDUNKNOWN;
 	return;
@@ -512,7 +516,7 @@ builtin_success:
 		return;
 	}
 	INTOFF;
-	cmdp = cmdlookup(name, 1);
+	cmdp = cmdlookup(sh, name, 1);
 	cmdp->cmdtype = CMDBUILTIN;
 	cmdp->param.cmd = bcmd;
 	INTON;
@@ -529,7 +533,7 @@ success:
  */
 
 struct builtincmd *
-ShellContext::find_builtin(const char *name)
+find_builtin(ShellContext &sh, const char *name)
 {
 	struct builtincmd *bp;
 
@@ -548,17 +552,17 @@ ShellContext::find_builtin(const char *name)
  */
 
 void
-ShellContext::hashcd(void)
+hashcd(ShellContext &sh)
 {
 	struct tblentry **pp;
 	struct tblentry *cmdp;
 
-	for (pp = cmdtable ; pp < &cmdtable[CMDTABLESIZE] ; pp++) {
+	for (pp = sh.cmdtable ; pp < &sh.cmdtable[CMDTABLESIZE] ; pp++) {
 		for (cmdp = *pp ; cmdp ; cmdp = cmdp->next) {
 			if (cmdp->cmdtype == CMDNORMAL || (
 				cmdp->cmdtype == CMDBUILTIN &&
 				!(cmdp->param.cmd->flags & BUILTIN_REGULAR) &&
-				builtinloc > 0
+				sh.builtinloc > 0
 			))
 				cmdp->rehash = 1;
 		}
@@ -568,14 +572,14 @@ ShellContext::hashcd(void)
 
 
 /*
- * Fix command hash table when PATH changed.
- * Called before PATH is changed.  The argument is the new value of PATH;
+ * Fix command hash table when PATH sh.changed.
+ * Called before PATH is sh.changed.  The argument is the new value of PATH;
  * pathval() still returns the old value at this point.
  * Called with interrupts off.
  */
 
 void
-ShellContext::changepath(const char *newval)
+changepath(ShellContext &sh, const char *newval)
 {
 	const char *scan;
 	int idx;
@@ -595,31 +599,31 @@ ShellContext::changepath(const char *newval)
 		idx++;
 		scan++;
 	}
-	builtinloc = bltin;
-	clearcmdentry();
+	sh.builtinloc = bltin;
+	clearcmdentry(sh);
 }
 
 
 /*
  * Clear out command entries.  The argument specifies the first entry in
- * PATH which has changed.
+ * PATH which has sh.changed.
  */
 
- void
-ShellContext::clearcmdentry(void)
+static void
+clearcmdentry(ShellContext &sh)
 {
 	struct tblentry **tblp;
 	struct tblentry **pp;
 	struct tblentry *cmdp;
 
 	INTOFF;
-	for (tblp = cmdtable ; tblp < &cmdtable[CMDTABLESIZE] ; tblp++) {
+	for (tblp = sh.cmdtable ; tblp < &sh.cmdtable[CMDTABLESIZE] ; tblp++) {
 		pp = tblp;
 		while ((cmdp = *pp) != NULL) {
 			if (cmdp->cmdtype == CMDNORMAL ||
 			    (cmdp->cmdtype == CMDBUILTIN &&
 			     !(cmdp->param.cmd->flags & BUILTIN_REGULAR) &&
-			     builtinloc > 0)) {
+			     sh.builtinloc > 0)) {
 				*pp = cmdp->next;
 				ckfree(cmdp);
 			} else {
@@ -645,8 +649,8 @@ ShellContext::clearcmdentry(void)
 
 
 
- struct tblentry *
-ShellContext::cmdlookup(const char *name, int add)
+static struct tblentry *
+cmdlookup(ShellContext &sh, const char *name, int add)
 {
 	unsigned int hashval;
 	const char *p;
@@ -658,20 +662,20 @@ ShellContext::cmdlookup(const char *name, int add)
 	while (*p)
 		hashval += (unsigned char)*p++;
 	hashval &= 0x7FFF;
-	pp = &cmdtable[hashval % CMDTABLESIZE];
+	pp = &sh.cmdtable[hashval % CMDTABLESIZE];
 	for (cmdp = *pp ; cmdp ; cmdp = cmdp->next) {
 		if (equal(cmdp->cmdname, name))
 			break;
 		pp = &cmdp->next;
 	}
 	if (add && cmdp == NULL) {
-		cmdp = *pp = ckmalloc(sizeof (struct tblentry) - ARB
+		cmdp = *pp = ckmalloc(sh, sizeof (struct tblentry) - ARB
 					+ strlen(name) + 1);
 		cmdp->next = NULL;
 		cmdp->cmdtype = CMDUNKNOWN;
 		strcpy(cmdp->cmdname, name);
 	}
-	lastcmdentry = pp;
+	sh.lastcmdentry = pp;
 	return cmdp;
 }
 
@@ -679,16 +683,16 @@ ShellContext::cmdlookup(const char *name, int add)
  * Delete the command entry returned on the last lookup.
  */
 
- void
-ShellContext::delete_cmd_entry(void)
+static void
+delete_cmd_entry(ShellContext &sh)
 {
 	struct tblentry *cmdp;
 
 	INTOFF;
-	cmdp = *lastcmdentry;
-	*lastcmdentry = cmdp->next;
+	cmdp = *sh.lastcmdentry;
+	*sh.lastcmdentry = cmdp->next;
 	if (cmdp->cmdtype == CMDFUNCTION)
-		freefunc(cmdp->param.func);
+		freefunc(sh, cmdp->param.func);
 	ckfree(cmdp);
 	INTON;
 }
@@ -696,10 +700,10 @@ ShellContext::delete_cmd_entry(void)
 
 
 #ifdef notdef
-void
-ShellContext::getcmdentry(char *name, struct cmdentry *entry)
+static void
+getcmdentry(ShellContext &sh, char *name, struct cmdentry *entry)
 {
-	struct tblentry *cmdp = cmdlookup(name, 0);
+	struct tblentry *cmdp = cmdlookup(sh, name, 0);
 
 	if (cmdp) {
 		entry->u = cmdp->param;
@@ -717,14 +721,14 @@ ShellContext::getcmdentry(char *name, struct cmdentry *entry)
  * the same name - except special builtins.
  */
 
- void
-ShellContext::addcmdentry(char *name, struct cmdentry *entry)
+static void
+addcmdentry(ShellContext &sh, char *name, struct cmdentry *entry)
 {
 	struct tblentry *cmdp;
 
-	cmdp = cmdlookup(name, 1);
+	cmdp = cmdlookup(sh, name, 1);
 	if (cmdp->cmdtype == CMDFUNCTION) {
-		freefunc(cmdp->param.func);
+		freefunc(sh, cmdp->param.func);
 	}
 	cmdp->cmdtype = entry->cmdtype;
 	cmdp->param = entry->u;
@@ -737,14 +741,14 @@ ShellContext::addcmdentry(char *name, struct cmdentry *entry)
  */
 
 void
-ShellContext::defun(union node *func)
+defun(ShellContext &sh, union node *func)
 {
 	struct cmdentry entry;
 
 	INTOFF;
 	entry.cmdtype = CMDFUNCTION;
-	entry.u.func = copyfunc(func);
-	addcmdentry(func->ndefun.text, &entry);
+	entry.u.func = copyfunc(sh, func);
+	addcmdentry(sh, func->ndefun.text, &entry);
 	INTON;
 }
 
@@ -754,13 +758,13 @@ ShellContext::defun(union node *func)
  */
 
 void
-ShellContext::unsetfunc(const char *name)
+unsetfunc(ShellContext &sh, const char *name)
 {
 	struct tblentry *cmdp;
 
-	if ((cmdp = cmdlookup(name, 0)) != NULL &&
+	if ((cmdp = cmdlookup(sh, name, 0)) != NULL &&
 	    cmdp->cmdtype == CMDFUNCTION)
-		delete_cmd_entry();
+		delete_cmd_entry(sh);
 }
 
 /*
@@ -768,18 +772,19 @@ ShellContext::unsetfunc(const char *name)
  */
 
 int
-ShellContext::typecmd(int argc, char **argv)
+typecmd(ShellContext &sh, int argc, char **argv)
 {
 	int err = 0;
 
-	nextopt(nullstr);
-	while (*argptr) {
-		err |= describe_command(out1, *argptr++, NULL, 1);
+	nextopt(sh, nullstr);
+	while (*sh.argptr) {
+		err |= describe_command(sh, sh.out1, *sh.argptr++, NULL, 1);
 	}
 	return err;
 }
 
- int ShellContext::describe_command(struct output *out, char *command,
+static int
+describe_command(ShellContext &sh, struct output *out, char *command,
                             const char *path, int verbose)
 {
 	struct cmdentry entry;
@@ -787,22 +792,22 @@ ShellContext::typecmd(int argc, char **argv)
 	const struct alias *ap;
 
 	if (verbose) {
-		outstr(command, out);
+		outstr(sh, command, out);
 	}
 
 	/* First look at the keywords */
-	if (findkwd(command)) {
-		outstr(verbose ? " is a shell keyword" : command, out);
+	if (findkwd(sh, command)) {
+		outstr(sh, verbose ? " is a shell keyword" : command, out);
 		goto out;
 	}
 
 	/* Then look at the aliases */
-	if ((ap = lookupalias(command, 0)) != NULL) {
+	if ((ap = lookupalias(sh, command, 0)) != NULL) {
 		if (verbose) {
-			outfmt(out, " is an alias for %s", ap->val);
+			outfmt(sh, out, " is an alias for %s", ap->val);
 		} else {
-			outstr("alias ", out);
-			printalias(ap);
+			outstr(sh, "alias ", out);
+			printalias(sh, ap);
 			return 0;
 		}
 		goto out;
@@ -813,7 +818,7 @@ ShellContext::typecmd(int argc, char **argv)
 	 */
 	if (path == NULL) {
 		path = pathval();
-		cmdp = cmdlookup(command, 0);
+		cmdp = cmdlookup(sh, command, 0);
 	} else {
 		cmdp = NULL;
 	}
@@ -823,7 +828,7 @@ ShellContext::typecmd(int argc, char **argv)
 		entry.u = cmdp->param;
 	} else {
 		/* Finally use brute force */
-		find_command(command, &entry, DO_ABS, path);
+		find_command(sh, command, &entry, DO_ABS, path);
 	}
 
 	switch (entry.cmdtype) {
@@ -834,54 +839,53 @@ ShellContext::typecmd(int argc, char **argv)
 			p = command;
 		} else {
 			do {
-				padvance(&path, command);
+				padvance(sh, &path, command);
 			} while (--j >= 0);
 			p = stackblock();
 		}
 		if (verbose) {
-			outfmt(
-				out, " is%s %s",
+			outfmt(sh, out, " is%s %s",
 				cmdp ? " a tracked alias for" : nullstr, p
 			);
 		} else {
-			outstr(p, out);
+			outstr(sh, p, out);
 		}
 		break;
 	}
 
 	case CMDFUNCTION:
 		if (verbose) {
-			outstr(" is a shell function", out);
+			outstr(sh, " is a shell function", out);
 		} else {
-			outstr(command, out);
+			outstr(sh, command, out);
 		}
 		break;
 
 	case CMDBUILTIN:
 		if (verbose) {
-			outfmt(
-				out, " is a %sshell builtin",
+			outfmt(sh, out, " is a %sshell builtin",
 				entry.u.cmd->flags & BUILTIN_SPECIAL ?
 					"special " : nullstr
 			);
 		} else {
-			outstr(command, out);
+			outstr(sh, command, out);
 		}
 		break;
 
 	default:
 		if (verbose) {
-			outstr(": not found\n", out);
+			outstr(sh, ": not found\n", out);
 		}
 		return 127;
 	}
 
 out:
-	outc('\n', out);
+	outc(sh, '\n', out);
 	return 0;
 }
 
-int ShellContext::commandcmd(int argc, char **argv)
+int
+commandcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *cmd;
 	int c;
@@ -892,7 +896,7 @@ int ShellContext::commandcmd(int argc, char **argv)
 	int verify = 0;
 	const char *path = NULL;
 
-	while ((c = nextopt("pvV")) != '\0')
+	while ((c = nextopt(sh, "pvV")) != '\0')
 		if (c == 'V')
 			verify |= VERIFY_VERBOSE;
 		else if (c == 'v')
@@ -904,9 +908,9 @@ int ShellContext::commandcmd(int argc, char **argv)
 		else
 			path = defpath;
 
-	cmd = *argptr;
+	cmd = *sh.argptr;
 	if (verify && cmd)
-		return describe_command(out1, cmd, path, verify - VERIFY_BRIEF);
+		return describe_command(sh, sh.out1, cmd, path, verify - VERIFY_BRIEF);
 
 	return 0;
 }

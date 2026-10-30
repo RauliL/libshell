@@ -38,22 +38,21 @@
 
 #include <errno.h>
 
-/* pid of main shell */
-extern int rootpid;
-/* pid of current shell */
-extern int mypid;
+struct ShellContext;
+
 /* shell level: 0 for the main shell, 1 for its children, and so on */
-extern int shlvl;
-#define rootshell (!shlvl)
+#define rootshell (!sh.shlvl)
 
 #ifdef __GLIBC__
-/* glibc sucks */
+/* glibc sucks — redirect errno through a process-wide pointer set in run(). */
 extern int *dash_errno;
 #undef errno
 #define errno (*dash_errno)
 #endif
 
-void readcmdfile(char *);
-int dotcmd(int, char **);
-int exitcmd(int, char **);
+void readcmdfile(ShellContext &sh, char *);
+int dotcmd(ShellContext &sh, int, char **);
+int exitcmd(ShellContext &sh, int, char **);
 #endif
+
+

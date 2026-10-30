@@ -1,3 +1,5 @@
+#include "shell.h"
+#include "shell_context.h"
 /*
  * Copyright (c) 1989, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -40,13 +42,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-static int	 conv_escape_str(char *, char **);
-static int	 getchr(void);
-static double	 getdouble(void);
-static uintmax_t getuintmax(int);
-static char	*getstr(void);
-static char	*mklong(const char *, const char *);
-static void      check_conversion(const char *, const char *);
+static int conv_escape_str(ShellContext &sh, char *, char **);
+static int getchr(ShellContext &sh);
+static double getdouble(ShellContext &sh);
+static uintmax_t getuintmax(ShellContext &sh, int);
+static char	* getstr(ShellContext &sh);
+static char	* mklong(ShellContext &sh, const char *, const char *);
+static void check_conversion(ShellContext &sh, const char *, const char *);
 
 
 
@@ -77,29 +79,30 @@ static void      check_conversion(const char *, const char *);
 	int ret; \
 	switch ((char *)param - (char *)array) { \
 	default: \
-		ret = xasprintf(sp, f, array[0], array[1], func); \
+		ret = xasprintf(sh, sp, f, array[0], array[1], func); \
 		break; \
 	case sizeof(*param): \
-		ret = xasprintf(sp, f, array[0], func); \
+		ret = xasprintf(sh, sp, f, array[0], func); \
 		break; \
 	case 0: \
-		ret = xasprintf(sp, f, func); \
+		ret = xasprintf(sh, sp, f, func); \
 		break; \
 	} \
 	ret; \
 })
 
 
- int ShellContext::print_escape_str(const char *f, int *param, int *array, char *s)
+static int
+print_escape_str(ShellContext &sh, const char *f, int *param, int *array, char *s)
 {
 	char *p, *q;
 	int done;
 	int len;
 	int total;
-	std::size_t su = stackstr.used;
-	std::size_t hc = stackheaps.size();
+	std::size_t su = sh.stackstr.used;
+	std::size_t hc = sh.stackheaps.size();
 
-	done = conv_escape_str(s, &q);
+	done = conv_escape_str(sh, s, &q);
 	p = stackblock();
 	len = q - p;
 	total = len - 1;
@@ -109,7 +112,7 @@ static void      check_conversion(const char *, const char *);
 	if (f[1] == 's')
 		goto easy;
 
-	p = makestrspace(len, q);
+	p = makestrspace(sh, len, q);
 	memset(p, 'X', total);
 	p[total] = 0;
 
@@ -122,32 +125,33 @@ static void      check_conversion(const char *, const char *);
 easy:
 	out1mem(p, total);
 
-	while (stackheaps.size() > hc) {
-		ckfree(stackheaps.back());
-		stackheaps.pop_back();
+	while (sh.stackheaps.size() > hc) {
+		ckfree(sh.stackheaps.back());
+		sh.stackheaps.pop_back();
 	}
-	stackstr.rewind(su);
+	sh.stackstr.rewind(su);
 	return done;
 }
 
 
-int ShellContext::printfcmd(int argc, char *argv[])
+int
+printfcmd(ShellContext &sh, int argc, char *argv[])
 {
 	char *fmt;
 	char *format;
 	int ch;
 
-	rval = 0;
+	sh.rval = 0;
 
-	nextopt(nullstr);
+	nextopt(sh, nullstr);
 
-	argv = argptr;
+	argv = sh.argptr;
 	format = *argv;
 
 	if (!format)
 		error("usage: printf format [arg ...]");
 
-	gargv = ++argv;
+	sh.gargv = ++argv;
 
 #define SKIP1	"#-+ 0"
 #define SKIP2	"*0123456789"
@@ -174,7 +178,7 @@ int ShellContext::printfcmd(int argc, char *argv[])
 
 				STARTSTACKSTR(cp);
 				CHECKSTRSPACE(4, cp);
-				ret = conv_escape(fmt, cp, false);
+				ret = conv_escape(sh, fmt, cp, false);
 				fmt += ret >> 4;
 				out1mem(cp, ret & 15);
 				continue;
@@ -193,7 +197,7 @@ int ShellContext::printfcmd(int argc, char *argv[])
 			fmt += strspn(fmt, SKIP1);
 			if (*fmt == '*') {
 				++fmt;
-				*param++ = getuintmax(1);
+				*param++ = getuintmax(sh, 1);
 			} else {
 				/* skip to possible '.',
 				 * get following precision
@@ -205,7 +209,7 @@ int ShellContext::printfcmd(int argc, char *argv[])
 				++fmt;
 				if (*fmt == '*') {
 					++fmt;
-					*param++ = getuintmax(1);
+					*param++ = getuintmax(sh, 1);
 				} else
 					fmt += strspn(fmt, SKIP2);
 			}
@@ -222,25 +226,25 @@ int ShellContext::printfcmd(int argc, char *argv[])
 			case 'b':
 				*fmt = 's';
 				/* escape if a \c was encountered */
-				if (print_escape_str(start, param, array,
-						     getstr()))
+				if (print_escape_str(sh, start, param, array,
+						     getstr(sh)))
 					goto out;
 				*fmt = 'b';
 				break;
 			case 'c': {
-				int p = getchr();
+				int p = getchr(sh);
 				PF(start, p);
 				break;
 			}
 			case 's': {
-				char *p = getstr();
+				char *p = getstr(sh);
 				PF(start, p);
 				break;
 			}
 			case 'd':
 			case 'i': {
-				uintmax_t p = getuintmax(1);
-				start = mklong(start, fmt);
+				uintmax_t p = getuintmax(sh, 1);
+				start = mklong(sh, start, fmt);
 				PF(start, p);
 				break;
 			}
@@ -248,8 +252,8 @@ int ShellContext::printfcmd(int argc, char *argv[])
 			case 'u':
 			case 'x':
 			case 'X': {
-				uintmax_t p = getuintmax(0);
-				start = mklong(start, fmt);
+				uintmax_t p = getuintmax(sh, 0);
+				start = mklong(sh, start, fmt);
 				PF(start, p);
 				break;
 			}
@@ -261,7 +265,7 @@ int ShellContext::printfcmd(int argc, char *argv[])
 			case 'F':
 			case 'g':
 			case 'G': {
-				double p = getdouble();
+				double p = getdouble(sh);
 				PF(start, p);
 				break;
 			}
@@ -270,10 +274,10 @@ int ShellContext::printfcmd(int argc, char *argv[])
 			}
 			*++fmt = nextch;
 		}
-	} while (gargv != argv && *gargv);
+	} while (sh.gargv != argv && *sh.gargv);
 
 out:
-	return rval;
+	return sh.rval;
 }
 
 
@@ -281,8 +285,8 @@ out:
  * Print SysV echo(1) style escape string 
  *	Halts processing string if a \c escape is encountered.
  */
- int
-ShellContext::conv_escape_str(char *str, char **sp)
+static int
+conv_escape_str(ShellContext &sh, char *str, char **sp)
 {
 	char *cp;
 	int c;
@@ -319,7 +323,7 @@ putchar:
 			str++;
 
 		/* Finally test for sequences valid in the format string */
-		ret = conv_escape(str, cp, false);
+		ret = conv_escape(sh, str, cp, false);
 		str += ret >> 4;
 		cp += ret & 15;
 	} while (c & 0xff);
@@ -332,7 +336,8 @@ putchar:
 /*
  * Print "standard" escape characters 
  */
-unsigned ShellContext::conv_escape(char *str0, char *out0, bool mbchar)
+unsigned
+conv_escape(ShellContext &sh, char *str0, char *out0, bool mbchar)
 {
 	char *out = out0;
 	char *str = str0;
@@ -472,8 +477,8 @@ out_noput:
 	return (out - out0) | (str - str0) << 4;
 }
 
- char *
-ShellContext::mklong(const char *str, const char *ch)
+static char *
+mklong(ShellContext &sh, const char *str, const char *ch)
 {
 	/*
 	 * Replace a string like "%92.3u" with "%92.3"PRIuMAX.
@@ -489,43 +494,43 @@ ShellContext::mklong(const char *str, const char *ch)
 
 	len = ch - str + sizeof(PRIdMAX);
 	STARTSTACKSTR(copy);
-	copy = makestrspace(len, copy);
+	copy = makestrspace(sh, len, copy);
 	memcpy(copy, str, len - sizeof(PRIdMAX));
 	memcpy(copy + len - sizeof(PRIdMAX), PRIdMAX, sizeof(PRIdMAX));
 	copy[len - 2] = *ch;
 	return (copy);	
 }
 
- int
-ShellContext::getchr(void)
+static int
+getchr(ShellContext &sh)
 {
 	int val = 0;
 
-	if (*gargv)
-		val = **gargv++;
+	if (*sh.gargv)
+		val = **sh.gargv++;
 	return val;
 }
 
- char *
-ShellContext::getstr(void)
+static char *
+getstr(ShellContext &sh)
 {
 	char *val = nullstr;
 
-	if (*gargv)
-		val = *gargv++;
+	if (*sh.gargv)
+		val = *sh.gargv++;
 	return val;
 }
 
- uintmax_t
-ShellContext::getuintmax(int sign)
+static uintmax_t
+getuintmax(ShellContext &sh, int sign)
 {
 	uintmax_t val = 0;
 	char *cp, *ep;
 
-	cp = *gargv;
+	cp = *sh.gargv;
 	if (cp == NULL)
 		goto out;
-	gargv++;
+	sh.gargv++;
 
 	val = (unsigned char) cp[1];
 	if (*cp == '\"' || *cp == '\'')
@@ -533,48 +538,48 @@ ShellContext::getuintmax(int sign)
 
 	errno = 0;
 	val = sign ? strtoimax(cp, &ep, 0) : strtoumax(cp, &ep, 0);
-	check_conversion(cp, ep);
+	check_conversion(sh, cp, ep);
 out:
 	return val;
 }
 
- double
-ShellContext::getdouble(void)
+static double
+getdouble(ShellContext &sh)
 {
 	double val;
 	char *cp, *ep;
 
-	cp = *gargv;
+	cp = *sh.gargv;
 	if (cp == NULL)
 		return 0;
-	gargv++;
+	sh.gargv++;
 
 	if (*cp == '\"' || *cp == '\'')
 		return (unsigned char) cp[1];
 
 	errno = 0;
 	val = strtod(cp, &ep);
-	check_conversion(cp, ep);
+	check_conversion(sh, cp, ep);
 	return val;
 }
 
- void
-ShellContext::check_conversion(const char *s, const char *ep)
+static void
+check_conversion(ShellContext &sh, const char *s, const char *ep)
 {
 	if (*ep) {
 		if (ep == s)
 			warnx("%s: expected numeric value", s);
 		else
 			warnx("%s: not completely converted", s);
-		rval = 1;
+		sh.rval = 1;
 	} else if (errno == ERANGE) {
 		warnx("%s: %s", s, strerror(ERANGE));
-		rval = 1;
+		sh.rval = 1;
 	}
 }
 
 int
-ShellContext::echocmd(int argc, char **argv)
+echocmd(ShellContext &sh, int argc, char **argv)
 {
 	const char *lastfmt = snlfmt;
 	int nonl;
@@ -591,7 +596,7 @@ ShellContext::echocmd(int argc, char **argv)
 		if (!s || !*++argv)
 			fmt = lastfmt;
 
-		nonl = print_escape_str(fmt, NULL, NULL, s ?: nullstr);
+		nonl = print_escape_str(sh, fmt, NULL, NULL, s ?: nullstr);
 	} while (!nonl && *argv);
 	return 0;
 }

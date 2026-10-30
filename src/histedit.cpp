@@ -44,6 +44,7 @@
  * Editline and history functions (and glue).
  */
 #include "shell.h"
+#include "shell_context.h"
 #include "parser.h"
 #include "var.h"
 #include "options.h"
@@ -64,7 +65,7 @@
 
 
 
-STATIC const char *fc_replace(const char *, char *, char *);
+static const char * fc_replace(ShellContext &sh, const char *, char *, char *);
 
 #ifdef DEBUG
 
@@ -75,76 +76,76 @@ STATIC const char *fc_replace(const char *, char *, char *);
  * have changed (figures out what to do).
  */
 void
-ShellContext::histedit(void)
+histedit(ShellContext &sh)
 {
 	FILE *el_err;
 
 #define editing (Eflag || Vflag)
 
 	if (iflag) {
-		if (!hist) {
+		if (!sh.hist) {
 			/*
 			 * turn history on
 			 */
 			INTOFF;
-			hist = history_init();
+			sh.hist = history_init();
 			INTON;
 
-			if (hist != NULL)
-				sethistsize(histsizeval());
+			if (sh.hist != NULL)
+				sethistsize(sh, histsizeval());
 			else
 				out2str("sh: can't initialize history\n");
 		}
-		if (editing && !el && isatty(0)) { /* && isatty(2) ??? */
+		if (editing && !sh.el && isatty(0)) { /* && isatty(2) ??? */
 			/*
 			 * turn editing on
 			 */
 			INTOFF;
-			if (el_in == NULL)
-				el_in = fdopen(0, "r");
-			if (el_out == NULL)
-				el_out = fdopen(2, "w");
-			if (el_in == NULL || el_out == NULL)
+			if (sh.el_in == NULL)
+				sh.el_in = fdopen(0, "r");
+			if (sh.el_out == NULL)
+				sh.el_out = fdopen(2, "w");
+			if (sh.el_in == NULL || sh.el_out == NULL)
 				goto bad;
-			el_err = el_out;
+			el_err = sh.el_out;
 #if DEBUG
-			if (tracefile)
-				el_err = tracefile;
+			if (sh.tracefile)
+				el_err = sh.tracefile;
 #endif
-			el = el_init(arg0, el_in, el_out, el_err);
-			if (el != NULL) {
-				if (hist)
-					el_set(el, EL_HIST, history, hist);
-				el_set(el, EL_PROMPT_ESC, [](void *p) -> const char * {
-				return ShellContext::signaled->getprompt(p);
+			sh.el = el_init(sh.arg0, sh.el_in, sh.el_out, el_err);
+			if (sh.el != NULL) {
+				if (sh.hist)
+					el_set(sh.el, EL_HIST, history, sh.hist);
+				el_set(sh.el, EL_PROMPT_ESC, [](void *p) -> const char * {
+				return getprompt(*ShellContext::signaled, p);
 			}, '\1');
 			} else {
 bad:
 				out2str("sh: can't initialize editing\n");
 			}
 			INTON;
-		} else if (!editing && el) {
+		} else if (!editing && sh.el) {
 			INTOFF;
-			el_end(el);
-			el = NULL;
+			el_end(sh.el);
+			sh.el = NULL;
 			INTON;
 		}
-		if (el) {
+		if (sh.el) {
 			if (Vflag)
-				el_set(el, EL_EDITOR, "vi");
+				el_set(sh.el, EL_EDITOR, "vi");
 			else if (Eflag)
-				el_set(el, EL_EDITOR, "emacs");
-			el_source(el, NULL);
+				el_set(sh.el, EL_EDITOR, "emacs");
+			el_source(sh.el, NULL);
 		}
 	} else {
 		INTOFF;
-		if (el) {	/* no editing if not interactive */
-			el_end(el);
-			el = NULL;
+		if (sh.el) {	/* no editing if not interactive */
+			el_end(sh.el);
+			sh.el = NULL;
 		}
-		if (hist) {
-			history_end(hist);
-			hist = NULL;
+		if (sh.hist) {
+			history_end(sh.hist);
+			sh.hist = NULL;
 		}
 		INTON;
 	}
@@ -152,26 +153,26 @@ bad:
 
 
 void
-ShellContext::sethistsize(const char *hs)
+sethistsize(ShellContext &sh, const char *hs)
 {
 	int histsize;
 	HistEvent he;
 
-	if (hist != NULL) {
+	if (sh.hist != NULL) {
 		if (hs == NULL || *hs == '\0' ||
 		   (histsize = atoi(hs)) < 0)
 			histsize = 100;
-		history(hist, &he, H_SETSIZE, histsize);
+		history(sh.hist, &he, H_SETSIZE, histsize);
 	}
 }
 
 void
-ShellContext::setterm(const char *term)
+setterm(ShellContext &sh, const char *term)
 {
-	if (el != NULL && term != NULL)
-		if (el_set(el, EL_TERMINAL, term) != 0) {
-			outfmt(out2, "sh: Can't set terminal type %s\n", term);
-			outfmt(out2, "sh: Using dumb terminal settings.\n");
+	if (sh.el != NULL && term != NULL)
+		if (el_set(sh.el, EL_TERMINAL, term) != 0) {
+			outfmt(sh, sh.out2, "sh: Can't set terminal type %s\n", term);
+			outfmt(sh, sh.out2, "sh: Using dumb terminal settings.\n");
 		}
 }
 
@@ -180,7 +181,7 @@ ShellContext::setterm(const char *term)
  *  the Korn shell fc command.  Oh well...
  */
 int
-ShellContext::histcmd(int argc, char **argv)
+histcmd(ShellContext &sh, int argc, char **argv)
 {
 	int ch;
 	const char *editor = NULL;
@@ -210,19 +211,19 @@ ShellContext::histcmd(int argc, char **argv)
 	(void) &argv;
 #endif
 
-	if (hist == NULL)
-		sh_error("history not active");
+	if (sh.hist == NULL)
+		sh_error(sh, "history not active");
 
 #ifdef __GLIBC__
 	optind = 0;
 #else
 	optreset = 1; optind = 1; /* initialize getopt */
 #endif
-	while (not_fcnumber(argv[optind ?: 1]) &&
+	while (not_fcnumber(sh, argv[optind ?: 1]) &&
 	      (ch = getopt(argc, argv, ":e:lnrs")) != -1)
 		switch ((char)ch) {
 		case 'e':
-			editor = optionarg;
+			editor = sh.optionarg;
 			break;
 		case 'l':
 			lflg = 1;
@@ -237,11 +238,11 @@ ShellContext::histcmd(int argc, char **argv)
 			sflg = 1;
 			break;
 		case ':':
-			sh_error("option -%c expects argument", optopt);
+			sh_error(sh, "option -%c expects argument", optopt);
 			/* NOTREACHED */
 		case '?':
 		default:
-			sh_error("unknown option: -%c", optopt);
+			sh_error(sh, "unknown option: -%c", optopt);
 			/* NOTREACHED */
 		}
 	optind = optind ?: 1;
@@ -258,26 +259,26 @@ ShellContext::histcmd(int argc, char **argv)
 		 * cleanup temp files.
 		 */
 		if (setjmp(jmploc.loc)) {
-			fc_active = 0;
+			sh.fc_active = 0;
 			if (*editfile)
 				unlink(editfile);
-			handler = savehandler;
-			longjmp(handler->loc, 1);
+			sh.handler = savehandler;
+			longjmp(sh.handler->loc, 1);
 		}
-		savehandler = handler;
-		handler = &jmploc;
-		if (++fc_active > MAXHISTLOOPS) {
-			fc_active = 0;
-			displayhist = 0;
-			sh_error("called recursively too many times");
+		savehandler = sh.handler;
+		sh.handler = &jmploc;
+		if (++sh.fc_active > MAXHISTLOOPS) {
+			sh.fc_active = 0;
+			sh.displayhist = 0;
+			sh_error(sh, "called recursively too many times");
 		}
 		/*
 		 * Set editor.
 		 */
 		if (sflg == 0) {
 			if (editor == NULL &&
-			    (editor = bltinlookup("FCEDIT")) == NULL &&
-			    (editor = bltinlookup("EDITOR")) == NULL)
+			    (editor = bltinlookup(sh, "FCEDIT")) == NULL &&
+			    (editor = bltinlookup(sh, "EDITOR")) == NULL)
 				editor = DEFEDITOR;
 			if (editor[0] == '-' && editor[1] == '\0') {
 				sflg = 1;	/* no edit */
@@ -296,7 +297,7 @@ ShellContext::histcmd(int argc, char **argv)
 			argc--, argv++;
 		}
 		if (argc >= 2)
-			sh_error("too many args");
+			sh_error(sh, "too many args");
 	}
 
 	/*
@@ -316,14 +317,14 @@ ShellContext::histcmd(int argc, char **argv)
 		laststr = argv[1];
 		break;
 	default:
-		sh_error("too many args");
+		sh_error(sh, "too many args");
 		/* NOTREACHED */
 	}
 	/*
 	 * Turn into event numbers.
 	 */
-	first = str_to_event(firststr, 0);
-	last = str_to_event(laststr, 1);
+	first = str_to_event(sh, firststr, 0);
+	last = str_to_event(sh, laststr, 1);
 
 	if (rflg) {
 		i = last;
@@ -345,10 +346,10 @@ ShellContext::histcmd(int argc, char **argv)
 		INTOFF;		/* easier */
 		sprintf(editfile, "%s_shXXXXXX", _PATH_TMP);
 		if ((fd = mkstemp(editfile)) < 0)
-			sh_error("can't create temporary file %s", editfile);
+			sh_error(sh, "can't create temporary file %s", editfile);
 		if ((efp = fdopen(fd, "w")) == NULL) {
 			close(fd);
-			sh_error("can't allocate stdio buffer for temp");
+			sh_error(sh, "can't allocate stdio buffer for temp");
 		}
 	}
 
@@ -360,25 +361,25 @@ ShellContext::histcmd(int argc, char **argv)
 	 * The history interface needs rethinking, as the following
 	 * convolutions will demonstrate.
 	 */
-	history(hist, &he, H_FIRST);
-	retval = history(hist, &he, H_NEXT_EVENT, first);
-	for (;retval != -1; retval = history(hist, &he, direction)) {
+	history(sh.hist, &he, H_FIRST);
+	retval = history(sh.hist, &he, H_NEXT_EVENT, first);
+	for (;retval != -1; retval = history(sh.hist, &he, direction)) {
 		if (lflg) {
 			if (!nflg)
-				out1fmt("%5d ", he.num);
+				out1fmt(sh, "%5d ", he.num);
 			out1str(he.str);
 		} else {
 			const char *s = pat ?
-			   fc_replace(he.str, pat, repl) : he.str;
+			   fc_replace(sh, he.str, pat, repl) : he.str;
 
 			if (sflg) {
-				if (displayhist) {
+				if (sh.displayhist) {
 					out2str(s);
 				}
 
-				evalstring(s, {});
-				if (displayhist && hist) {
-					history(hist, &he, H_ENTER, s);
+				evalstring(sh, s, {});
+				if (sh.displayhist && sh.hist) {
+					history(sh.hist, &he, H_ENTER, s);
 				}
 
 				break;
@@ -396,24 +397,24 @@ ShellContext::histcmd(int argc, char **argv)
 		char *editcmd;
 
 		fclose(efp);
-		editcmd = stalloc(strlen(editor) + strlen(editfile) + 2);
+		editcmd = stalloc(sh, strlen(editor) + strlen(editfile) + 2);
 		sprintf(editcmd, "%s %s", editor, editfile);
 		/* XXX - should use no JC command */
-		evalstring(editcmd, {});
+		evalstring(sh, editcmd, {});
 		INTON;
-		readcmdfile(editfile);	/* XXX - should read back - quick tst */
+		readcmdfile(sh, editfile);	/* XXX - should read back - quick tst */
 		unlink(editfile);
 	}
 
-	if (lflg == 0 && fc_active > 0)
-		--fc_active;
-	if (displayhist)
-		displayhist = 0;
+	if (lflg == 0 && sh.fc_active > 0)
+		--sh.fc_active;
+	if (sh.displayhist)
+		sh.displayhist = 0;
 	return 0;
 }
 
- const char *
-ShellContext::fc_replace(const char *s, char *p, char *r)
+static const char *
+fc_replace(ShellContext &sh, const char *s, char *p, char *r)
 {
 	char *dest;
 	int plen = strlen(p);
@@ -435,24 +436,24 @@ ShellContext::fc_replace(const char *s, char *p, char *r)
 }
 
 int
-ShellContext::not_fcnumber(char *s)
+not_fcnumber(ShellContext &sh, char *s)
 {
 	if (s == NULL)
 		return 0;
         if (*s == '-')
                 s++;
-	return (!is_number(s));
+	return (!is_number(sh, s));
 }
 
 int
-ShellContext::str_to_event(const char *str, int last)
+str_to_event(ShellContext &sh, const char *str, int last)
 {
 	HistEvent he;
 	const char *s = str;
 	int relative = 0;
 	int i, retval;
 
-	retval = history(hist, &he, H_FIRST);
+	retval = history(sh.hist, &he, H_FIRST);
 	switch (*s) {
 	case '-':
 		relative = 1;
@@ -460,37 +461,37 @@ ShellContext::str_to_event(const char *str, int last)
 	case '+':
 		s++;
 	}
-	if (is_number(s)) {
+	if (is_number(sh, s)) {
 		i = atoi(s);
 		if (relative) {
 			while (retval != -1 && i--) {
-				retval = history(hist, &he, H_NEXT);
+				retval = history(sh.hist, &he, H_NEXT);
 			}
 			if (retval == -1)
-				retval = history(hist, &he, H_LAST);
+				retval = history(sh.hist, &he, H_LAST);
 		} else {
-			retval = history(hist, &he, H_NEXT_EVENT, i);
+			retval = history(sh.hist, &he, H_NEXT_EVENT, i);
 			if (retval == -1) {
 				/*
 				 * the notion of first and last is
 				 * backwards to that of the history package
 				 */
-				retval = history(hist, &he,
+				retval = history(sh.hist, &he,
 						last ? H_FIRST : H_LAST);
 				if (retval != -1 && last)
-					retval = history(hist, &he, H_NEXT);
+					retval = history(sh.hist, &he, H_NEXT);
 			}
 		}
 		if (retval == -1)
-			sh_error("history number %s not found (internal error)",
+			sh_error(sh, "history number %s not found (internal error)",
 				 str);
 	} else {
 		/*
 		 * pattern
 		 */
-		retval = history(hist, &he, H_PREV_STR, str);
+		retval = history(sh.hist, &he, H_PREV_STR, str);
 		if (retval == -1)
-			sh_error("history pattern not found: %s", str);
+			sh_error(sh, "history pattern not found: %s", str);
 	}
 	return (he.num);
 }

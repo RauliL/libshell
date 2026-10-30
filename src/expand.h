@@ -80,15 +80,16 @@ struct mbpair {
 struct jmploc;
 union node;
 
-void expandarg(union node *, struct arglist *, int);
-#define rmescapes(p) _rmescapes((p), 0)
-char *_rmescapes(char *, int);
-int casematch(union node *, char *);
-void recordregion(int, int, int);
-void removerecordregions(int); 
-void ifsbreakup(char *, int, struct arglist *);
-void ifsfree(void);
-void restore_handler_expandarg(struct jmploc *savehandler, int err);
-void changeifs(const char *);
+struct ShellContext;
+void expandarg(ShellContext &sh, union node *, struct arglist *, int);
+#define rmescapes(p) _rmescapes(sh, (p), 0)
+char *_rmescapes(ShellContext &sh, char *, int);
+int casematch(ShellContext &sh, union node *, char *);
+void recordregion(ShellContext &sh, int, int, int);
+void removerecordregions(ShellContext &sh, int); 
+void ifsbreakup(ShellContext &sh, char *, int, struct arglist *);
+void ifsfree(ShellContext &sh);
+void restore_handler_expandarg(ShellContext &sh, struct jmploc *savehandler, int err);
+void changeifs(ShellContext &sh, const char *);
 
 #endif

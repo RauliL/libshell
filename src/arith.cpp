@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "shell.h"
+#include "shell_context.h"
 
 namespace dash {
 namespace arith {
@@ -600,7 +601,7 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 			} else if constexpr (std::is_same_v<T, VarExpr>) {
 				if (noeval)
 					return Result<intmax_t>::Ok(0);
-				return Result<intmax_t>::Ok(sh_.lookupvarint(node.name.c_str()));
+				return Result<intmax_t>::Ok(lookupvarint(sh_, node.name.c_str()));
 			} else if constexpr (std::is_same_v<T, UnaryExpr>) {
 				auto v = eval_node(*node.operand, noeval);
 				if (!v || noeval)
@@ -664,14 +665,14 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 
 				intmax_t result = *rhs;
 				if (node.op != Op::Assign) {
-					intmax_t cur = sh_.lookupvarint(node.name.c_str());
+					intmax_t cur = lookupvarint(sh_, node.name.c_str());
 					auto combined = do_binop(assign_to_binop(node.op), cur, result);
 					if (!combined)
 						return combined;
 					result = *combined;
 				}
 				return Result<intmax_t>::Ok(
-					sh_.setvarint(node.name.c_str(), result, 0));
+					setvarint(sh_, node.name.c_str(), result, 0));
 			}
 		},
 		expr.node);
@@ -687,16 +688,17 @@ Result<intmax_t> Evaluator::eval(const ExprPtr &expr)
 } /* namespace arith */
 } /* namespace dash */
 
-intmax_t ShellContext::arith(const char *s)
+intmax_t
+arith(ShellContext &sh, const char *s)
 {
 	auto ast = dash::arith::parse(s ? s : "");
 	if (!ast)
-		sh_error("arithmetic expression: %s: \"%s\"", ast.error().c_str(), s);
+		sh_error(sh, "arithmetic expression: %s: \"%s\"", ast.error().c_str(), s);
 
-	dash::arith::Evaluator evaluator(*this);
+	dash::arith::Evaluator evaluator(*&sh);
 	auto result = evaluator.eval(*ast);
 	if (!result)
-		sh_error("arithmetic expression: %s: \"%s\"", result.error().c_str(), s);
+		sh_error(sh, "arithmetic expression: %s: \"%s\"", result.error().c_str(), s);
 
 	return *result;
 }

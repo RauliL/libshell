@@ -40,6 +40,7 @@
 #include <stdlib.h>
 
 #include "shell.h"
+#include "shell_context.h"
 #include "nodes.h"
 #include "exec.h"	/* defines padvance() */
 #include "var.h"
@@ -54,32 +55,32 @@
 
 /* times of mailboxes */
 
-/* Set if MAIL or MAILPATH is changed. */
+/* Set if MAIL or MAILPATH is sh.changed. */
 
 
 
 
 /*
- * Print appropriate message(s) if mail has arrived.  If changed is set,
- * then the value of MAIL has changed, so we just update the values.
+ * Print appropriate message(s) if mail has arrived.  If sh.changed is set,
+ * then the value of MAIL has sh.changed, so we just update the values.
  */
 
 void
-ShellContext::chkmail(void)
+chkmail(ShellContext &sh)
 {
 	const char *mpath;
 	char *p;
 	char *q;
 	time_t *mtp;
 	struct stat64 statb;
-	std::size_t su = stackstr.used;
-	std::size_t hc = stackheaps.size();
+	std::size_t su = sh.stackstr.used;
+	std::size_t hc = sh.stackheaps.size();
 
 	mpath = mpathset() ? mpathval() : mailval();
-	for (mtp = mailtime; mtp < mailtime + MAXMBOXES; mtp++) {
+	for (mtp = sh.mailtime; mtp < sh.mailtime + MAXMBOXES; mtp++) {
 		int len;
 
-		len = padvance_magic(&mpath, nullstr, 2);
+		len = padvance_magic(sh, &mpath, nullstr, 2);
 		if (len < 0)
 			break;
 		p = stackblock();
@@ -95,25 +96,24 @@ ShellContext::chkmail(void)
 			*mtp = 0;
 			continue;
 		}
-		if (!changed && statb.st_mtime != *mtp) {
-			outfmt(
-				&errout, snlfmt,
-				pathopt ? pathopt : "you have mail"
+		if (!sh.changed && statb.st_mtime != *mtp) {
+			outfmt(sh, &sh.errout, snlfmt,
+				sh.pathopt ? sh.pathopt : "you have mail"
 			);
 		}
 		*mtp = statb.st_mtime;
 	}
-	changed = 0;
-	while (stackheaps.size() > hc) {
-		ckfree(stackheaps.back());
-		stackheaps.pop_back();
+	sh.changed = 0;
+	while (sh.stackheaps.size() > hc) {
+		ckfree(sh.stackheaps.back());
+		sh.stackheaps.pop_back();
 	}
-	stackstr.rewind(su);
+	sh.stackstr.rewind(su);
 }
 
 
 void
-ShellContext::changemail(const char *val)
+changemail(ShellContext &sh, const char *val)
 {
-	changed++;
+	sh.changed++;
 }

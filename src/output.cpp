@@ -33,14 +33,14 @@
  */
 
 /*
- * Shell output routines.  We use our own output routines because:
+ * Shell sh.output routines.  We use our own sh.output routines because:
  *	When a builtin command is interrupted we have to discard
- *		any pending output.
+ *		any pending sh.output.
  *	When a builtin command appears in back quotes, we want to
- *		save the output of the command in a region obtained
+ *		save the sh.output of the command in a region obtained
  *		via malloc, rather than doing a fork and reading the
- *		output of the command via a pipe.
- *	Our output routines may be smaller than the stdio routines.
+ *		sh.output of the command via a pipe.
+ *	Our sh.output routines may be smaller than the stdio routines.
  */
 
 #include <sys/types.h>		/* quad_t */
@@ -57,6 +57,7 @@
 #include <limits.h>
 
 #include "shell.h"
+#include "shell_context.h"
 #include "syntax.h"
 #include "output.h"
 #include "memalloc.h"
@@ -66,10 +67,10 @@
 
 
 #define OUTBUFSIZ BUFSIZ
-#define MEM_OUT -3		/* output to dynamically allocated memory */
+#define MEM_OUT -3		/* sh.output to dynamically allocated memory */
 
 
-static int xvsnprintf(char *, size_t, const char *, va_list);
+static int xvsnprintf(ShellContext &sh, char *, size_t, const char *, va_list);
 
 
 #ifdef mkinit
@@ -79,17 +80,17 @@ INCLUDE "memalloc.h"
 
 INIT {
 #ifdef USE_GLIBC_STDIO
-	initstreams();
+	initstreams(sh);
 #endif
 }
 
 RESET {
 #ifdef notyet
-	out1 = &output;
-	out2 = &errout;
+	sh.out1 = &sh.output;
+	sh.out2 = &sh.errout;
 #ifdef USE_GLIBC_STDIO
 	if (memout.stream != NULL)
-		__closememout();
+		__closememout(sh);
 #endif
 	if (memout.buf != NULL) {
 		ckfree(memout.buf);
@@ -102,7 +103,7 @@ RESET {
 
 
 void
-ShellContext::outmem(const char *p, size_t len, struct output *dest)
+outmem(ShellContext &sh, const char *p, size_t len, struct output *dest)
 {
 #ifdef USE_GLIBC_STDIO
 	INTOFF;
@@ -144,20 +145,20 @@ buffered:
 alloc:
 #endif
 		INTOFF;
-		dest->buf = ckrealloc(dest->buf, bufsize);
+		dest->buf = ckrealloc(sh, dest->buf, bufsize);
 		dest->bufsize = bufsize;
 		dest->end = dest->buf + bufsize;
 		dest->nextc = dest->buf + offset;
 		INTON;
 	} else {
-		flushout(dest);
+		flushout(sh, dest);
 	}
 
 	nleft = dest->end - dest->nextc;
 	if (nleft > len)
 		goto buffered;
 
-	if ((xwrite(dest->fd, p, len))) {
+	if ((xwrite(sh, dest->fd, p, len))) {
 #ifdef notyet
 err:
 #endif
@@ -168,7 +169,7 @@ err:
 
 
 void
-ShellContext::outstr(const char *p, struct output *file)
+outstr(ShellContext &sh, const char *p, struct output *file)
 {
 #ifdef USE_GLIBC_STDIO
 	INTOFF;
@@ -178,7 +179,7 @@ ShellContext::outstr(const char *p, struct output *file)
 	size_t len;
 
 	len = strlen(p);
-	outmem(p, len, file);
+	outmem(sh, p, len, file);
 #endif
 }
 
@@ -187,26 +188,26 @@ ShellContext::outstr(const char *p, struct output *file)
 
 
 void
-ShellContext::outcslow(int c, struct output *dest)
+outcslow(ShellContext &sh, int c, struct output *dest)
 {
 	char buf = c;
-	outmem(&buf, 1, dest);
+	outmem(sh, &buf, 1, dest);
 }
 #endif
 
 
 void
-ShellContext::flushall(void)
+flushall(ShellContext &sh)
 {
-	flushout(&output);
+	flushout(sh, &sh.output);
 #ifdef FLUSHERR
-	flushout(&errout);
+	flushout(sh, &sh.errout);
 #endif
 }
 
 
 void
-ShellContext::flushout(struct output *dest)
+flushout(ShellContext &sh, struct output *dest)
 {
 #ifdef USE_GLIBC_STDIO
 	INTOFF;
@@ -219,75 +220,77 @@ ShellContext::flushout(struct output *dest)
 	if (!len || dest->fd < 0)
 		return;
 	dest->nextc = dest->buf;
-	if ((xwrite(dest->fd, dest->buf, len)))
+	if ((xwrite(sh, dest->fd, dest->buf, len)))
 		dest->flags |= OUTPUT_ERR;
 #endif
 }
 
 
 void
-ShellContext::outfmt(struct output *file, const char *fmt, ...)
+outfmt(ShellContext &sh, struct output *file, const char *fmt, ...)
 {
 	va_list ap;
 
 	va_start(ap, fmt);
-	doformat(file, fmt, ap);
+	doformat(sh, file, fmt, ap);
 	va_end(ap);
 }
 
 
 void
-ShellContext::out1fmt(const char *fmt, ...)
+out1fmt(ShellContext &sh, const char *fmt, ...)
 {
 	va_list ap;
 
 	va_start(ap, fmt);
-	doformat(out1, fmt, ap);
+	doformat(sh, sh.out1, fmt, ap);
 	va_end(ap);
 }
 
 
 int
-ShellContext::fmtstr(char *outbuf, size_t length, const char *fmt, ...)
+fmtstr(ShellContext &sh, char *outbuf, size_t length, const char *fmt, ...)
 {
 	va_list ap;
 	int ret;
 
 	va_start(ap, fmt);
-	ret = xvsnprintf(outbuf, length, fmt, ap);
+	ret = xvsnprintf(sh, outbuf, length, fmt, ap);
 	va_end(ap);
 	return ret > (int)length ? length : ret;
 }
 
 
- int ShellContext::xvasprintf(char **sp, size_t size, const char *f, va_list ap)
+static int
+xvasprintf(ShellContext &sh, char **sp, size_t size, const char *f, va_list ap)
 {
 	char *s;
 	int len;
 	va_list ap2;
 
 	va_copy(ap2, ap);
-	len = xvsnprintf(*sp, size, f, ap2);
+	len = xvsnprintf(sh, *sp, size, f, ap2);
 	va_end(ap2);
 	if (len < 0)
-		sh_error("xvsnprintf failed");
+		sh_error(sh, "xvsnprintf failed");
 	if (len < size)
 		return len;
 
-	s = stalloc((len >= stackblocksize() ? len : stackblocksize()) + 1);
+	s = stalloc(sh, (len >= stackblocksize() ? len : stackblocksize()) + 1);
 	*sp = s;
-	len = xvsnprintf(s, len + 1, f, ap);
+	len = xvsnprintf(sh, s, len + 1, f, ap);
 	return len;
 }
 
 
-int ShellContext::xasprintf(char **sp, const char *f, ...)
+int
+xasprintf(ShellContext &sh, char **sp, const char *f, ...)
 {
 	va_list ap;
 	int ret;
 
 	va_start(ap, f);
-	ret = xvasprintf(sp, 0, f, ap);
+	ret = xvasprintf(sh, sp, 0, f, ap);
 	va_end(ap);
 	return ret;
 }
@@ -295,28 +298,28 @@ int ShellContext::xasprintf(char **sp, const char *f, ...)
 
 #ifndef USE_GLIBC_STDIO
 void
-ShellContext::doformat(struct output *dest, const char *f, va_list ap)
+doformat(ShellContext &sh, struct output *dest, const char *f, va_list ap)
 {
 	char *s;
 	int len;
 	int olen;
-	std::size_t su = stackstr.used;
-	std::size_t hc = stackheaps.size();
+	std::size_t su = sh.stackstr.used;
+	std::size_t hc = sh.stackheaps.size();
 
 	s = dest->nextc;
 	olen = dest->end - dest->nextc;
-	len = xvasprintf(&s, olen, f, ap);
+	len = xvasprintf(sh, &s, olen, f, ap);
 	if (likely(olen > len)) {
 		dest->nextc += len;
 		goto out;
 	}
-	outmem(s, len, dest);
+	outmem(sh, s, len, dest);
 out:
-	while (stackheaps.size() > hc) {
-		ckfree(stackheaps.back());
-		stackheaps.pop_back();
+	while (sh.stackheaps.size() > hc) {
+		ckfree(sh.stackheaps.back());
+		sh.stackheaps.pop_back();
 	}
-	stackstr.rewind(su);
+	sh.stackstr.rewind(su);
 }
 #endif
 
@@ -327,7 +330,7 @@ out:
  */
 
 int
-ShellContext::xwrite(int fd, const void *p, size_t n)
+xwrite(ShellContext &sh, int fd, const void *p, size_t n)
 {
 	const char *buf = static_cast<const char *>(p);
 
@@ -352,14 +355,17 @@ ShellContext::xwrite(int fd, const void *p, size_t n)
 
 #ifdef notyet
 #ifdef USE_GLIBC_STDIO
-void ShellContext::initstreams() {
-	output.stream = stdout;
-	errout.stream = stderr;
+void
+initstreams(ShellContext &sh)
+{
+	sh.output.stream = stdout;
+	sh.errout.stream = stderr;
 }
 
 
 void
-ShellContext::openmemout(void) {
+openmemout(ShellContext &sh)
+{
 	INTOFF;
 	memout.stream = open_memstream(&memout.buf, &memout.bufsize);
 	INTON;
@@ -367,7 +373,8 @@ ShellContext::openmemout(void) {
 
 
 int
-ShellContext::__closememout(void) {
+__closememout(ShellContext &sh)
+{
 	int error;
 	error = fclose(memout.stream);
 	memout.stream = NULL;
@@ -377,8 +384,8 @@ ShellContext::__closememout(void) {
 #endif
 
 
- int
-ShellContext::xvsnprintf(char *outbuf, size_t length, const char *fmt, va_list ap)
+static int
+xvsnprintf(ShellContext &sh, char *outbuf, size_t length, const char *fmt, va_list ap)
 {
 	int ret;
 

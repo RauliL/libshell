@@ -38,9 +38,10 @@
 
 union node;
 
-void init(void);
-void exitreset(void);
-void forkreset(union node *);
-void postexitreset(void);
-void reset(void);
+struct ShellContext;
+void init(ShellContext &sh);
+void exitreset(ShellContext &sh);
+void forkreset(ShellContext &sh, union node *);
+void postexitreset(ShellContext &sh);
+void reset(ShellContext &sh);
 #endif

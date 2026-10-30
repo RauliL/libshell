@@ -45,6 +45,7 @@
 
 #include "jobs.h"
 #include "shell.h"
+#include "shell_context.h"
 #include "main.h"
 #include "options.h"
 #include "output.h"
@@ -66,86 +67,87 @@
 
 
 
-static void exverror(int, const char *, va_list)
+static void exverror(ShellContext &sh, int, const char *, va_list)
     __attribute__((__noreturn__));
 
 /*
- * Called to raise an exception.  Since C doesn't include exceptions, we
- * just do a longjmp to the exception handler.  The type of exception is
+ * Called to raise an sh.exception.  Since C doesn't include exceptions, we
+ * just do a longjmp to the sh.exception sh.handler.  The type of sh.exception is
  * stored in the global variable "exception".
  */
 
 void
-ShellContext::exraise(int e)
+exraise(ShellContext &sh, int e)
 {
 #ifdef DEBUG
-	if (handler == NULL)
+	if (sh.handler == NULL)
 		abort();
 #endif
 
-	if (vforked)
-		_exit(exitstatus);
+	if (sh.vforked)
+		_exit(sh.exitstatus);
 
 	INTOFF;
 
-	exception = e;
-	longjmp(handler->loc, 1);
+	sh.exception = e;
+	longjmp(sh.handler->loc, 1);
 }
 
 
 /*
- * Called from trap.c when a SIGINT is received.  (If the user specifies
- * that SIGINT is to be trapped or ignored using the trap builtin, then
+ * Called from sh.trap.c when a SIGINT is received.  (If the user specifies
+ * that SIGINT is to be trapped or ignored using the sh.trap builtin, then
  * this routine is not called.)  Suppressint is nonzero when interrupts
  * are held using the INTOFF macro.  (The test for iflag is just
  * defensive programming.)
  */
 
 void
-ShellContext::onint(void) {
+onint(ShellContext &sh)
+{
 
-	intpending = 0;
+	sh.intpending = 0;
 	sigclearmask();
 	if (!(rootshell && iflag)) {
 		signal(SIGINT, SIG_DFL);
 		raise(SIGINT);
 	}
-	exitstatus = SIGINT + 128;
-	exraise(EXINT);
+	sh.exitstatus = SIGINT + 128;
+	exraise(sh, EXINT);
 	/* NOTREACHED */
 }
 
- void
-ShellContext::exvwarning2(const char *msg, va_list ap)
+static void
+exvwarning2(ShellContext &sh, const char *msg, va_list ap)
 {
 	struct output *errs;
 	const char *name;
 	const char *fmt;
 
-	errs = out2;
-	name = arg0 ? arg0 : "sh";
-	if (!commandname)
+	errs = sh.out2;
+	name = sh.arg0 ? sh.arg0 : "sh";
+	if (!sh.commandname)
 		fmt = "%s: %d: ";
 	else
 		fmt = "%s: %d: %s: ";
-	outfmt(errs, fmt, name, errlinno, commandname);
-	doformat(errs, msg, ap);
+	outfmt(sh, errs, fmt, name, sh.errlinno, sh.commandname);
+	doformat(sh, errs, msg, ap);
 #if FLUSHERR
-	outc('\n', errs);
+	outc(sh, '\n', errs);
 #else
-	outcslow('\n', errs);
+	outcslow(sh, '\n', errs);
 #endif
 }
 
-#define exvwarning(a, b, c) exvwarning2(b, c)
+#define exvwarning(a, b, c) exvwarning2(sh, b, c)
 
 /*
- * Exverror is called to raise the error exception.  If the second argument
+ * Exverror is called to raise the error sh.exception.  If the second argument
  * is not NULL then error prints an error message using printf style
- * formatting.  It then raises the error exception.
+ * formatting.  It then raises the error sh.exception.
  */
- void
-ShellContext::exverror(int cond, const char *msg, va_list ap)
+static void
+exverror(ShellContext &sh, int cond, const char *msg, va_list ap)
 {
 #ifdef DEBUG
 	if (msg) {
@@ -161,33 +163,33 @@ ShellContext::exverror(int cond, const char *msg, va_list ap)
 #endif
 		exvwarning(-1, msg, ap);
 
-	flushall();
-	exraise(cond);
+	flushall(sh);
+	exraise(sh, cond);
 	/* NOTREACHED */
 }
 
 
 void
-ShellContext::sh_error(const char *msg, ...)
+sh_error(ShellContext &sh, const char *msg, ...)
 {
 	va_list ap;
 
-	exitstatus = 2;
+	sh.exitstatus = 2;
 
 	va_start(ap, msg);
-	exverror(EXERROR, msg, ap);
+	exverror(sh, EXERROR, msg, ap);
 	/* NOTREACHED */
 	va_end(ap);
 }
 
 
 void
-ShellContext::exerror(int cond, const char *msg, ...)
+exerror(ShellContext &sh, int cond, const char *msg, ...)
 {
 	va_list ap;
 
 	va_start(ap, msg);
-	exverror(cond, msg, ap);
+	exverror(sh, cond, msg, ap);
 	/* NOTREACHED */
 	va_end(ap);
 }
@@ -197,7 +199,7 @@ ShellContext::exerror(int cond, const char *msg, ...)
  */
 
 void
-ShellContext::sh_warnx(const char *fmt, ...)
+sh_warnx(ShellContext &sh, const char *fmt, ...)
 {
 	va_list ap;
 
@@ -214,7 +216,7 @@ ShellContext::sh_warnx(const char *fmt, ...)
  */
 
 const char *
-ShellContext::errmsg(int e, int action)
+errmsg(ShellContext &sh, int e, int action)
 {
 	if (e != ENOENT && e != ENOTDIR)
 		return strerror(e);
@@ -230,9 +232,10 @@ ShellContext::errmsg(int e, int action)
 
 #ifdef REALLY_SMALL
 void
-ShellContext::__inton() {
-	if (--suppressint == 0 && intpending) {
-		onint();
+__inton(ShellContext &sh)
+{
+	if (--sh.suppressint == 0 && sh.intpending) {
+		onint(sh);
 	}
 }
 #endif

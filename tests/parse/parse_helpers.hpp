@@ -4,26 +4,23 @@
 #include <cstdio>
 #include <string>
 #include <string_view>
+#include <unistd.h>
 
 #include "shell.h"
+#include "shell_context.h"
 
 namespace parse_test {
 
-/*
- * Parse a shell script without executing it (equivalent to dash -n).
- * Returns true if the script parses successfully.
- * Syntax errors are reported via Result — no setjmp.
- */
 inline bool parses_ok(std::string_view script)
 {
 	ShellContext sh;
 
 	sh.mypid = sh.rootpid = getpid();
 	sh.arg0 = const_cast<char *>("parse_tests");
-	sh.init();
+	init(sh);
 
 	std::string copy(script);
-	return static_cast<bool>(sh.try_parse_string(copy.data()));
+	return static_cast<bool>(try_parse_string(sh, copy.data()));
 }
 
 inline bool parses_file_ok(const std::string &path)

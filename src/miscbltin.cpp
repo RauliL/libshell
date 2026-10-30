@@ -58,6 +58,7 @@
 #include "output.h"
 #include "parser.h"
 #include "shell.h"
+#include "shell_context.h"
 #include "syntax.h"
 #include "trap.h"
 #include "var.h"
@@ -74,8 +75,8 @@
  *  @param ap argument (variable) list
  *  @param len length of line including trailing '\0'
  */
- void
-ShellContext::readcmd_handle_line(char *s, int ac, char **ap)
+static void
+readcmd_handle_line(ShellContext &sh, char *s, int ac, char **ap)
 {
 	struct arglist arglist;
 	struct strlist *sl;
@@ -84,9 +85,9 @@ ShellContext::readcmd_handle_line(char *s, int ac, char **ap)
 
 	arglist.lastp = &arglist.list;
 	
-	ifsbreakup(s, ac, &arglist);
+	ifsbreakup(sh, s, ac, &arglist);
 	*arglist.lastp = NULL;
-	ifsfree();
+	ifsfree(sh);
 
 	sl = arglist.list;
 
@@ -94,7 +95,7 @@ ShellContext::readcmd_handle_line(char *s, int ac, char **ap)
 		if (!sl) {
 			/* nullify remaining arguments */
 			do {
-				setvar(*ap, nullstr, 0);
+				setvar(sh, *ap, nullstr, 0);
 			} while (*++ap);
 
 			return;
@@ -102,7 +103,7 @@ ShellContext::readcmd_handle_line(char *s, int ac, char **ap)
 
 		/* set variable to field */
 		rmescapes(sl->text);
-		setvar(*ap, sl->text, 0);
+		setvar(sh, *ap, sl->text, 0);
 		sl = sl->next;
 	} while (*++ap);
 }
@@ -116,7 +117,7 @@ ShellContext::readcmd_handle_line(char *s, int ac, char **ap)
  */
 
 int
-ShellContext::readcmd(int argc, char **argv)
+readcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *prompt;
 	int startloc;
@@ -129,25 +130,25 @@ ShellContext::readcmd(int argc, char **argv)
 
 	rflag = 0;
 	prompt = NULL;
-	while ((i = nextopt("p:r")) != '\0') {
+	while ((i = nextopt(sh, "p:r")) != '\0') {
 		if (i == 'p')
-			prompt = optionarg;
+			prompt = sh.optionarg;
 		else
 			rflag = 1;
 	}
 	if (prompt && isatty(0)) {
 		out2str(prompt);
 #ifdef FLUSHERR
-		flushall();
+		flushall(sh);
 #endif
 	}
-	if (*(ap = argptr) == NULL)
-		sh_error("arg count");
+	if (*(ap = sh.argptr) == NULL)
+		sh_error(sh, "arg count");
 
 	status = 0;
 	STARTSTACKSTR(p);
 
-	pushstdin();
+	pushstdin(sh);
 
 	goto start;
 
@@ -156,14 +157,14 @@ ShellContext::readcmd(int argc, char **argv)
 		int c;
 
 		CHECKSTRSPACE((MB_LEN_MAX > 16 ? MB_LEN_MAX : 16) + 4, p);
-		c = pgetc();
+		c = pgetc(sh);
 		if (c == PEOF) {
 			status = 1;
 			break;
 		}
 		if (c == '\0')
 			continue;
-		ml = getmbc(c, p, 0);
+		ml = getmbc(sh, c, p, 0);
 		if (ml) {
 			p += ml;
 			goto record;
@@ -186,16 +187,16 @@ put:
 
 record:
 		if (newloc >= startloc) {
-			recordregion(startloc, newloc, 0);
+			recordregion(sh, startloc, newloc, 0);
 start:
 			startloc = p - (char *)stackblock();
 			newloc = startloc - 1;
 		}
 	}
-	popfile();
-	recordregion(startloc, p - (char *)stackblock(), 0);
+	popfile(sh);
+	recordregion(sh, startloc, p - (char *)stackblock(), 0);
 	STACKSTRNUL(p);
-	readcmd_handle_line(p + 1, argc - (ap - argv), ap);
+	readcmd_handle_line(sh, p + 1, argc - (ap - argv), ap);
 	return status;
 }
 
@@ -211,14 +212,14 @@ start:
  */
 
 int
-ShellContext::umaskcmd(int argc, char **argv)
+umaskcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *ap;
 	int mask;
 	int i;
 	int symbolic_mode = 0;
 
-	while ((i = nextopt("S")) != '\0') {
+	while ((i = nextopt(sh, "S")) != '\0') {
 		symbolic_mode = 1;
 	}
 
@@ -227,7 +228,7 @@ ShellContext::umaskcmd(int argc, char **argv)
 	umask(mask);
 	INTON;
 
-	if ((ap = *argptr) == NULL) {
+	if ((ap = *sh.argptr) == NULL) {
 		if (symbolic_mode) {
 			char buf[18];
 			int j;
@@ -243,9 +244,9 @@ ShellContext::umaskcmd(int argc, char **argv)
 				*ap++ = ',';
 			}
 			ap[-1] = '\0';
-			out1fmt(snlfmt, buf);
+			out1fmt(sh, snlfmt, buf);
 		} else {
-			out1fmt("%.4o\n", mask);
+			out1fmt(sh, "%.4o\n", mask);
 		}
 	} else {
 		int new_mask;
@@ -254,7 +255,7 @@ ShellContext::umaskcmd(int argc, char **argv)
 			new_mask = 0;
 			do {
 				if (*ap >= '8' || *ap < '0')
-					sh_error(illnum, *argptr);
+					sh_error(sh, illnum, *sh.argptr);
 				new_mask = (new_mask << 3) + (*ap - '0');
 			} while (*++ap != '\0');
 		} else {
@@ -318,7 +319,7 @@ ShellContext::umaskcmd(int argc, char **argv)
 			}
 			if (*ap) {
 error:
-				sh_error("Illegal mode: %s", *argptr);
+				sh_error(sh, "Illegal mode: %s", *sh.argptr);
 				return 1;
 			}
 			new_mask = ~new_mask;
@@ -388,7 +389,8 @@ static const struct limits limits[] = {
 
 enum limtype : int { SOFT = 0x1, HARD = 0x2 };
 
- void ShellContext::printlim(enum limtype how, const struct rlimit *limit,
+static void
+printlim(ShellContext &sh, enum limtype how, const struct rlimit *limit,
 		     const struct limits *l)
 {
 	rlim_t val;
@@ -398,15 +400,15 @@ enum limtype : int { SOFT = 0x1, HARD = 0x2 };
 		val = limit->rlim_cur;
 
 	if (val == RLIM_INFINITY)
-		out1fmt("unlimited\n");
+		out1fmt(sh, "unlimited\n");
 	else {
 		val /= l->factor;
-		out1fmt("%" PRIdMAX "\n", (intmax_t) val);
+		out1fmt(sh, "%" PRIdMAX "\n", (intmax_t) val);
 	}
 }
 
 int
-ShellContext::ulimitcmd(int argc, char **argv)
+ulimitcmd(ShellContext &sh, int argc, char **argv)
 {
 	int	c;
 	rlim_t val = 0;
@@ -417,7 +419,7 @@ ShellContext::ulimitcmd(int argc, char **argv)
 	struct rlimit	limit;
 
 	what = 'f';
-	while ((optc = nextopt("HSa"
+	while ((optc = nextopt(sh, "HSa"
 #ifdef RLIMIT_CPU
 			       "t"
 #endif
@@ -472,12 +474,12 @@ ShellContext::ulimitcmd(int argc, char **argv)
 	for (l = limits; l->option != what; l++)
 		;
 
-	set = *argptr ? 1 : 0;
+	set = *sh.argptr ? 1 : 0;
 	if (set) {
-		char *p = *argptr;
+		char *p = *sh.argptr;
 
-		if (all || argptr[1])
-			sh_error("too many arguments");
+		if (all || sh.argptr[1])
+			sh_error(sh, "too many arguments");
 		if (strcmp(p, "unlimited") == 0)
 			val = RLIM_INFINITY;
 		else {
@@ -490,15 +492,15 @@ ShellContext::ulimitcmd(int argc, char **argv)
 					break;
 			}
 			if (c)
-				sh_error("bad number");
+				sh_error(sh, "bad number");
 			val *= l->factor;
 		}
 	}
 	if (all) {
 		for (l = limits; l->name; l++) {
 			getrlimit(l->cmd, &limit);
-			out1fmt("%-20s ", l->name);
-			printlim(how, &limit, l);
+			out1fmt(sh, "%-20s ", l->name);
+			printlim(sh, how, &limit, l);
 		}
 		return 0;
 	}
@@ -510,9 +512,9 @@ ShellContext::ulimitcmd(int argc, char **argv)
 		if (how & SOFT)
 			limit.rlim_cur = val;
 		if (setrlimit(l->cmd, &limit) < 0)
-			sh_error("error setting limit (%s)", strerror(errno));
+			sh_error(sh, "error setting limit (%s)", strerror(errno));
 	} else {
-		printlim(how, &limit, l);
+		printlim(sh, how, &limit, l);
 	}
 	return 0;
 }

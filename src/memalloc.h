@@ -22,47 +22,51 @@ struct rawmem {
 	}
 };
 
-rawmem ckmalloc(std::size_t);
-rawmem ckrealloc(void *, std::size_t);
-char *savestr(const char *);
-rawmem stalloc(std::size_t);
-rawmem astalloc(std::size_t);
-void clear_stack_temps();
-void stunalloc(void *);
-rawmem growstackstr();
-char *growstackto(std::size_t len);
-char *makestrspace(size_t, char *);
-char *stnputs(const char *, size_t, char *);
-char *stputs(const char *, char *);
+struct ShellContext;
 
-/* These names resolve to ShellContext::stackstr / helpers inside methods. */
-#define stackblock() (stackstr.base())
-#define stackblocksize() (stackstr.avail())
-#define stacknxt (stackstr.base())
-#define stacknleft (stackstr.avail())
-#define sstrend (stackstr.cap())
+rawmem ckmalloc(ShellContext &sh, std::size_t);
+rawmem ckrealloc(ShellContext &sh, void *, std::size_t);
+char *savestr(ShellContext &sh, const char *);
+rawmem stalloc(ShellContext &sh, std::size_t);
+rawmem astalloc(ShellContext &sh, std::size_t);
+void clear_stack_temps(ShellContext &sh);
+void stunalloc(ShellContext &sh, void *);
+rawmem growstackstr(ShellContext &sh);
+char *growstackto(ShellContext &sh, std::size_t len);
+char *makestrspace(ShellContext &sh, size_t, char *);
+char *stnputs(ShellContext &sh, const char *, size_t, char *);
+char *stputs(ShellContext &sh, const char *, char *);
+rawmem stackstr_commit(ShellContext &sh, std::size_t);
+char *_STPUTC(ShellContext &sh, int c, char *p);
+
+/* These names resolve to sh.stackstr via shell_access.h (ShellContext &sh in scope). */
+#define stackblock() (sh.stackstr.base())
+#define stackblocksize() (sh.stackstr.avail())
+#define stacknxt (sh.stackstr.base())
+#define stacknleft (sh.stackstr.avail())
+#define sstrend (sh.stackstr.cap())
 
 #define STARTSTACKSTR(p) ((p) = static_cast<std::remove_reference_t<decltype(p)>>( \
-	static_cast<void *>(stackstr.base())))
-#define STPUTC(c, p) ((p) = _STPUTC((c), (p)))
+	static_cast<void *>(sh.stackstr.base())))
+#define STPUTC(c, p) ((p) = _STPUTC(sh, (c), (p)))
 #define CHECKSTRSPACE(n, p) \
 	({ \
 		char *_q = (p); \
 		size_t _l = (n); \
 		size_t _m = static_cast<size_t>(sstrend - _q); \
 		if (_l > _m) \
-			(p) = makestrspace(_l, _q); \
+			(p) = makestrspace(sh, _l, _q); \
 		0; \
 	})
 #define USTPUTC(c, p)	(*p++ = (c))
-#define STACKSTRNUL(p)	((p) == sstrend? (p = growstackstr(), *p = '\0') : (*p = '\0'))
+#define STACKSTRNUL(p)	((p) == sstrend? (p = growstackstr(sh), *p = '\0') : (*p = '\0'))
 #define STUNPUTC(p)	(--p)
 #define STTOPC(p)	p[-1]
 #define STADJUST(amount, p)	(p += (amount))
 
-#define grabstackstr(p)	(stackstr_commit(static_cast<size_t>( \
+#define grabstackstr(p)	(stackstr_commit(sh, static_cast<size_t>( \
 	reinterpret_cast<char *>(p) - (char *)stackblock())))
-#define ungrabstackstr(s, p) stunalloc((s))
+#define ungrabstackstr(s, p) stunalloc(sh, (s))
 #define stackstrend() (static_cast<void *>(sstrend))
 
 #define ckfree(p)	std::free(const_cast<void *>(static_cast<const void *>(p)))

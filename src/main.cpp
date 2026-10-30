@@ -40,6 +40,11 @@
 
 
 #include "shell.h"
+
+#ifdef __GLIBC__
+int *dash_errno;
+#endif
+#include "shell_context.h"
 #include "main.h"
 #include "mail.h"
 #include "options.h"
@@ -76,19 +81,19 @@ extern int etext();
 #endif
 
 
-STATIC void read_profile(const char *);
-STATIC char *find_dot_file(char *);
-static int cmdloop(int);
+static void read_profile(ShellContext &sh, const char *);
+static char * find_dot_file(ShellContext &sh, char *);
+int cmdloop(ShellContext &sh, int);
 /*
  * Main routine.  We initialize things, parse the arguments, execute
  * profiles if we're a login shell, and then call cmdloop to execute
  * commands.  The setjmp call sets up the location to jump to when an
- * exception occurs.  When an exception occurs the variable "state"
+ * sh.exception occurs.  When an sh.exception occurs the variable "state"
  * is used to figure out how far we had gotten.
  */
 
 int
-ShellContext::run(int argc, char **argv)
+run(ShellContext &sh, int argc, char **argv)
 {
 	char *shinit;
 	volatile int state;
@@ -103,19 +108,19 @@ ShellContext::run(int argc, char **argv)
 #endif
 
 	state = 0;
-	if (unlikely(setjmp(main_handler.loc))) {
+	if (unlikely(setjmp(sh.main_handler.loc))) {
 		int e;
 		int s;
 
-		exitreset();
+		exitreset(sh);
 
-		e = exception;
+		e = sh.exception;
 
 		s = state;
-		if (e == EXEND || e == EXEXIT || s == 0 || iflag == 0 || shlvl)
+		if (e == EXEND || e == EXEXIT || s == 0 || iflag == 0 || sh.shlvl)
 			goto exit;
 
-		reset();
+		reset(sh);
 
 		if (e == EXINT
 #if ATTY
@@ -124,10 +129,10 @@ ShellContext::run(int argc, char **argv)
 		 ) {
 			out2c('\n');
 #ifdef FLUSHERR
-			flushout(out2);
+			flushout(sh, sh.out2);
 #endif
 		}
-		clear_stack_temps();
+		clear_stack_temps(sh);
 		FORCEINTON;				/* enable interrupts */
 		if (s == 1)
 			goto state1;
@@ -138,20 +143,20 @@ ShellContext::run(int argc, char **argv)
 		else
 			goto state4;
 	}
-	handler = &main_handler;
+	sh.handler = &sh.main_handler;
 #ifdef DEBUG
-	opentrace();
-	trputs("Shell args:  ");  trargs(argv);
+	opentrace(sh);
+	trputs(sh, "Shell args:  ");  trargs(sh, argv);
 #endif
-	mypid = rootpid = getpid();
-	init();
-	login = procargs(argv);
+	sh.mypid = sh.rootpid = getpid();
+	init(sh);
+	login = procargs(sh, argv);
 	if (login) {
 		state = 1;
-		read_profile("/etc/profile");
+		read_profile(sh, "/etc/profile");
 state1:
 		state = 2;
-		read_profile("$HOME/.profile");
+		read_profile(sh, "$HOME/.profile");
 	}
 state2:
 	state = 3;
@@ -161,19 +166,19 @@ state2:
 #endif
 		iflag
 	) {
-		if ((shinit = lookupvar("ENV")) != NULL && *shinit != '\0') {
-			read_profile(shinit);
+		if ((shinit = lookupvar(sh, "ENV")) != NULL && *shinit != '\0') {
+			read_profile(sh, shinit);
 		}
 	}
-	clear_stack_temps();
+	clear_stack_temps(sh);
 state3:
 	state = 4;
-	if (minusc)
-		execute(minusc, sflag ? EvalFlags{} : EvalFlag::exit);
+	if (sh.minusc)
+		execute(sh, sh.minusc, sflag ? EvalFlags{} : EvalFlag::exit);
 
-	if (sflag || minusc == NULL) {
+	if (sflag || sh.minusc == NULL) {
 state4:	/* XXX ??? - why isn't this before the "if" statement */
-		cmdloop(1);
+		cmdloop(sh, 1);
 	}
 exit:
 #if PROFILE
@@ -185,7 +190,7 @@ exit:
 		_mcleanup();
 	}
 #endif
-	exitshell();
+	exitshell(sh);
 	/* NOTREACHED */
 }
 
@@ -195,8 +200,8 @@ exit:
  * loop; it turns on prompting if the shell is interactive.
  */
 
- int
-ShellContext::cmdloop(int top)
+int
+cmdloop(ShellContext &sh, int top)
 {
 	union node *n;
 	int inter;
@@ -207,26 +212,26 @@ ShellContext::cmdloop(int top)
 	for (;;) {
 		int skip;
 
-		if (jobctl)
-			showjobs(out2, SHOW_CHANGED);
+		if (sh.jobctl)
+			showjobs(sh, sh.out2, SHOW_CHANGED);
 		inter = 0;
 		if (iflag && top) {
 			inter++;
-			chkmail();
+			chkmail(sh);
 		}
 		try {
-			n = parsecmd(inter);
+			n = parsecmd(sh, inter);
 			/* showtree(n); DEBUG */
 			if (n == NEOF) {
-				clear_stack_temps();
+				clear_stack_temps(sh);
 				if (!top || numeof >= 50)
 					break;
-				if (!stoppedjobs()) {
+				if (!stoppedjobs(sh)) {
 					if (!Iflag) {
 						if (iflag) {
 							out2c('\n');
 #ifdef FLUSHERR
-							flushout(out2);
+							flushout(sh, sh.out2);
 #endif
 						}
 						break;
@@ -237,31 +242,31 @@ ShellContext::cmdloop(int top)
 			} else {
 				int i;
 
-				job_warning = (job_warning == 2) ? 1 : 0;
+				sh.job_warning = (sh.job_warning == 2) ? 1 : 0;
 				numeof = 0;
-				i = evaltree(n, {});
+				i = evaltree(sh, n, {});
 				if (n)
 					status = i;
 				if (n && n != NEOF)
 					freenode(n);
-				clear_stack_temps();
+				clear_stack_temps(sh);
 			}
 		} catch (const dash::ParseError &e) {
-			report_parse_error(e);
-			clear_stack_temps();
+			report_parse_error(sh, e);
+			clear_stack_temps(sh);
 			if (!(iflag && top))
-				return exitstatus;
-			skip = evalskip;
+				return sh.exitstatus;
+			skip = sh.evalskip;
 			if (skip) {
-				evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+				sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
 				break;
 			}
 			continue;
 		}
 
-		skip = evalskip;
+		skip = sh.evalskip;
 		if (skip) {
-			evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+			sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
 			break;
 		}
 	}
@@ -275,15 +280,15 @@ ShellContext::cmdloop(int top)
  * Read /etc/profile or .profile.  Return on error.
  */
 
- void
-ShellContext::read_profile(const char *name)
+static void
+read_profile(ShellContext &sh, const char *name)
 {
-	name = expandstr(name);
-	if (setinputfile(name, INPUT_PUSH_FILE | INPUT_NOFILE_OK) < 0)
+	name = expandstr(sh, name);
+	if (setinputfile(sh, name, INPUT_PUSH_FILE | INPUT_NOFILE_OK) < 0)
 		return;
 
-	cmdloop(0);
-	popfile();
+	cmdloop(sh, 0);
+	popfile(sh);
 }
 
 
@@ -293,11 +298,11 @@ ShellContext::read_profile(const char *name)
  */
 
 void
-ShellContext::readcmdfile(char *name)
+readcmdfile(ShellContext &sh, char *name)
 {
-	setinputfile(name, INPUT_PUSH_FILE);
-	cmdloop(0);
-	popfile();
+	setinputfile(sh, name, INPUT_PUSH_FILE);
+	cmdloop(sh, 0);
+	popfile(sh);
 }
 
 
@@ -308,8 +313,8 @@ ShellContext::readcmdfile(char *name)
  */
 
 
- char *
-ShellContext::find_dot_file(char *basename)
+static char *
+find_dot_file(ShellContext &sh, char *basename)
 {
 	char *fullname;
 	const char *path = pathval();
@@ -320,36 +325,36 @@ ShellContext::find_dot_file(char *basename)
 	if (strchr(basename, '/'))
 		return basename;
 
-	while ((len = padvance(&path, basename)) >= 0) {
+	while ((len = padvance(sh, &path, basename)) >= 0) {
 		fullname = stackblock();
-		if ((!pathopt || *pathopt == 'f') &&
+		if ((!sh.pathopt || *sh.pathopt == 'f') &&
 		    !stat64(fullname, &statb) && S_ISREG(statb.st_mode)) {
 			/* This will be freed by the caller. */
-			return stalloc(len);
+			return stalloc(sh, len);
 		}
 	}
 
 	/* not found in the PATH */
-	sh_error("%s: not found", basename);
+	sh_error(sh, "%s: not found", basename);
 	/* NOTREACHED */
 }
 
 int
-ShellContext::dotcmd(int argc, char **argv)
+dotcmd(ShellContext &sh, int argc, char **argv)
 {
 	int status = 0;
 
-	nextopt(nullstr);
-	argv = argptr;
+	nextopt(sh, nullstr);
+	argv = sh.argptr;
 
 	if (*argv) {
 		char *fullname;
 
-		fullname = find_dot_file(*argv);
-		setinputfile(fullname, INPUT_PUSH_FILE);
-		commandname = fullname;
-		status = cmdloop(0);
-		popfile();
+		fullname = find_dot_file(sh, *argv);
+		setinputfile(sh, fullname, INPUT_PUSH_FILE);
+		sh.commandname = fullname;
+		status = cmdloop(sh, 0);
+		popfile(sh);
 	}
 
 	return status;
@@ -357,15 +362,15 @@ ShellContext::dotcmd(int argc, char **argv)
 
 
 int
-ShellContext::exitcmd(int argc, char **argv)
+exitcmd(ShellContext &sh, int argc, char **argv)
 {
-	if (stoppedjobs())
+	if (stoppedjobs(sh))
 		return 0;
 
 	if (argc > 1)
-		savestatus = number(argv[1]);
+		sh.savestatus = number(sh, argv[1]);
 
-	exraise(EXEXIT);
+	exraise(sh, EXEXIT);
 	/* NOTREACHED */
 }
 
@@ -373,6 +378,6 @@ ShellContext::exitcmd(int argc, char **argv)
 INCLUDE "error.h"
 
 FORKRESET {
-	handler = &main_handler;
+	sh.handler = &sh.main_handler;
 }
 #endif

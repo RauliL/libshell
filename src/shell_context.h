@@ -64,6 +64,17 @@ struct stdin_state {
 	tcflag_t bufferable;
 };
 
+struct ShellContext;
+
+void changeifs(ShellContext &sh, const char *val);
+void changemail(ShellContext &sh, const char *val);
+void changepath(ShellContext &sh, const char *val);
+void getoptsreset(ShellContext &sh, const char *val);
+#ifndef SMALL
+void sethistsize(ShellContext &sh, const char *val);
+#endif
+void changelocale(ShellContext &sh, const char *val);
+
 struct ShellContext {
 	StackStr stackstr;
 	std::vector<void *> stackheaps;
@@ -143,26 +154,26 @@ struct ShellContext {
 #if ATTY
 		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "ATTY\0", nullptr },
 #endif
-		{ nullptr, VSTRFIXED|VTEXTFIXED, defifsvar, &ShellContext::changeifs },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "MAIL\0", &ShellContext::changemail },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "MAILPATH\0", &ShellContext::changemail },
-		{ nullptr, VSTRFIXED|VTEXTFIXED, defpathvar, &ShellContext::changepath },
+		{ nullptr, VSTRFIXED|VTEXTFIXED, defifsvar, changeifs },
+		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "MAIL\0", changemail },
+		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "MAILPATH\0", changemail },
+		{ nullptr, VSTRFIXED|VTEXTFIXED, defpathvar, changepath },
 		{ nullptr, VSTRFIXED|VTEXTFIXED, "PS1=$ ", nullptr },
 		{ nullptr, VSTRFIXED|VTEXTFIXED, "PS2=> ", nullptr },
 		{ nullptr, VSTRFIXED|VTEXTFIXED, "PS4=+ ", nullptr },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VNOFUNC, defoptindvar, &ShellContext::getoptsreset },
+		{ nullptr, VSTRFIXED|VTEXTFIXED|VNOFUNC, defoptindvar, getoptsreset },
 #ifdef WITH_LINENO
 		{ nullptr, VSTRFIXED|VTEXTFIXED, linenovar, nullptr },
 #endif
 #ifndef SMALL
 		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "TERM\0", nullptr },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "HISTSIZE\0", &ShellContext::sethistsize },
+		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "HISTSIZE\0", sethistsize },
 #endif
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_ALL\0", &ShellContext::changelocale },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_COLLATE\0", &ShellContext::changelocale },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_CTYPE\0", &ShellContext::changelocale },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_NUMERIC\0", &ShellContext::changelocale },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LANG\0", &ShellContext::changelocale },
+		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_ALL\0", changelocale },
+		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_COLLATE\0", changelocale },
+		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_CTYPE\0", changelocale },
+		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_NUMERIC\0", changelocale },
+		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LANG\0", changelocale },
 	};
 	struct var *vartab[39] = {};
 
@@ -210,9 +221,6 @@ struct ShellContext {
 	int rootpid = 0;
 	int mypid = 0;
 	int shlvl = 0;
-#ifdef __GLIBC__
-	int *dash_errno = nullptr;
-#endif
 	struct jmploc main_handler = {};
 
 	struct jmploc *handler = nullptr;
@@ -273,67 +281,62 @@ struct ShellContext {
 		if (signaled == this)
 			signaled = nullptr;
 	}
-
-	void init();
-	void exitreset();
-	void forkreset(union node *);
-	void postexitreset();
-	void reset();
-
-	void freestdout()
-	{
-		output.nextc = output.buf;
-		output.flags = 0;
-	}
-
-#ifdef USE_GLIBC_STDIO
-	void outc(int ch, struct output *file)
-	{
-		putc(ch, file->stream);
-	}
-#else
-	void outc(int ch, struct output *file)
-	{
-		if (file->nextc == file->end)
-			outcslow(ch, file);
-		else {
-			*file->nextc = ch;
-			file->nextc++;
-		}
-	}
-#endif
-
-	int padvance(const char **path, const char *name)
-	{
-		return padvance_magic(path, name, 1);
-	}
-
-	int have_traps(void)
-	{
-		return trapcnt;
-	}
-
-	char *bltinlookup(const char *name)
-	{
-		return lookupvar(name);
-	}
-
-	int goodname(const char *p)
-	{
-		return !*endofname(p);
-	}
-
-	int parser_eof(void)
-	{
-		return tokpushback && lasttoken == TEOF;
-	}
+};
 
 #include "shell_context_methods.inc"
 
-	int execute(char *command, EvalFlags flags)
-	{
-		return evalstring(command, flags);
+inline void freestdout(ShellContext &sh)
+{
+	sh.output.nextc = sh.output.buf;
+	sh.output.flags = 0;
+}
+
+#ifdef USE_GLIBC_STDIO
+inline void outc(ShellContext &sh, int ch, struct output *file)
+{
+	(void)sh;
+	putc(ch, file->stream);
+}
+#else
+inline void outc(ShellContext &sh, int ch, struct output *file)
+{
+	if (file->nextc == file->end)
+		outcslow(sh, ch, file);
+	else {
+		*file->nextc = ch;
+		file->nextc++;
 	}
-};
+}
+#endif
+
+inline int padvance(ShellContext &sh, const char **path, const char *name)
+{
+	return padvance_magic(sh, path, name, 1);
+}
+
+inline int have_traps(ShellContext &sh)
+{
+	return sh.trapcnt;
+}
+
+inline char *bltinlookup(ShellContext &sh, const char *name)
+{
+	return lookupvar(sh, name);
+}
+
+inline int goodname(ShellContext &sh, const char *p)
+{
+	return !*endofname(sh, p);
+}
+
+inline int parser_eof(ShellContext &sh)
+{
+	return sh.tokpushback && sh.lasttoken == TEOF;
+}
+
+inline int execute(ShellContext &sh, char *command, EvalFlags flags)
+{
+	return evalstring(sh, command, flags);
+}
 
 #endif
