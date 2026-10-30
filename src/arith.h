@@ -117,4 +117,6 @@ private:
 } /* namespace arith */
 } /* namespace dash */
 
+dash::ShellResult<intmax_t> arith(ShellContext &sh, const char *s);
+
 #endif

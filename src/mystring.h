@@ -66,14 +66,17 @@ extern const char dotdir[];
 #if 0
 void scopyn(const char *, char *, int);
 #endif
+#include "error.h"
+
+struct ShellContext;
 char *prefix(const char *, const char *);
-void badnum(const char *s) __attribute__ ((noreturn));
-intmax_t atomax(const char *, int);
-intmax_t atomax10(const char *);
-int number(const char *);
-int is_number(const char *);
-char *single_quote(const char *);
-char *sstrdup(const char *);
+tl::unexpected<dash::ShellErr> badnum(ShellContext &sh, const char *s);
+dash::ShellResult<intmax_t> atomax(ShellContext &sh, const char *, int);
+dash::ShellResult<intmax_t> atomax10(ShellContext &sh, const char *);
+dash::ShellResult<int> number(ShellContext &sh, const char *);
+int is_number(ShellContext &sh, const char *);
+char *single_quote(ShellContext &sh, const char *);
+char *sstrdup(ShellContext &sh, const char *);
 int pstrcmp(const void *, const void *);
 const char *const *findstring(const char *, const char *const *, size_t);
 

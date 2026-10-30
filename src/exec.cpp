@@ -98,7 +98,7 @@ static void clearcmdentry(ShellContext &sh);
 static struct tblentry * cmdlookup(ShellContext &sh, const char *, int);
 static void delete_cmd_entry(ShellContext &sh);
 static void addcmdentry(ShellContext &sh, char *, struct cmdentry *);
-static int describe_command(ShellContext &sh, struct output *, char *, const char *, int);
+static dash::ShellResult<int> describe_command(ShellContext &sh, struct output *, char *, const char *, int);
 
 
 /*
@@ -267,7 +267,7 @@ padvance_magic(ShellContext &sh, const char **path, const char *name, int magic)
 /*** Command hashing code ***/
 
 
-int
+dash::ShellResult<int>
 hashcmd(ShellContext &sh, int argc, char **argv)
 {
 	struct tblentry **pp;
@@ -278,7 +278,7 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 	bool clear;
 
 	clear = false;
-	while ((c = nextopt(sh, "r")) != '\0')
+	while ((c = TRY_SH(nextopt(sh, "r"))) != '\0')
 		clear = true;
 	if(clear) {
 		clearcmdentry(sh);
@@ -302,7 +302,7 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 		      !(cmdp->param.cmd->flags & BUILTIN_REGULAR) &&
 		      sh.builtinloc > 0)))
 			delete_cmd_entry(sh);
-		find_command(sh, name, &entry, DO_ERR, pathval());
+		TRY_SHV(find_command(sh, name, &entry, DO_ERR, pathval()));
 		if (entry.cmdtype == CMDUNKNOWN)
 			c = 1;
 		sh.argptr++;
@@ -351,7 +351,7 @@ test_exec(ShellContext &sh, const char *fullname, struct stat64 *statb)
  * change the shellexec routine as well.
  */
 
-void
+dash::ShellResult<void>
 find_command(ShellContext &sh, char *name, struct cmdentry *entry, int act, const char *path)
 {
 	struct tblentry *cmdp;
@@ -375,13 +375,13 @@ find_command(ShellContext &sh, char *name, struct cmdentry *entry, int act, cons
 #endif
 absfail:
 				entry->cmdtype = CMDUNKNOWN;
-				return;
+				return {};
 			}
 			if (!test_exec(sh, name, &statb))
 				goto absfail;
 		}
 		entry->cmdtype = CMDNORMAL;
-		return;
+		return {};
 	}
 
 	updatetbl = (path == pathval());
@@ -478,7 +478,7 @@ loop:
 			readcmdfile(sh, fullname);
 			if ((cmdp = cmdlookup(sh, name, 0)) == NULL ||
 			    cmdp->cmdtype != CMDFUNCTION)
-				sh_error(sh, "%s not defined in %s", name,
+				return sh_error(sh, "%s not defined in %s", name,
 					 fullname);
 			stunalloc(sh, fullname);
 			goto success;
@@ -490,7 +490,7 @@ loop:
 		if (!updatetbl) {
 			entry->cmdtype = CMDNORMAL;
 			entry->u.index = idx;
-			return;
+			return {};
 		}
 		INTOFF;
 		cmdp = cmdlookup(sh, name, 1);
@@ -507,13 +507,13 @@ loop:
 		sh_warnx(sh, "%s: %s", name, errmsg(sh, e, E_EXEC));
 fail:
 	entry->cmdtype = CMDUNKNOWN;
-	return;
+	return {};
 
 builtin_success:
 	if (!updatetbl) {
 		entry->cmdtype = CMDBUILTIN;
 		entry->u.cmd = bcmd;
-		return;
+		return {};
 	}
 	INTOFF;
 	cmdp = cmdlookup(sh, name, 1);
@@ -524,6 +524,7 @@ success:
 	cmdp->rehash = 0;
 	entry->cmdtype = cmdp->cmdtype;
 	entry->u = cmdp->param;
+	return {};
 }
 
 
@@ -631,7 +632,7 @@ clearcmdentry(ShellContext &sh)
 			}
 		}
 	}
-	INTON;
+	INTON_DEFER;
 }
 
 
@@ -692,7 +693,7 @@ delete_cmd_entry(ShellContext &sh)
 	if (cmdp->cmdtype == CMDFUNCTION)
 		freefunc(sh, cmdp->param.func);
 	delete cmdp;
-	INTON;
+	INTON_DEFER;
 }
 
 
@@ -747,7 +748,7 @@ defun(ShellContext &sh, union node *func)
 	entry.cmdtype = CMDFUNCTION;
 	entry.u.func = copyfunc(sh, func);
 	addcmdentry(sh, const_cast<char *>(func->ndefun.text.c_str()), &entry);
-	INTON;
+	INTON_DEFER;
 }
 
 
@@ -769,19 +770,19 @@ unsetfunc(ShellContext &sh, const char *name)
  * Locate and print what a word is...
  */
 
-int
+dash::ShellResult<int>
 typecmd(ShellContext &sh, int argc, char **argv)
 {
 	int err = 0;
 
-	nextopt(sh, nullstr);
+	TRY_SHV(nextopt(sh, nullstr));
 	while (*sh.argptr) {
-		err |= describe_command(sh, sh.out1, *sh.argptr++, NULL, 1);
+		err |= TRY_SH(describe_command(sh, sh.out1, *sh.argptr++, NULL, 1));
 	}
 	return err;
 }
 
-static int
+static dash::ShellResult<int>
 describe_command(ShellContext &sh, struct output *out, char *command,
                             const char *path, int verbose)
 {
@@ -826,7 +827,7 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 		entry.u = cmdp->param;
 	} else {
 		/* Finally use brute force */
-		find_command(sh, command, &entry, DO_ABS, path);
+		TRY_SHV(find_command(sh, command, &entry, DO_ABS, path));
 	}
 
 	switch (entry.cmdtype) {
@@ -882,7 +883,7 @@ out:
 	return 0;
 }
 
-int
+dash::ShellResult<int>
 commandcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *cmd;
@@ -894,7 +895,7 @@ commandcmd(ShellContext &sh, int argc, char **argv)
 	int verify = 0;
 	const char *path = NULL;
 
-	while ((c = nextopt(sh, "pvV")) != '\0')
+	while ((c = TRY_SH(nextopt(sh, "pvV"))) != '\0')
 		if (c == 'V')
 			verify |= VERIFY_VERBOSE;
 		else if (c == 'v')

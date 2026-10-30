@@ -72,7 +72,7 @@ static void signal_entry(int signo)
 }
 
 static int decode_signum(ShellContext &sh, const char *);
-MKINIT void clear_traps(ShellContext &sh, union node *);
+MKINIT dash::ShellResult<void> clear_traps(ShellContext &sh, union node *);
 
 #ifdef mkinit
 INCLUDE "memalloc.h"
@@ -88,14 +88,14 @@ FORKRESET {
 }
 #endif
 
-int
+dash::ShellResult<int>
 trapcmd(ShellContext &sh, int argc, char **argv)
 {
 	const char *action;
 	char **ap;
 	int signo;
 
-	nextopt(sh, nullstr);
+	TRY_SHV(nextopt(sh, nullstr));
 	ap = sh.argptr;
 	if (!*ap) {
 		for (signo = 0 ; signo < NSIG ; signo++) {
@@ -109,7 +109,7 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 		return 0;
 	}
 	if (sh.ptrap)
-		clear_traps(sh, NULL);
+		TRY_SHV(clear_traps(sh, NULL));
 	if (!ap[1] || decode_signum(sh, *ap) >= 0)
 		action = nullptr;
 	else
@@ -141,7 +141,7 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 	return 0;
 }
 
-void
+dash::ShellResult<void>
 clear_traps(ShellContext &sh, union node *n)
 {
 	int simplecmd;
@@ -162,6 +162,7 @@ clear_traps(ShellContext &sh, union node *n)
 	sh.trapcnt = 0;
 	sh.ptrap = simplecmd;
 	INTON;
+	return {};
 }
 
 void
@@ -276,7 +277,7 @@ onsig(ShellContext &sh, int signo)
 	}
 }
 
-void
+dash::ShellResult<void>
 dotrap(ShellContext &sh)
 {
 	char *q;
@@ -284,7 +285,7 @@ dotrap(ShellContext &sh)
 	int status, last_status;
 
 	if (!sh.pending_sig)
-		return;
+		return {};
 
 	status = sh.savestatus;
 	last_status = status;
@@ -308,12 +309,17 @@ dotrap(ShellContext &sh)
 
 		if (!sh.trap[i + 1])
 			continue;
-		evalstring(sh, sh.trap[i + 1]->data(), {});
+		auto r = evalstring(sh, sh.trap[i + 1]->data(), {});
+		if (!r) {
+			sh.savestatus = last_status;
+			return tl::unexpected(r.error());
+		}
 		if (sh.evalskip != SKIPFUNC)
 			sh.exitstatus = status;
 	}
 
 	sh.savestatus = last_status;
+	return {};
 }
 
 void
@@ -333,25 +339,19 @@ exitshell(ShellContext &sh)
 {
 	sh.savestatus = sh.exitstatus;
 	TRACE(("pid %d, exitshell(%d)\n", getpid(), sh.savestatus));
-	try {
-		if (sh.trap[0]) {
-			std::string exittrap = std::move(*sh.trap[0]);
-			sh.trap[0].reset();
-			if (!sh.ptrap) {
-				sh.evalskip = 0;
-				evalstring(sh, exittrap.data(), {});
-				sh.evalskip = SKIPFUNCDEF;
-			}
+	if (sh.trap[0]) {
+		std::string exittrap = std::move(*sh.trap[0]);
+		sh.trap[0].reset();
+		if (!sh.ptrap) {
+			sh.evalskip = 0;
+			/* EXIT trap failure must not skip teardown. */
+			(void)evalstring(sh, exittrap.data(), {});
+			sh.evalskip = SKIPFUNCDEF;
 		}
-	} catch (const dash::ShellError &) {
-		/* EXIT trap failed; still tear down. */
 	}
 	exitreset(sh);
 	postexitreset(sh);
-	try {
-		setjobctl(sh, 0);
-	} catch (const dash::ShellError &) {
-	}
+	setjobctl(sh, 0);
 	flushall(sh);
 	_exit(sh.exitstatus);
 	/* NOTREACHED */

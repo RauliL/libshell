@@ -32,7 +32,9 @@
  *
  */
 
-int	cdcmd(int, char **);
-int	pwdcmd(int, char **);
-void	setpwd(const char *, int);
+#include "error.h"
+struct ShellContext;
+dash::ShellResult<int> cdcmd(ShellContext &sh, int, char **);
+dash::ShellResult<int> pwdcmd(ShellContext &sh, int, char **);
+dash::ShellResult<void> setpwd(ShellContext &sh, const char *, int);
 #endif

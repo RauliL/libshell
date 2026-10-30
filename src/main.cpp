@@ -59,15 +59,15 @@ int *dash_errno;
 #include "parse_error.h"
 #include "nodes_free.h"
 
-static char *find_dot_file(ShellContext &sh, char *);
+static dash::ShellResult<char *> find_dot_file(ShellContext &sh, char *);
 
 /*
  * Read and execute commands until EOF.  No prompting or other interactive
  * behaviour — used for scripts, -c companions, `.`, and sourced files.
- * ShellError is converted to an exit status at this boundary (Result-style);
- * EXEXIT/EXEND propagate to the driver.
+ * EXERROR is converted to an exit status at this boundary; EXEXIT/EXEND/EXINT
+ * propagate as ShellResult errors to the driver.
  */
-int
+dash::ShellResult<int>
 cmdloop(ShellContext &sh)
 {
 	union node *n;
@@ -86,7 +86,17 @@ cmdloop(ShellContext &sh)
 				break;
 			}
 			sh.job_warning = (sh.job_warning == 2) ? 1 : 0;
-			status = evaltree(sh, n, {});
+			auto r = evaltree(sh, n, {});
+			if (!r) {
+				sh.exception = r.error().code;
+				if (n && n != NEOF)
+					freenode(n);
+				clear_stack_temps(sh);
+				if (r.error().code == EXERROR)
+					return sh.exitstatus;
+				return r;
+			}
+			status = *r;
 			if (n && n != NEOF)
 				freenode(n);
 			clear_stack_temps(sh);
@@ -94,12 +104,6 @@ cmdloop(ShellContext &sh)
 			report_parse_error(sh, e);
 			clear_stack_temps(sh);
 			return sh.exitstatus;
-		} catch (const dash::ShellError &e) {
-			sh.exception = e.code();
-			clear_stack_temps(sh);
-			if (e.code() == EXERROR)
-				return sh.exitstatus;
-			throw;
 		}
 
 		skip = sh.evalskip;
@@ -115,19 +119,22 @@ cmdloop(ShellContext &sh)
 /*
  * Read a file containing shell functions / commands.
  */
-void
+dash::ShellResult<void>
 readcmdfile(ShellContext &sh, char *name)
 {
-	setinputfile(sh, name, INPUT_PUSH_FILE);
-	cmdloop(sh);
+	TRY_SHV(setinputfile(sh, name, INPUT_PUSH_FILE));
+	auto r = cmdloop(sh);
 	popfile(sh);
+	if (!r)
+		return tl::unexpected(r.error());
+	return {};
 }
 
 /*
  * Take commands from a file.  To be compatible we should do a path
  * search for the file, which is necessary to find sub-commands.
  */
-static char *
+static dash::ShellResult<char *>
 find_dot_file(ShellContext &sh, char *basename)
 {
 	char *fullname;
@@ -149,41 +156,42 @@ find_dot_file(ShellContext &sh, char *basename)
 	}
 
 	/* not found in the PATH */
-	sh_error(sh, "%s: not found", basename);
-	/* NOTREACHED */
+	return sh_error(sh, "%s: not found", basename);
 }
 
-int
+dash::ShellResult<int>
 dotcmd(ShellContext &sh, int argc, char **argv)
 {
 	int status = 0;
 
-	nextopt(sh, nullstr);
+	TRY_SHV(nextopt(sh, nullstr));
 	argv = sh.argptr;
 
 	if (*argv) {
-		char *fullname;
-
-		fullname = find_dot_file(sh, *argv);
-		setinputfile(sh, fullname, INPUT_PUSH_FILE);
+		auto fullname_r = find_dot_file(sh, *argv);
+		if (!fullname_r)
+			return tl::unexpected(fullname_r.error());
+		char *fullname = *fullname_r;
+		TRY_SHV(setinputfile(sh, fullname, INPUT_PUSH_FILE));
 		sh.commandname = fullname;
-		status = cmdloop(sh);
+		auto r = cmdloop(sh);
 		popfile(sh);
+		if (!r)
+			return r;
+		status = *r;
 	}
 
 	return status;
 }
 
-int
+dash::ShellResult<int>
 exitcmd(ShellContext &sh, int argc, char **argv)
 {
 	if (stoppedjobs(sh))
 		return 0;
 
 	if (argc > 1)
-		sh.savestatus = number(sh, argv[1]);
+		sh.savestatus = TRY_SH(number(sh, argv[1]));
 
-	exraise(sh, EXEXIT);
-	/* NOTREACHED */
+	return exraise(sh, EXEXIT);
 }
-

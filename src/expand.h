@@ -73,15 +73,16 @@ struct mbpair {
 union node;
 
 struct ShellContext;
-void expandarg(ShellContext &sh, union node *, ArgList *, int);
+#include "error.h"
+dash::ShellResult<void> expandarg(ShellContext &sh, union node *, ArgList *, int);
 #define rmescapes(p) _rmescapes(sh, (p), 0)
 char *_rmescapes(ShellContext &sh, char *, int);
-int casematch(ShellContext &sh, union node *, char *);
+dash::ShellResult<int> casematch(ShellContext &sh, union node *, char *);
 void recordregion(ShellContext &sh, int, int, int);
-void removerecordregions(ShellContext &sh, int); 
+dash::ShellResult<void> removerecordregions(ShellContext &sh, int);
 void ifsbreakup(ShellContext &sh, char *, int, ArgList *);
 void ifsfree(ShellContext &sh);
-void restore_handler_expandarg(ShellContext &sh, int err);
+dash::ShellResult<void> restore_handler_expandarg(ShellContext &sh, int err);
 void changeifs(ShellContext &sh, const char *);
 
 #endif

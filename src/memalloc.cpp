@@ -2,6 +2,7 @@
  * Heap allocation helpers and StackStr-backed string building.
  */
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <unistd.h>
@@ -18,7 +19,10 @@
 static __attribute__((__always_inline__)) inline void
 outofspace(ShellContext &sh)
 {
-	sh_error(sh, "Out of space");
+	/* OOM is fatal; avoid ShellResult blast radius through ckmalloc. */
+	(void)sh;
+	fprintf(stderr, "Out of space\n");
+	_exit(2);
 }
 
 static rawmem

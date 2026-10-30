@@ -75,7 +75,7 @@
  *  @param ap argument (variable) list
  *  @param len length of line including trailing '\0'
  */
-static void
+static dash::ShellResult<void>
 readcmd_handle_line(ShellContext &sh, char *s, int ac, char **ap)
 {
 	ArgList fields;
@@ -90,17 +90,18 @@ readcmd_handle_line(ShellContext &sh, char *s, int ac, char **ap)
 		if (i >= fields.size()) {
 			/* nullify remaining arguments */
 			do {
-				setvar(sh, *ap, nullstr, 0);
+				TRY_SHV(setvar(sh, *ap, nullstr, 0));
 			} while (*++ap);
 
-			return;
+			return {};
 		}
 
 		/* set variable to field */
 		rmescapes(fields[i].data());
-		setvar(sh, *ap, fields[i].c_str(), 0);
+		TRY_SHV(setvar(sh, *ap, fields[i].c_str(), 0));
 		i++;
 	} while (*++ap);
+	return {};
 }
 
 /*
@@ -111,7 +112,7 @@ readcmd_handle_line(ShellContext &sh, char *s, int ac, char **ap)
  * This uses unbuffered input, which may be avoidable in some cases.
  */
 
-int
+dash::ShellResult<int>
 readcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *prompt;
@@ -125,7 +126,7 @@ readcmd(ShellContext &sh, int argc, char **argv)
 
 	rflag = 0;
 	prompt = NULL;
-	while ((i = nextopt(sh, "p:r")) != '\0') {
+	while ((i = TRY_SH(nextopt(sh, "p:r"))) != '\0') {
 		if (i == 'p')
 			prompt = sh.optionarg;
 		else
@@ -138,7 +139,7 @@ readcmd(ShellContext &sh, int argc, char **argv)
 #endif
 	}
 	if (*(ap = sh.argptr) == NULL)
-		sh_error(sh, "arg count");
+		return sh_error(sh, "arg count");
 
 	status = 0;
 	STARTSTACKSTR(p);
@@ -191,7 +192,7 @@ start:
 	popfile(sh);
 	recordregion(sh, startloc, p - (char *)stackblock(), 0);
 	STACKSTRNUL(p);
-	readcmd_handle_line(sh, p + 1, argc - (ap - argv), ap);
+	TRY_SHV(readcmd_handle_line(sh, p + 1, argc - (ap - argv), ap));
 	return status;
 }
 
@@ -206,7 +207,7 @@ start:
  * Public domain.
  */
 
-int
+dash::ShellResult<int>
 umaskcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *ap;
@@ -214,7 +215,7 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 	int i;
 	int symbolic_mode = 0;
 
-	while ((i = nextopt(sh, "S")) != '\0') {
+	while ((i = TRY_SH(nextopt(sh, "S"))) != '\0') {
 		symbolic_mode = 1;
 	}
 
@@ -250,7 +251,7 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 			new_mask = 0;
 			do {
 				if (*ap >= '8' || *ap < '0')
-					sh_error(sh, illnum, *sh.argptr);
+					return sh_error(sh, illnum, *sh.argptr);
 				new_mask = (new_mask << 3) + (*ap - '0');
 			} while (*++ap != '\0');
 		} else {
@@ -314,7 +315,7 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 			}
 			if (*ap) {
 error:
-				sh_error(sh, "Illegal mode: %s", *sh.argptr);
+				return sh_error(sh, "Illegal mode: %s", *sh.argptr);
 				return 1;
 			}
 			new_mask = ~new_mask;
@@ -402,7 +403,7 @@ printlim(ShellContext &sh, enum limtype how, const struct rlimit *limit,
 	}
 }
 
-int
+dash::ShellResult<int>
 ulimitcmd(ShellContext &sh, int argc, char **argv)
 {
 	int	c;
@@ -414,7 +415,7 @@ ulimitcmd(ShellContext &sh, int argc, char **argv)
 	struct rlimit	limit;
 
 	what = 'f';
-	while ((optc = nextopt(sh, "HSa"
+	while ((optc = TRY_SH(nextopt(sh, "HSa"
 #ifdef RLIMIT_CPU
 			       "t"
 #endif
@@ -451,7 +452,7 @@ ulimitcmd(ShellContext &sh, int argc, char **argv)
 #ifdef RLIMIT_RTPRIO
 			       "r"
 #endif
-	)) != '\0')
+	))) != '\0')
 		switch (optc) {
 		case 'H':
 			how = HARD;
@@ -474,7 +475,7 @@ ulimitcmd(ShellContext &sh, int argc, char **argv)
 		char *p = *sh.argptr;
 
 		if (all || sh.argptr[1])
-			sh_error(sh, "too many arguments");
+			return sh_error(sh, "too many arguments");
 		if (strcmp(p, "unlimited") == 0)
 			val = RLIM_INFINITY;
 		else {
@@ -487,7 +488,7 @@ ulimitcmd(ShellContext &sh, int argc, char **argv)
 					break;
 			}
 			if (c)
-				sh_error(sh, "bad number");
+				return sh_error(sh, "bad number");
 			val *= l->factor;
 		}
 	}
@@ -507,7 +508,7 @@ ulimitcmd(ShellContext &sh, int argc, char **argv)
 		if (how & SOFT)
 			limit.rlim_cur = val;
 		if (setrlimit(l->cmd, &limit) < 0)
-			sh_error(sh, "error setting limit (%s)", strerror(errno));
+			return sh_error(sh, "error setting limit (%s)", strerror(errno));
 	} else {
 		printlim(sh, how, &limit, l);
 	}

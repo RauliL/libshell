@@ -109,10 +109,10 @@ static void set_curjob(ShellContext &sh, struct job *, unsigned);
 static int jobno(ShellContext &sh, const struct job *);
 static int sprint_status(ShellContext &sh, char *, int, int);
 static void freejob(ShellContext &sh, struct job *);
-static struct job * getjob(ShellContext &sh, const char *, int);
+static dash::ShellResult<struct job *> getjob(ShellContext &sh, const char *, int);
 static struct job * growjobtab(ShellContext &sh);
 static void forkchild(ShellContext &sh, struct job *, union node *, int);
-static void forkparent(ShellContext &sh, struct job *, union node *, int, pid_t);
+static dash::ShellResult<void> forkparent(ShellContext &sh, struct job *, union node *, int, pid_t);
 static int dowait(ShellContext &sh, int, struct job *);
 #ifdef SYSV
 STATIC int onsigchild(void);
@@ -126,8 +126,8 @@ static void showpipe(ShellContext &sh, struct job *, struct output *);
 static int getstatus(ShellContext &sh, struct job *);
 
 #if JOBS
-static int restartjob(ShellContext &sh, struct job *, int);
-static void xtcsetpgrp(ShellContext &sh, int, pid_t);
+static dash::ShellResult<int> restartjob(ShellContext &sh, struct job *, int);
+static dash::ShellResult<void> xtcsetpgrp(ShellContext &sh, int, pid_t);
 #endif
 
 static void
@@ -189,35 +189,36 @@ set_curjob(ShellContext &sh, struct job *jp, unsigned mode)
 
 
 
-static void
+static dash::ShellResult<void>
 xxtcsetpgrp(ShellContext &sh, pid_t pgrp)
 {
 	int fd = sh.ttyfd;
 
 	if (fd < 0)
-		return;
+		return {};
 
-	xtcsetpgrp(sh, fd, pgrp);
+	TRY_SHV(xtcsetpgrp(sh, fd, pgrp));
+	return {};
 }
 
-void
+dash::ShellResult<void>
 setjobctl(ShellContext &sh, int on)
 {
 	int pgrp = -1;
 	int fd;
 
 	if (on == sh.jobctl || rootshell == 0)
-		return;
+		return {};
 	if (on) {
 		int ofd;
-		ofd = fd = sh_open(sh, _PATH_TTY, O_RDWR, 1);
+		ofd = fd = TRY_SH(sh_open(sh, _PATH_TTY, O_RDWR, 1));
 		if (fd < 0) {
 			fd += 3;
 			while (!isatty(fd))
 				if (--fd < 0)
 					goto out;
 		}
-		fd = savefd(sh, fd, ofd);
+		fd = TRY_SH(savefd(sh, fd, ofd));
 		do { /* while we are in the background */
 			if ((pgrp = tcgetpgrp(fd)) < 0) {
 close:
@@ -228,7 +229,7 @@ out:
 					break;
 				sh_warnx(sh, "can't access tty; job control turned off");
 				mflag = on = 0;
-				return;
+				return {};
 			}
 			if (pgrp == getpgrp())
 				break;
@@ -249,7 +250,7 @@ out:
 	setsignal(sh, SIGTTIN);
 	if (fd >= 0) {
 		setpgid(0, pgrp);
-		xtcsetpgrp(sh, fd, pgrp);
+		TRY_SHV(xtcsetpgrp(sh, fd, pgrp));
 
 		if (!on) {
 			close(fd);
@@ -259,11 +260,12 @@ out:
 
 	sh.ttyfd = fd;
 	sh.jobctl = on;
+	return {};
 }
 #endif
 
 
-int
+dash::ShellResult<int>
 killcmd(ShellContext &sh, int argc, char **argv)
 {
 	extern const char *const signal_names[];
@@ -275,7 +277,7 @@ killcmd(ShellContext &sh, int argc, char **argv)
 
 	if (argc <= 1) {
 usage:
-		sh_error(sh, "Usage: kill [-s sigspec | -signum | -sigspec] [pid | job]... or\n"
+		return sh_error(sh, "Usage: kill [-s sigspec | -signum | -sigspec] [pid | job]... or\n"
 "kill -l [exitstatus]"
 		);
 	}
@@ -285,7 +287,7 @@ usage:
 		if (signo < 0) {
 			int c;
 
-			while ((c = nextopt(sh, "ls:")) != '\0')
+			while ((c = TRY_SH(nextopt(sh, "ls:"))) != '\0')
 				switch (c) {
 				default:
 #ifdef DEBUG
@@ -297,7 +299,7 @@ usage:
 				case 's':
 					signo = decode_signal(sh, sh.optionarg, 1);
 					if (signo < 0) {
-						sh_error(sh, "invalid signal number or name: %s",
+						return sh_error(sh, "invalid signal number or name: %s",
 							sh.optionarg
 						);
 					}
@@ -326,13 +328,13 @@ usage:
 			}
 			return 0;
 		}
-		signo = number(sh, *argv);
+		signo = TRY_SH(number(sh, *argv));
 		if (signo > 128)
 			signo -= 128;
 		if (0 < signo && signo < NSIG)
 			outfmt(sh, out, snlfmt, signal_names[signo]);
 		else
-			sh_error(sh, "invalid signal number or exit status: %s",
+			return sh_error(sh, "invalid signal number or exit status: %s",
 				 *argv);
 		return 0;
 	}
@@ -340,11 +342,11 @@ usage:
 	i = 0;
 	do {
 		if (**argv == '%') {
-			jp = getjob(sh, *argv, 0);
+			jp = TRY_SH(getjob(sh, *argv, 0));
 			pid = -jp->ps[0].pid;
 		} else
 			pid = **argv == '-' ?
-				-number(sh, *argv + 1) : number(sh, *argv);
+				-TRY_SH(number(sh, *argv + 1)) : TRY_SH(number(sh, *argv));
 		if (kill(pid, signo) != 0) {
 			sh_warnx(sh, snlfmt, strerror(errno));
 			i = 1;
@@ -361,7 +363,7 @@ jobno(ShellContext &sh, const struct job *jp)
 }
 
 #if JOBS
-int
+dash::ShellResult<int>
 fgcmd(ShellContext &sh, int argc, char **argv)
 {
 	struct job *jp;
@@ -370,23 +372,23 @@ fgcmd(ShellContext &sh, int argc, char **argv)
 	int retval;
 
 	mode = (**argv == 'f') ? FORK_FG : FORK_BG;
-	nextopt(sh, nullstr);
+	TRY_SHV(nextopt(sh, nullstr));
 	argv = sh.argptr;
 	out = sh.out1;
 	do {
-		jp = getjob(sh, *argv, 1);
+		jp = TRY_SH(getjob(sh, *argv, 1));
 		if (mode == FORK_BG) {
 			set_curjob(sh, jp, CUR_RUNNING);
 			outfmt(sh, out, "[%d] ", jobno(sh, jp));
 		}
 		outstr(sh, jp->ps->cmd, out);
 		showpipe(sh, jp, out);
-		retval = restartjob(sh, jp, mode);
+		retval = TRY_SH(restartjob(sh, jp, mode));
 	} while (*argv && *++argv);
 	return retval;
 }
 
-int
+dash::ShellResult<int>
 bgcmd(ShellContext &sh, int argc, char **argv)
 #ifdef HAVE_ALIAS_ATTRIBUTE
 	__attribute__((__alias__("fgcmd")));
@@ -397,7 +399,7 @@ bgcmd(ShellContext &sh, int argc, char **argv)
 #endif
 
 
-static int
+static dash::ShellResult<int>
 restartjob(ShellContext &sh, struct job *jp, int mode)
 {
 	struct procstat *ps;
@@ -411,7 +413,7 @@ restartjob(ShellContext &sh, struct job *jp, int mode)
 	jp->state = JOBRUNNING;
 	pgid = jp->ps->pid;
 	if (mode == FORK_FG)
-		xxtcsetpgrp(sh, pgid);
+		TRY_SHV(xxtcsetpgrp(sh, pgid));
 	killpg(pgid, SIGCONT);
 	ps = jp->ps;
 	i = jp->nprocs;
@@ -421,7 +423,7 @@ restartjob(ShellContext &sh, struct job *jp, int mode)
 		}
 	} while (ps++, --i);
 out:
-	status = (mode == FORK_FG) ? waitforjob(sh, jp) : 0;
+	status = (mode == FORK_FG) ? TRY_SH(waitforjob(sh, jp)) : 0;
 	INTON;
 	return status;
 }
@@ -536,14 +538,14 @@ start:
 }
 
 
-int
+dash::ShellResult<int>
 jobscmd(ShellContext &sh, int argc, char **argv)
 {
 	int mode, m;
 	struct output *out;
 
 	mode = 0;
-	while ((m = nextopt(sh, "lp")))
+	while ((m = TRY_SH(nextopt(sh, "lp"))))
 		if (m == 'l')
 			mode = SHOW_PID;
 		else
@@ -553,7 +555,7 @@ jobscmd(ShellContext &sh, int argc, char **argv)
 	argv = sh.argptr;
 	if (*argv)
 		do
-			showjob(sh, out, getjob(sh, *argv,0), mode);
+			showjob(sh, out, TRY_SH(getjob(sh, *argv,0)), mode);
 		while (*++argv);
 	else
 		showjobs(sh, out, mode);
@@ -602,19 +604,19 @@ freejob(ShellContext &sh, struct job *jp)
 		ckfree(jp->ps);
 	jp->used = 0;
 	set_curjob(sh, jp, CUR_DELETE);
-	INTON;
+	INTON_DEFER;
 }
 
 
 
-int
+dash::ShellResult<int>
 waitcmd(ShellContext &sh, int argc, char **argv)
 {
 	struct job *job;
 	int retval;
 	struct job *jp;
 
-	nextopt(sh, nullstr);
+	TRY_SHV(nextopt(sh, nullstr));
 	retval = 0;
 
 	argv = sh.argptr;
@@ -640,7 +642,7 @@ waitcmd(ShellContext &sh, int argc, char **argv)
 	retval = 127;
 	do {
 		if (**argv != '%') {
-			pid_t pid = number(sh, *argv);
+			pid_t pid = TRY_SH(number(sh, *argv));
 			job = sh.curjob;
 			goto start;
 			do {
@@ -652,7 +654,7 @@ start:
 					goto repeat;
 			} while (1);
 		} else
-			job = getjob(sh, *argv, 0);
+			job = TRY_SH(getjob(sh, *argv, 0));
 		/* loop until process terminated or stopped */
 		if (!dowait(sh, DOWAIT_WAITCMD, job))
 			goto sigout;
@@ -676,7 +678,7 @@ sigout:
  * Convert a job name to a job structure.
  */
 
-static struct job *
+static dash::ShellResult<struct job *>
 getjob(ShellContext &sh, const char *name, int getctl)
 {
 	struct job *jp;
@@ -756,7 +758,7 @@ gotit:
 #endif
 	return jp;
 err:
-	sh_error(sh, err_msg, name);
+	return sh_error(sh, err_msg, name);
 }
 
 
@@ -900,7 +902,7 @@ forkchild(ShellContext &sh, struct job *jp, union node *n, int mode)
 		/* This can fail because we are doing it in the parent also */
 		(void)setpgid(0, pgrp);
 		if (mode == FORK_FG)
-			xxtcsetpgrp(sh, pgrp);
+			(void)xxtcsetpgrp(sh, pgrp);
 		setsignal(sh, SIGTSTP);
 		setsignal(sh, SIGTTOU);
 	} else
@@ -910,7 +912,7 @@ forkchild(ShellContext &sh, struct job *jp, union node *n, int mode)
 		ignoresig(sh, SIGQUIT);
 		if (jp->nprocs == 0) {
 			close(0);
-			sh_open(sh, _PATH_DEVNULL, O_RDONLY, 0);
+			(void)sh_open(sh, _PATH_DEVNULL, O_RDONLY, 0);
 			/* Should call reset_input here, but it's harmless
 			 * for now.
 			 */
@@ -937,20 +939,19 @@ forkchild(ShellContext &sh, struct job *jp, union node *n, int mode)
 		freejob(sh, jp);
 }
 
-static void
+static dash::ShellResult<void>
 forkparent(ShellContext &sh, struct job *jp, union node *n, int mode, pid_t pid)
 {
 	if (pid < 0) {
 		TRACE(("Fork failed, errno=%d", errno));
 		if (jp)
 			freejob(sh, jp);
-		sh_error(sh, "Cannot fork");
-		/* NOTREACHED */
+		return sh_error(sh, "Cannot fork");
 	}
 
 	TRACE(("In parent shell:  child = %d\n", pid));
 	if (!jp)
-		return;
+		return {};
 #if JOBS
 	if (mode != FORK_NOJOB && jp->jobctl) {
 		int pgrp;
@@ -975,9 +976,10 @@ forkparent(ShellContext &sh, struct job *jp, union node *n, int mode, pid_t pid)
 		if (sh.jobctl && n)
 			ps->cmd = commandtext(sh, n);
 	}
+	return {};
 }
 
-int
+dash::ShellResult<int>
 forkshell(ShellContext &sh, struct job *jp, union node *n, int mode)
 {
 	int pid;
@@ -990,12 +992,12 @@ forkshell(ShellContext &sh, struct job *jp, union node *n, int mode)
 	if (pid == 0)
 		forkchild(sh, jp, n, mode);
 	else
-		forkparent(sh, jp, n, mode, pid);
+		TRY_SHV(forkparent(sh, jp, n, mode, pid));
 
 	return pid;
 }
 
-struct job *
+dash::ShellResult<struct job *>
 vforkexec(ShellContext &sh, union node *n, char **argv, const char *path, int idx)
 {
 	struct job *jp;
@@ -1016,7 +1018,7 @@ vforkexec(ShellContext &sh, union node *n, char **argv, const char *path, int id
 	}
 
 	sh.vforked = 0;
-	forkparent(sh, jp, n, FORK_FG, pid);
+	TRY_SHV(forkparent(sh, jp, n, FORK_FG, pid));
 
 	return jp;
 }
@@ -1042,7 +1044,7 @@ vforkexec(ShellContext &sh, union node *n, char **argv, const char *path, int id
  * Called with interrupts off.
  */
 
-int
+dash::ShellResult<int>
 waitforjob(ShellContext &sh, struct job *jp)
 {
 	int st;
@@ -1055,7 +1057,7 @@ waitforjob(ShellContext &sh, struct job *jp)
 	st = getstatus(sh, jp);
 #if JOBS
 	if (jp->jobctl) {
-		xxtcsetpgrp(sh, sh.rootpid);
+		TRY_SHV(xxtcsetpgrp(sh, sh.rootpid));
 		/*
 		 * This is truly gross.
 		 * If we're doing job control, then we did a TIOCSPGRP which
@@ -1141,7 +1143,7 @@ gotjob:
 	}
 
 out:
-	INTON;
+	INTON_DEFER;
 
 	if (thisjob && thisjob == job) {
 		char s[48 + 1];
@@ -1545,7 +1547,7 @@ showpipe(ShellContext &sh, struct job *jp, struct output *out)
 
 
 #if JOBS
-static void
+static dash::ShellResult<void>
 xtcsetpgrp(ShellContext &sh, int fd, pid_t pgrp)
 {
 	int err;
@@ -1555,7 +1557,8 @@ xtcsetpgrp(ShellContext &sh, int fd, pid_t pgrp)
 	sigclearmask();
 
 	if (err)
-		sh_error(sh, "Cannot set tty process group (%s)", strerror(errno));
+		return sh_error(sh, "Cannot set tty process group (%s)", strerror(errno));
+	return {};
 }
 #endif
 

@@ -125,7 +125,8 @@ void *bsearch(const void *key, const void *base, size_t nmemb,
 #ifndef HAVE_SYSCONF
 long sysconf(int name)
 {
-	sh_error("no sysconf for: %d", name);
+	fprintf(stderr, "no sysconf for: %d\n", name);
+	_exit(2);
 }
 #endif
 

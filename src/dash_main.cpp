@@ -39,14 +39,14 @@ short profile_buf[16384];
 extern int etext();
 #endif
 
-static void read_profile(ShellContext &sh, const char *name);
-static int interactive_cmdloop(ShellContext &sh);
+static dash::ShellResult<void> read_profile(ShellContext &sh, const char *name);
+static dash::ShellResult<int> interactive_cmdloop(ShellContext &sh);
 
 /*
  * Top-level interactive parse/eval loop: prompting, mail checks, ignoreeof,
  * and recovering from parse errors at the prompt.
  */
-static int
+static dash::ShellResult<int>
 interactive_cmdloop(ShellContext &sh)
 {
 	union node *n;
@@ -78,13 +78,26 @@ interactive_cmdloop(ShellContext &sh)
 				}
 				numeof++;
 			} else {
-				int i;
-
 				sh.job_warning = (sh.job_warning == 2) ? 1 : 0;
 				numeof = 0;
-				i = evaltree(sh, n, {});
+				auto r = evaltree(sh, n, {});
+				if (!r) {
+					sh.exception = r.error().code;
+					if (n && n != NEOF)
+						freenode(n);
+					clear_stack_temps(sh);
+					if (r.error().code == EXERROR) {
+						skip = sh.evalskip;
+						if (skip) {
+							sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+							break;
+						}
+						continue;
+					}
+					return r;
+				}
 				if (n)
-					status = i;
+					status = *r;
 				if (n && n != NEOF)
 					freenode(n);
 				clear_stack_temps(sh);
@@ -98,18 +111,6 @@ interactive_cmdloop(ShellContext &sh)
 				break;
 			}
 			continue;
-		} catch (const dash::ShellError &e) {
-			sh.exception = e.code();
-			clear_stack_temps(sh);
-			if (e.code() == EXERROR) {
-				skip = sh.evalskip;
-				if (skip) {
-					sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
-					break;
-				}
-				continue;
-			}
-			throw;
 		}
 
 		skip = sh.evalskip;
@@ -122,19 +123,22 @@ interactive_cmdloop(ShellContext &sh)
 	return status;
 }
 
-static void
+static dash::ShellResult<void>
 read_profile(ShellContext &sh, const char *name)
 {
 	name = expandstr(sh, name);
-	if (setinputfile(sh, name, INPUT_PUSH_FILE | INPUT_NOFILE_OK) < 0)
-		return;
+	if (auto _r = setinputfile(sh, name, INPUT_PUSH_FILE | INPUT_NOFILE_OK); !_r || *_r < 0)
+		return {};
 
-	cmdloop(sh);
+	auto r = cmdloop(sh);
 	popfile(sh);
+	if (!r)
+		return tl::unexpected(r.error());
+	return {};
 }
 
 /*
- * Executable entry.  ShellError replaces setjmp for interactive recovery:
+ * Executable entry.  ShellResult replaces setjmp for interactive recovery:
  * abort the current stage and continue (profiles → ENV → main loop), or
  * exit when non-interactive / EXEXIT / EXEND.
  */
@@ -159,46 +163,71 @@ run(ShellContext &sh, int argc, char **argv)
 #endif
 	sh.mypid = sh.rootpid = getpid();
 	init(sh);
-	login = procargs(sh, argv);
 
 resume:
-	try {
-		if (state <= 1 && login) {
-			if (state < 1) {
-				state = 1;
-				read_profile(sh, "/etc/profile");
-			}
-			state = 2;
-			read_profile(sh, "$HOME/.profile");
-		}
-		if (state < 3) {
-			state = 3;
-			if (
-#ifndef linux
-				getuid() == geteuid() && getgid() == getegid() &&
-#endif
-				iflag
-			) {
-				if ((shinit = lookupvar(sh, "ENV")) != NULL &&
-				    *shinit != '\0') {
-					read_profile(sh, shinit);
-				}
-			}
-			clear_stack_temps(sh);
-		}
-		if (state < 4) {
-			state = 4;
-			if (sh.minusc)
-				execute(sh, sh.minusc->data(),
-					sflag ? EvalFlags{} : EvalFlag::exit);
-		}
-		if (iflag)
-			interactive_cmdloop(sh);
-		else if (sflag || !sh.minusc)
-			cmdloop(sh);
-	} catch (const dash::ShellError &e) {
-		int ecode = e.code();
+	dash::ShellErr err{};
+	bool failed = false;
 
+	if (state == 0) {
+		auto pr = procargs(sh, argv);
+		if (!pr) {
+			err = pr.error();
+			failed = true;
+		} else {
+			login = *pr;
+		}
+	}
+
+	auto take = [&](auto &&r) {
+		if (!failed && !r) {
+			err = r.error();
+			failed = true;
+		}
+	};
+
+	if (!failed && state <= 1 && login) {
+		if (state < 1) {
+			state = 1;
+			take(read_profile(sh, "/etc/profile"));
+		}
+		if (!failed) {
+			state = 2;
+			take(read_profile(sh, "$HOME/.profile"));
+		}
+	}
+	if (!failed && state < 3) {
+		state = 3;
+		if (
+#ifndef linux
+			getuid() == geteuid() && getgid() == getegid() &&
+#endif
+			iflag
+		) {
+			if ((shinit = lookupvar(sh, "ENV")) != NULL &&
+			    *shinit != '\0') {
+				take(read_profile(sh, shinit));
+			}
+		}
+		if (!failed)
+			clear_stack_temps(sh);
+	}
+	if (!failed && state < 4) {
+		state = 4;
+		if (sh.minusc)
+			take(execute(sh, sh.minusc->data(),
+				sflag ? EvalFlags{} : EvalFlag::exit));
+	}
+	if (!failed) {
+		if (iflag)
+			take(interactive_cmdloop(sh));
+		else if (sflag || !sh.minusc)
+			take(cmdloop(sh));
+	}
+
+	if (failed) {
+		int ecode = err.code;
+
+handle_err:
 		exitreset(sh);
 		sh.exception = ecode;
 		if (ecode == EXEND || ecode == EXEXIT || state == 0 ||
@@ -218,7 +247,13 @@ resume:
 #endif
 		}
 		clear_stack_temps(sh);
-		FORCEINTON;
+		barrier();
+		sh.suppressint = 0;
+		if (sh.intpending) {
+			auto u = onint(sh);
+			ecode = u.value().code; /* tl::unexpected<ShellErr>::value */
+			goto handle_err;
+		}
 		goto resume;
 	}
 exit:

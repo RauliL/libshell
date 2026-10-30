@@ -116,16 +116,16 @@ prefix(const char *string, const char *pfx)
 	return const_cast<char *>(string + head.size());
 }
 
-void
+tl::unexpected<dash::ShellErr>
 badnum(ShellContext &sh, const char *s)
 {
-	sh_error(sh, illnum, s);
+	return sh_error(sh, illnum, s);
 }
 
 /*
  * Convert a string into an integer of type intmax_t.  Alow trailing spaces.
  */
-intmax_t
+dash::ShellResult<intmax_t>
 atomax(ShellContext &sh, const char *s, int base)
 {
 	char *p;
@@ -139,18 +139,18 @@ atomax(ShellContext &sh, const char *s, int base)
 	 * contexts.
 	 */
 	if (p == s && base)
-		badnum(sh, s);
+		return badnum(sh, s);
 
 	while (std::isspace(static_cast<unsigned char>(*p)))
 	      p++;
 
 	if (*p)
-		badnum(sh, s);
+		return badnum(sh, s);
 
 	return r;
 }
 
-intmax_t
+dash::ShellResult<intmax_t>
 atomax10(ShellContext &sh, const char *s)
 {
 	return atomax(sh, s, 10);
@@ -161,15 +161,15 @@ atomax10(ShellContext &sh, const char *s)
  * failure.
  */
 
-int
+dash::ShellResult<int>
 number(ShellContext &sh, const char *s)
 {
-	intmax_t n = atomax10(sh, s);
+	intmax_t n = TRY_SH(atomax10(sh, s));
 
 	if (n < 0 || n > INT_MAX)
-		badnum(sh, s);
+		return badnum(sh, s);
 
-	return n;
+	return static_cast<int>(n);
 }
 
 

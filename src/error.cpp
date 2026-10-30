@@ -33,15 +33,15 @@
  */
 
 /*
- * Errors and exceptions.
+ * Errors — shell unwind via ShellResult (tl::expected), not exceptions.
  */
 
-#include <signal.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdarg>
+#include <csignal>
+#include <cstdlib>
+#include <cstring>
 #include <unistd.h>
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
 
 #include "jobs.h"
 #include "shell.h"
@@ -56,15 +56,15 @@
 #include "system.h"
 
 
-static void exverror(ShellContext &sh, int, const char *, va_list)
-    __attribute__((__noreturn__));
+static tl::unexpected<dash::ShellErr>
+exverror(ShellContext &sh, int, const char *, va_list);
 
 /*
- * Raise a shell unwind.  Stores the code in sh.exception and throws
- * dash::ShellError for C++ catch handlers at eval/cmdloop boundaries.
+ * Raise a shell unwind.  Stores the code in sh.exception and returns
+ * tl::unexpected for the caller to propagate as ShellResult.
  */
 
-void
+tl::unexpected<dash::ShellErr>
 exraise(ShellContext &sh, int e)
 {
 	if (sh.vforked)
@@ -73,19 +73,16 @@ exraise(ShellContext &sh, int e)
 	INTOFF;
 
 	sh.exception = e;
-	throw dash::ShellError(e);
+	return dash::fail(e);
 }
 
 
 /*
- * Called from sh.trap.c when a SIGINT is received.  (If the user specifies
- * that SIGINT is to be trapped or ignored using the sh.trap builtin, then
- * this routine is not called.)  Suppressint is nonzero when interrupts
- * are held using the INTOFF macro.  (The test for iflag is just
- * defensive programming.)
+ * Called when a deferred SIGINT is delivered (INTON).  Non-interactive
+ * shells re-raise SIGINT; interactive shells unwind with EXINT.
  */
 
-void
+tl::unexpected<dash::ShellErr>
 onint(ShellContext &sh)
 {
 
@@ -93,11 +90,10 @@ onint(ShellContext &sh)
 	sigclearmask();
 	if (!(rootshell && iflag)) {
 		signal(SIGINT, SIG_DFL);
-		raise(SIGINT);
+		::raise(SIGINT);
 	}
 	sh.exitstatus = SIGINT + 128;
-	exraise(sh, EXINT);
-	/* NOTREACHED */
+	return exraise(sh, EXINT);
 }
 
 static void
@@ -124,12 +120,7 @@ exvwarning2(ShellContext &sh, const char *msg, va_list ap)
 
 #define exvwarning(a, b, c) exvwarning2(sh, b, c)
 
-/*
- * Exverror is called to raise the error sh.exception.  If the second argument
- * is not NULL then error prints an error message using printf style
- * formatting.  It then raises the error sh.exception.
- */
-static void
+static tl::unexpected<dash::ShellErr>
 exverror(ShellContext &sh, int cond, const char *msg, va_list ap)
 {
 #ifdef DEBUG
@@ -141,18 +132,17 @@ exverror(ShellContext &sh, int cond, const char *msg, va_list ap)
 		va_end(aq);
 		TRACE(("\") pid=%d\n", getpid()));
 	} else
-		TRACE(("exverror(%d, NULL) pid=%d\n", cond, getpid()));
+		TRACE(("exverror(%d, NULL) pid=%d\n", getpid()));
 	if (msg)
 #endif
 		exvwarning(-1, msg, ap);
 
 	flushall(sh);
-	exraise(sh, cond);
-	/* NOTREACHED */
+	return exraise(sh, cond);
 }
 
 
-void
+tl::unexpected<dash::ShellErr>
 sh_error(ShellContext &sh, const char *msg, ...)
 {
 	va_list ap;
@@ -160,26 +150,22 @@ sh_error(ShellContext &sh, const char *msg, ...)
 	sh.exitstatus = 2;
 
 	va_start(ap, msg);
-	exverror(sh, EXERROR, msg, ap);
-	/* NOTREACHED */
+	auto r = exverror(sh, EXERROR, msg, ap);
 	va_end(ap);
+	return r;
 }
 
 
-void
+tl::unexpected<dash::ShellErr>
 exerror(ShellContext &sh, int cond, const char *msg, ...)
 {
 	va_list ap;
 
 	va_start(ap, msg);
-	exverror(sh, cond, msg, ap);
-	/* NOTREACHED */
+	auto r = exverror(sh, cond, msg, ap);
 	va_end(ap);
+	return r;
 }
-
-/*
- * error/warning routines for external builtins
- */
 
 void
 sh_warnx(ShellContext &sh, const char *fmt, ...)
@@ -192,15 +178,10 @@ sh_warnx(ShellContext &sh, const char *fmt, ...)
 }
 
 
-/*
- * Return a string describing an error.  The returned string may be a
- * pointer to a static buffer that will be overwritten on the next call.
- * Action describes the operation that got the error.
- */
-
 const char *
 errmsg(ShellContext &sh, int e, int action)
 {
+	(void)sh;
 	if (e != ENOENT && e != ENOTDIR)
 		return strerror(e);
 
@@ -214,11 +195,11 @@ errmsg(ShellContext &sh, int e, int action)
 
 
 #ifdef REALLY_SMALL
-void
+dash::ShellResult<void>
 __inton(ShellContext &sh)
 {
-	if (--sh.suppressint == 0 && sh.intpending) {
-		onint(sh);
-	}
+	if (--sh.suppressint == 0 && sh.intpending)
+		return onint(sh);
+	return {};
 }
 #endif

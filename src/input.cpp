@@ -165,13 +165,28 @@ stdin_tee(ShellContext &sh, void *buf, int nr)
 	int err;
 
 	if (!sh.stdin_state.pip[0]) {
-		sh_pipe(sh, sh.stdin_state.pip, 0);
-		if (sh.stdin_state.pip[0] < 10)
-			sh.stdin_state.pip[0] = savefd(sh, sh.stdin_state.pip[0],
-						    sh.stdin_state.pip[0]);
-		if (sh.stdin_state.pip[1] < 10)
-			sh.stdin_state.pip[1] = savefd(sh, sh.stdin_state.pip[1],
-						    sh.stdin_state.pip[1]);
+		if (auto r = sh_pipe(sh, sh.stdin_state.pip, 0); !r) {
+			errno = EIO;
+			return -1;
+		}
+		if (sh.stdin_state.pip[0] < 10) {
+			auto r = savefd(sh, sh.stdin_state.pip[0],
+					sh.stdin_state.pip[0]);
+			if (!r) {
+				errno = EIO;
+				return -1;
+			}
+			sh.stdin_state.pip[0] = *r;
+		}
+		if (sh.stdin_state.pip[1] < 10) {
+			auto r = savefd(sh, sh.stdin_state.pip[1],
+					sh.stdin_state.pip[1]);
+			if (!r) {
+				errno = EIO;
+				return -1;
+			}
+			sh.stdin_state.pip[1] = *r;
+		}
 	}
 
 	flush_tee(sh, buf, nr, sh.stdin_state.pending);
@@ -208,7 +223,7 @@ freestrings(ShellContext &sh, struct strpush *sp)
 	} while (sp);
 
 	sh.parsefile->spfree = NULL;
-	INTON;
+	INTON_DEFER;
 }
 
 
@@ -357,7 +372,7 @@ eof:
 		q = sh.parsefile->nextc + nr;
 		if (more <= 0) {
 			sh.parsefile->nleft = 0;
-			INTON;
+			INTON_DEFER;
 			goto eof;
 		}
 	}
@@ -365,7 +380,7 @@ eof:
 	q += more;
 	sh.parsefile->nleft = q - sh.parsefile->nextc - 1;
 	*q = '\0';
-	INTON;
+	INTON_DEFER;
 
 	if (vflag) {
 		out2str(sh.parsefile->nextc);
@@ -428,7 +443,7 @@ pushstring(ShellContext &sh, char *s, void *ap)
 	sh.parsefile->nleft = len;
 	sh.parsefile->unget = 0;
 	sh.parsefile->spfree = NULL;
-	INTON;
+	INTON_DEFER;
 }
 
 static void
@@ -450,7 +465,7 @@ popstring(ShellContext &sh)
 /*dprintf("*** calling popstring: restoring to '%s'\n", parsenextc);*/
 	sh.parsefile->strpush = sp->prev;
 	sh.parsefile->spfree = sp;
-	INTON;
+	INTON_DEFER;
 }
 
 /*
@@ -458,17 +473,17 @@ popstring(ShellContext &sh)
  * old input onto the stack first.
  */
 
-int
+dash::ShellResult<int>
 setinputfile(ShellContext &sh, const char *fname, int flags)
 {
 	int fd;
 
 	INTOFF;
-	fd = sh_open(sh, fname, O_RDONLY, flags & INPUT_NOFILE_OK);
+	fd = TRY_SH(sh_open(sh, fname, O_RDONLY, flags & INPUT_NOFILE_OK));
 	if (fd < 0)
 		goto out;
 	if (fd < 10)
-		fd = savefd(sh, fd, fd);
+		fd = TRY_SH(savefd(sh, fd, fd));
 	setinputfd(sh, fd, flags & INPUT_PUSH_FILE);
 out:
 	INTON;
@@ -504,7 +519,7 @@ setinputstring(ShellContext &sh, char *string)
 	sh.parsefile->nextc = string;
 	sh.parsefile->nleft = strlen(string);
 	sh.parsefile->eof = 2;
-	INTON;
+	INTON_DEFER;
 }
 
 
@@ -533,7 +548,7 @@ pushstdin(ShellContext &sh)
 	INTOFF;
 	sh.basepf.prev = sh.parsefile;
 	sh.parsefile = &sh.basepf;
-	INTON;
+	INTON_DEFER;
 }
 
 void
@@ -559,7 +574,7 @@ popfile(ShellContext &sh)
 	ckfree(pf);
 
 out:
-	INTON;
+	INTON_DEFER;
 }
 
 
@@ -594,7 +609,7 @@ flush_input(ShellContext &sh)
 		sh.stdin_state.pending = 0;
 	}
 	sh.basepf.nleft = 0;
-	INTON;
+	INTON_DEFER;
 }
 
 void

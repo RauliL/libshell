@@ -108,7 +108,7 @@ outmem(ShellContext &sh, const char *p, size_t len, struct output *dest)
 #ifdef USE_GLIBC_STDIO
 	INTOFF;
 	fwrite(p, 1, len, dest->stream);
-	INTON;
+	INTON_DEFER;
 #else
 	size_t bufsize;
 	size_t offset;
@@ -149,7 +149,7 @@ alloc:
 		dest->bufsize = bufsize;
 		dest->end = dest->buf + bufsize;
 		dest->nextc = dest->buf + offset;
-		INTON;
+		INTON_DEFER;
 	} else {
 		flushout(sh, dest);
 	}
@@ -174,7 +174,7 @@ outstr(ShellContext &sh, const char *p, struct output *file)
 #ifdef USE_GLIBC_STDIO
 	INTOFF;
 	fputs(p, file->stream);
-	INTON;
+	INTON_DEFER;
 #else
 	size_t len;
 
@@ -212,7 +212,7 @@ flushout(ShellContext &sh, struct output *dest)
 #ifdef USE_GLIBC_STDIO
 	INTOFF;
 	fflush(dest->stream);
-	INTON;
+	INTON_DEFER;
 #else
 	size_t len;
 
@@ -261,7 +261,7 @@ fmtstr(ShellContext &sh, char *outbuf, size_t length, const char *fmt, ...)
 }
 
 
-static int
+static dash::ShellResult<int>
 xvasprintf(ShellContext &sh, char **sp, size_t size, const char *f, va_list ap)
 {
 	char *s;
@@ -272,7 +272,7 @@ xvasprintf(ShellContext &sh, char **sp, size_t size, const char *f, va_list ap)
 	len = xvsnprintf(sh, *sp, size, f, ap2);
 	va_end(ap2);
 	if (len < 0)
-		sh_error(sh, "xvsnprintf failed");
+		return sh_error(sh, "xvsnprintf failed");
 	if (len < size)
 		return len;
 
@@ -283,14 +283,14 @@ xvasprintf(ShellContext &sh, char **sp, size_t size, const char *f, va_list ap)
 }
 
 
-int
+dash::ShellResult<int>
 xasprintf(ShellContext &sh, char **sp, const char *f, ...)
 {
 	va_list ap;
 	int ret;
 
 	va_start(ap, f);
-	ret = xvasprintf(sh, sp, 0, f, ap);
+	ret = TRY_SH(xvasprintf(sh, sp, 0, f, ap));
 	va_end(ap);
 	return ret;
 }
@@ -308,7 +308,14 @@ doformat(ShellContext &sh, struct output *dest, const char *f, va_list ap)
 
 	s = dest->nextc;
 	olen = dest->end - dest->nextc;
-	len = xvasprintf(sh, &s, olen, f, ap);
+	{
+		auto r = xvasprintf(sh, &s, olen, f, ap);
+		if (!r) {
+			dest->flags |= OUTPUT_ERR;
+			goto out;
+		}
+		len = *r;
+	}
 	if (likely(olen > len)) {
 		dest->nextc += len;
 		goto out;
@@ -368,7 +375,7 @@ openmemout(ShellContext &sh)
 {
 	INTOFF;
 	memout.stream = open_memstream(&memout.buf, &memout.bufsize);
-	INTON;
+	INTON_DEFER;
 }
 
 
@@ -405,6 +412,6 @@ xvsnprintf(ShellContext &sh, char *outbuf, size_t length, const char *fmt, va_li
 
 	INTOFF;
 	ret = vsnprintf(outbuf, length, fmt, ap);
-	INTON;
+	INTON_DEFER;
 	return ret;
 }

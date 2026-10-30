@@ -1811,16 +1811,17 @@ expandstr(ShellContext &sh, const char *ps)
 		n.text = sh.wordtext;
 		n.backquote = std::move(sh.backquotelist);
 
-		expandarg(sh, reinterpret_cast<union node *>(&n), NULL, EXP_QUOTED);
-		result = stackblock();
+		if (auto r = expandarg(sh, reinterpret_cast<union node *>(&n), NULL, EXP_QUOTED); !r) {
+			sh.exception = r.error().code;
+			err = 1;
+		} else {
+			result = stackblock();
+		}
 	} catch (const dash::ParseError &) {
-		err = 1;
-	} catch (const dash::ShellError &ex) {
-		sh.exception = ex.code();
 		err = 1;
 	}
 
-	restore_handler_expandarg(sh, err);
+	(void)restore_handler_expandarg(sh, err);
 
 	sh.doprompt = saveprompt;
 	unwindfiles(sh, file_stop);

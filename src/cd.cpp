@@ -67,19 +67,19 @@
 #define CD_PHYSICAL 1
 #define CD_PRINT 2
 
-static int docd(ShellContext &sh, const char *, int);
-static std::optional<std::string> updatepwd(ShellContext &sh, const char *);
+static dash::ShellResult<int> docd(ShellContext &sh, const char *, int);
+static dash::ShellResult<std::optional<std::string>> updatepwd(ShellContext &sh, const char *);
 static std::string getpwd(ShellContext &sh);
-static int cdopt(ShellContext &sh);
+static dash::ShellResult<int> cdopt(ShellContext &sh);
 
-static int
+static dash::ShellResult<int>
 cdopt(ShellContext &sh)
 {
 	int flags = 0;
 	int i, j;
 
 	j = 'L';
-	while ((i = nextopt(sh, "LP"))) {
+	while ((i = TRY_SH(nextopt(sh, "LP")))) {
 		if (i != j) {
 			flags ^= CD_PHYSICAL;
 			j = i;
@@ -89,7 +89,7 @@ cdopt(ShellContext &sh)
 	return flags;
 }
 
-int
+dash::ShellResult<int>
 cdcmd(ShellContext &sh, int argc, char **argv)
 {
 	const char *dest;
@@ -100,7 +100,7 @@ cdcmd(ShellContext &sh, int argc, char **argv)
 	int flags;
 	int len;
 
-	flags = cdopt(sh);
+	flags = TRY_SH(cdopt(sh));
 	dest = *sh.argptr;
 	if (!dest)
 		dest = bltinlookup(sh, homestr);
@@ -136,7 +136,7 @@ dotdot:
 			if (c && c != ':')
 				flags |= CD_PRINT;
 docd:
-			if (!docd(sh, p, flags))
+			if (!TRY_SH(docd(sh, p, flags)))
 				goto out;
 			goto err;
 		}
@@ -147,8 +147,7 @@ step6:
 	goto docd;
 
 err:
-	sh_error(sh, "can't cd to %s", dest);
-	/* NOTREACHED */
+	return sh_error(sh, "can't cd to %s", dest);
 out:
 	if (flags & CD_PRINT)
 		out1fmt(sh, snlfmt, sh.curdir.c_str());
@@ -161,7 +160,7 @@ out:
  * know that the current directory has sh.changed.
  */
 
-static int
+static dash::ShellResult<int>
 docd(ShellContext &sh, const char *dest, int flags)
 {
 	std::optional<std::string> logical;
@@ -172,14 +171,17 @@ docd(ShellContext &sh, const char *dest, int flags)
 
 	INTOFF;
 	if (!(flags & CD_PHYSICAL)) {
-		logical = updatepwd(sh, dest);
+		auto up = updatepwd(sh, dest);
+		if (!up)
+			return tl::unexpected(up.error());
+		logical = std::move(*up);
 		if (logical)
 			dest = dir = logical->c_str();
 	}
 	err = chdir(dest);
 	if (err)
 		goto out;
-	setpwd(sh, dir, 1);
+	TRY_SHV(setpwd(sh, dir, 1));
 	hashcd(sh);
 out:
 	INTON;
@@ -192,7 +194,7 @@ out:
  * cd command.
  */
 
-static std::optional<std::string>
+static dash::ShellResult<std::optional<std::string>>
 updatepwd(ShellContext &sh, const char *dir)
 {
 	std::string path;
@@ -207,13 +209,13 @@ updatepwd(ShellContext &sh, const char *dir)
 	char pathbuf[PATH_MAX];
 	if (cygwin_conv_path(CCP_WIN_A_TO_POSIX | CCP_RELATIVE, dir, pathbuf,
 			     sizeof(pathbuf)) < 0)
-		sh_error(sh, "can't normalize %s", dir);
+		return sh_error(sh, "can't normalize %s", dir);
 	dir = pathbuf;
 #endif
 
 	if (*dir != '/') {
 		if (sh.curdir.empty())
-			return std::nullopt;
+			return std::optional<std::string>{};
 		path = sh.curdir;
 	}
 
@@ -253,7 +255,7 @@ updatepwd(ShellContext &sh, const char *dir)
 	}
 	if (path.size() > lim && !path.empty() && path.back() == '/')
 		path.pop_back();
-	return path;
+	return std::optional<std::string>{std::move(path)};
 }
 
 
@@ -283,27 +285,27 @@ getpwd(ShellContext &sh)
 	return {};
 }
 
-int
+dash::ShellResult<int>
 pwdcmd(ShellContext &sh, int argc, char **argv)
 {
 	int flags;
 	const char *dir = sh.curdir.c_str();
 
-	flags = cdopt(sh);
+	flags = TRY_SH(cdopt(sh));
 	if (flags) {
 		if (sh.physdir.empty())
-			setpwd(sh, dir, 0);
+			TRY_SHV(setpwd(sh, dir, 0));
 		dir = sh.physdir.c_str();
 	}
 	out1fmt(sh, snlfmt, dir);
 	return 0;
 }
 
-void
+dash::ShellResult<void>
 setpwd(ShellContext &sh, const char *val, int setold)
 {
 	if (setold)
-		setvar(sh, "OLDPWD", sh.curdir.c_str(), VEXPORT);
+		TRY_SHV(setvar(sh, "OLDPWD", sh.curdir.c_str(), VEXPORT));
 
 	INTOFF;
 	sh.physdir.clear();
@@ -317,5 +319,6 @@ setpwd(ShellContext &sh, const char *val, int setold)
 		sh.curdir = val;
 	}
 	INTON;
-	setvar(sh, "PWD", sh.curdir.c_str(), VEXPORT);
+	TRY_SHV(setvar(sh, "PWD", sh.curdir.c_str(), VEXPORT));
+	return {};
 }

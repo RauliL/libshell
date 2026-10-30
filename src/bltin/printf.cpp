@@ -76,7 +76,7 @@ static void check_conversion(ShellContext &sh, const char *, const char *);
 }
 
 #define ASPF(sp, f, func) ({ \
-	int ret; \
+	dash::ShellResult<int> ret; \
 	switch ((char *)param - (char *)array) { \
 	default: \
 		ret = xasprintf(sh, sp, f, array[0], array[1], func); \
@@ -88,11 +88,13 @@ static void check_conversion(ShellContext &sh, const char *, const char *);
 		ret = xasprintf(sh, sp, f, func); \
 		break; \
 	} \
-	ret; \
+	if (!ret) \
+		return shell_fail_of(ret); \
+	*ret; \
 })
 
 
-static int
+static dash::ShellResult<int>
 print_escape_str(ShellContext &sh, const char *f, int *param, int *array, char *s)
 {
 	char *p, *q;
@@ -134,7 +136,7 @@ easy:
 }
 
 
-int
+dash::ShellResult<int>
 printfcmd(ShellContext &sh, int argc, char *argv[])
 {
 	char *fmt;
@@ -143,13 +145,13 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 
 	sh.rval = 0;
 
-	nextopt(sh, nullstr);
+	TRY_SHV(nextopt(sh, nullstr));
 
 	argv = sh.argptr;
 	format = *argv;
 
 	if (!format)
-		error("usage: printf format [arg ...]");
+		return error("usage: printf format [arg ...]");
 
 	sh.gargv = ++argv;
 
@@ -216,7 +218,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 
 			ch = *fmt;
 			if (!ch)
-				error("missing format character");
+				return error("missing format character");
 			/* null terminate format string to we can use it
 			   as an argument to printf. */
 			nextch = fmt[1];
@@ -226,8 +228,8 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 			case 'b':
 				*fmt = 's';
 				/* escape if a \c was encountered */
-				if (print_escape_str(sh, start, param, array,
-						     getstr(sh)))
+				if (TRY_SH(print_escape_str(sh, start, param, array,
+						     getstr(sh))))
 					goto out;
 				*fmt = 'b';
 				break;
@@ -270,7 +272,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 				break;
 			}
 			default:
-				error("%s: invalid directive", start);
+				return error("%s: invalid directive", start);
 			}
 			*++fmt = nextch;
 		}
@@ -578,7 +580,7 @@ check_conversion(ShellContext &sh, const char *s, const char *ep)
 	}
 }
 
-int
+dash::ShellResult<int>
 echocmd(ShellContext &sh, int argc, char **argv)
 {
 	const char *lastfmt = snlfmt;
@@ -596,7 +598,7 @@ echocmd(ShellContext &sh, int argc, char **argv)
 		if (!s || !*++argv)
 			fmt = lastfmt;
 
-		nonl = print_escape_str(sh, fmt, NULL, NULL, s ?: nullstr);
+		nonl = TRY_SH(print_escape_str(sh, fmt, NULL, NULL, s ?: nullstr));
 	} while (!nonl && *argv);
 	return 0;
 }

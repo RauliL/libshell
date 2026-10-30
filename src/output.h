@@ -69,7 +69,7 @@ void out1fmt(ShellContext &sh, const char *, ...)
     __attribute__((__format__(__printf__,2,3)));
 int fmtstr(ShellContext &sh, char *, size_t, const char *, ...)
     __attribute__((__format__(__printf__,4,5)));
-int xasprintf(ShellContext &sh, char **, const char *, ...);
+dash::ShellResult<int> xasprintf(ShellContext &sh, char **, const char *, ...);
 #ifndef USE_GLIBC_STDIO
 void doformat(ShellContext &sh, struct output *, const char *, va_list);
 #endif

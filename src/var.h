@@ -1,5 +1,7 @@
 #ifndef VAR_H
 #define VAR_H
+
+#include "error.h"
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -124,21 +126,21 @@ extern const char defpathvar[];
 
 struct ShellContext;
 void initvar(ShellContext &sh);
-struct var *setvar(ShellContext &sh, const char *name, const char *val, int flags);
-intmax_t setvarint(ShellContext &sh, const char *, intmax_t, int);
-struct var *setvareq(ShellContext &sh, char *s, int flags);
+dash::ShellResult<struct var *> setvar(ShellContext &sh, const char *name, const char *val, int flags);
+dash::ShellResult<intmax_t> setvarint(ShellContext &sh, const char *, intmax_t, int);
+dash::ShellResult<struct var *> setvareq(ShellContext &sh, char *s, int flags);
 char *lookupvar(ShellContext &sh, const char *);
-intmax_t lookupvarint(ShellContext &sh, const char *);
+dash::ShellResult<intmax_t> lookupvarint(ShellContext &sh, const char *);
 char **listvars(ShellContext &sh, int, int, char ***);
 #define environment() listvars(sh, VEXPORT, VUNSET, 0)
-int showvars(ShellContext &sh, const char *, int, int);
-int exportcmd(ShellContext &sh, int, char **);
-int localcmd(ShellContext &sh, int, char **);
-void mklocal(ShellContext &sh, char *name, int flags);
-struct localvar_list *pushlocalvars(ShellContext &sh, int push);
-void unwindlocalvars(ShellContext &sh, struct localvar_list *stop);
-int unsetcmd(ShellContext &sh, int, char **);
-void unsetvar(ShellContext &sh, const char *);
+dash::ShellResult<int> showvars(ShellContext &sh, const char *, int, int);
+dash::ShellResult<int> exportcmd(ShellContext &sh, int, char **);
+dash::ShellResult<int> localcmd(ShellContext &sh, int, char **);
+dash::ShellResult<void> mklocal(ShellContext &sh, char *name, int flags);
+dash::ShellResult<struct localvar_list *> pushlocalvars(ShellContext &sh, int push);
+dash::ShellResult<void> unwindlocalvars(ShellContext &sh, struct localvar_list *stop);
+dash::ShellResult<int> unsetcmd(ShellContext &sh, int, char **);
+dash::ShellResult<void> unsetvar(ShellContext &sh, const char *);
 int varcmp(const char *, const char *);
 
 static inline unsigned int hashval(const char *p)

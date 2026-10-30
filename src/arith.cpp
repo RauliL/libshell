@@ -596,7 +596,13 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 			} else if constexpr (std::is_same_v<T, VarExpr>) {
 				if (noeval)
 					return 0;
-				return lookupvarint(sh_, node.name.c_str());
+				{
+					auto v = lookupvarint(sh_, node.name.c_str());
+					if (!v)
+						return tl::unexpected(
+							std::string("variable lookup failed"));
+					return *v;
+				}
 			} else if constexpr (std::is_same_v<T, UnaryExpr>) {
 				auto v = eval_node(*node.operand, noeval);
 				if (!v || noeval)
@@ -660,13 +666,19 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 
 				intmax_t result = *rhs;
 				if (node.op != Op::Assign) {
-					intmax_t cur = lookupvarint(sh_, node.name.c_str());
-					auto combined = do_binop(assign_to_binop(node.op), cur, result);
+					auto cur = lookupvarint(sh_, node.name.c_str());
+					if (!cur)
+						return tl::unexpected(
+							std::string("variable lookup failed"));
+					auto combined = do_binop(assign_to_binop(node.op), *cur, result);
 					if (!combined)
 						return combined;
 					result = *combined;
 				}
-				return setvarint(sh_, node.name.c_str(), result, 0);
+				if (auto r = setvarint(sh_, node.name.c_str(), result, 0); !r)
+					return tl::unexpected(
+						std::string("variable assignment failed"));
+				return result;
 			}
 		},
 		expr.node);
@@ -682,17 +694,19 @@ Result<intmax_t> Evaluator::eval(const ExprPtr &expr)
 } /* namespace arith */
 } /* namespace dash */
 
-intmax_t
+dash::ShellResult<intmax_t>
 arith(ShellContext &sh, const char *s)
 {
 	auto ast = dash::arith::parse(s ? s : "");
 	if (!ast)
-		sh_error(sh, "arithmetic expression: %s: \"%s\"", ast.error().c_str(), s);
+		return sh_error(sh, "arithmetic expression: %s: \"%s\"",
+				ast.error().c_str(), s);
 
 	dash::arith::Evaluator evaluator(*&sh);
 	auto result = evaluator.eval(*ast);
 	if (!result)
-		sh_error(sh, "arithmetic expression: %s: \"%s\"", result.error().c_str(), s);
+		return sh_error(sh, "arithmetic expression: %s: \"%s\"",
+				result.error().c_str(), s);
 
 	return *result;
 }

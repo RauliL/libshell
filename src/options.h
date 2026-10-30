@@ -38,6 +38,7 @@
 
 #include <string>
 #include <vector>
+#include "error.h"
 
 struct shparam {
 	std::vector<std::string> p;	/* positional parameters (without $0) */
@@ -72,13 +73,13 @@ extern const char optletters[NOPTS];
 /* optlist, minusc, arg0, shellparam, argptr, optionarg, optptr: ShellContext fields */
 
 struct ShellContext;
-int procargs(ShellContext &sh, char **);
+dash::ShellResult<int> procargs(ShellContext &sh, char **);
 void optschanged(ShellContext &sh);
 void setparam(ShellContext &sh, char **);
 void freeparam(ShellContext &sh, struct shparam *);
-int shiftcmd(ShellContext &sh, int, char **);
-int setcmd(ShellContext &sh, int, char **);
-int getoptscmd(ShellContext &sh, int, char **);
-int nextopt(ShellContext &sh, const char *);
+dash::ShellResult<int> shiftcmd(ShellContext &sh, int, char **);
+dash::ShellResult<int> setcmd(ShellContext &sh, int, char **);
+dash::ShellResult<int> getoptscmd(ShellContext &sh, int, char **);
+dash::ShellResult<int> nextopt(ShellContext &sh, const char *);
 void getoptsreset(ShellContext &sh, const char *);
 #endif

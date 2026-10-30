@@ -38,6 +38,8 @@
 
 #include <signal.h>
 
+#include "result.h"
+
 /*
  * Types of operations (passed to the errmsg routine).
  */
@@ -46,45 +48,20 @@
 #define E_CREAT 02	/* creating a file */
 #define E_EXEC 04	/* executing a program */
 
-/* Shell unwind codes (dash::ShellError::code()). */
+/* Shell unwind codes (dash::ShellErr::code). */
 #define EXINT 0		/* SIGINT received */
 #define EXERROR 1	/* a generic error */
 #define EXEND 3		/* exit the shell */
 #define EXEXIT 4	/* exit the shell via exitcmd */
 
-namespace dash {
-
-/* Thrown by exraise/sh_error instead of longjmp; caught at eval/cmdloop boundaries. */
-class ShellError {
-public:
-	explicit ShellError(int code) : code_(code) {}
-	int code() const { return code_; }
-
-private:
-	int code_;
-};
-
-} /* namespace dash */
-
-
 /*
- * These macros allow the user to suspend the handling of interrupt signals
- * over a period of time.  This is similar to SIGHOLD to or sigblock, but
- * much more efficient and portable.  (But hacking the kernel is so much
- * more fun than worrying about efficiency and portability. :-))
- */
-
-/*
- * Interrupt deferral macros require ShellContext &sh in scope (same as the
- * former ash globals suppressint / sh.intpending, now fields of ShellContext).
+ * Interrupt deferral macros require ShellContext &sh in scope.
+ * INTON/FORCEINTON/RESTOREINT return from the enclosing ShellResult
+ * function when a deferred SIGINT must unwind (via onint → exraise).
  */
 struct ShellContext;
-void onint(ShellContext &sh) __attribute__((__noreturn__));
+tl::unexpected<dash::ShellErr> onint(ShellContext &sh);
 
-/*
- * INTOFF/INTON use suppressint/sh.intpending, which shell_access.h maps to
- * suppressint / sh.intpending when ShellContext &sh is in scope.
- */
 #define barrier() ({ __asm__ __volatile__ ("": : :"memory"); })
 #define INTOFF \
 	({ \
@@ -93,36 +70,68 @@ void onint(ShellContext &sh) __attribute__((__noreturn__));
 		0; \
 	})
 #ifdef REALLY_SMALL
-void __inton(ShellContext &sh);
-#define INTON __inton(sh)
+dash::ShellResult<void> __inton(ShellContext &sh);
+#define INTON \
+	do { \
+		if (auto _r = __inton(sh); !_r) \
+			return _r.error(); \
+	} while (0)
 #else
 #define INTON \
-	({ \
+	do { \
 		barrier(); \
-		if (--sh.suppressint == 0 && sh.intpending) onint(sh); \
-		0; \
-	})
+		if (--sh.suppressint == 0 && sh.intpending) \
+			return onint(sh); \
+	} while (0)
 #endif
 #define FORCEINTON \
-	({ \
+	do { \
 		barrier(); \
 		sh.suppressint = 0; \
-		if (sh.intpending) onint(sh); \
-		0; \
-	})
+		if (sh.intpending) \
+			return onint(sh); \
+	} while (0)
 #define SAVEINT(v) ((v) = sh.suppressint)
 #define RESTOREINT(v) \
-	({ \
+	do { \
 		barrier(); \
-		if ((sh.suppressint = (v)) == 0 && sh.intpending) onint(sh); \
-		0; \
-	})
+		if (((sh.suppressint = (v)) == 0) && sh.intpending) \
+			return onint(sh); \
+	} while (0)
 #define CLEAR_PENDING_INT sh.intpending = 0
 #define int_pending() sh.intpending
 
-void exraise(ShellContext &sh, int) __attribute__((__noreturn__));
-void sh_error(ShellContext &sh, const char *, ...) __attribute__((__noreturn__));
-void exerror(ShellContext &sh, int, const char *, ...) __attribute__((__noreturn__));
+/* For void helpers that cannot return ShellResult: drop suppressint and
+ * leave intpending set so a later ShellResult INTON/FORCEINTON unwinds. */
+#define INTON_DEFER 	do { 		barrier(); 		--sh.suppressint; 	} while (0)
+
+/* Avoid `.error()` in macros: bltin.h `#define error(...)` would rewrite it. */
+template <typename T>
+inline tl::unexpected<dash::ShellErr>
+shell_fail_of(const dash::ShellResult<T> &r)
+{
+	return tl::unexpected(r.error());
+}
+
+/* Propagate a nested ShellResult; for void results use TRY_SHV.
+ * Returns tl::unexpected so the enclosing ShellResult<T> may differ in T. */
+#define TRY_SH(expr) \
+	({ \
+		auto _try_sh_r = (expr); \
+		if (!_try_sh_r) \
+			return shell_fail_of(_try_sh_r); \
+		*_try_sh_r; \
+	})
+#define TRY_SHV(expr) \
+	do { \
+		if (auto _try_sh_r = (expr); !_try_sh_r) \
+			return shell_fail_of(_try_sh_r); \
+	} while (0)
+
+tl::unexpected<dash::ShellErr> exraise(ShellContext &sh, int);
+tl::unexpected<dash::ShellErr> sh_error(ShellContext &sh, const char *, ...);
+tl::unexpected<dash::ShellErr> exerror(ShellContext &sh, int, const char *, ...);
+
 const char *errmsg(ShellContext &sh, int, int);
 
 void sh_warnx(ShellContext &sh, const char *, ...);

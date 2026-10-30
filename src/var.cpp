@@ -205,7 +205,7 @@ initvar(ShellContext &sh)
  * flags of the variable.  If val is NULL, the variable is unset.
  */
 
-struct var *
+dash::ShellResult<struct var *>
 setvar(ShellContext &sh, const char *name, const char *val, int flags)
 {
 	char *p, *q;
@@ -218,7 +218,7 @@ setvar(ShellContext &sh, const char *name, const char *val, int flags)
 	p = strchrnul(q, '=');
 	namelen = p - name;
 	if (!namelen || p != q)
-		sh_error(sh, "%.*s: bad variable name", namelen, name);
+		return sh_error(sh, "%.*s: bad variable name", namelen, name);
 	vallen = 0;
 	if (val == NULL) {
 		flags |= VUNSET;
@@ -232,7 +232,7 @@ setvar(ShellContext &sh, const char *name, const char *val, int flags)
 	if (val)
 		p = static_cast<char *>(mempcpy(p, val, vallen));
 	*p = '\0';
-	vp = setvareq(sh, nameeq, flags | VNOSAVE);
+	vp = TRY_SH(setvareq(sh, nameeq, flags | VNOSAVE));
 	INTON;
 
 	return vp;
@@ -243,14 +243,14 @@ setvar(ShellContext &sh, const char *name, const char *val, int flags)
  * ored with the flags of the variable.
  */
 
-intmax_t
+dash::ShellResult<intmax_t>
 setvarint(ShellContext &sh, const char *name, intmax_t val, int flags)
 {
 	int len = max_int_length(sizeof(val));
 	char buf[len];
 
 	fmtstr(sh, buf, len, "%" PRIdMAX, val);
-	setvar(sh, name, buf, flags);
+	TRY_SHV(setvar(sh, name, buf, flags));
 	return val;
 }
 
@@ -264,7 +264,7 @@ setvarint(ShellContext &sh, const char *name, intmax_t val, int flags)
  * Called with interrupts off.
  */
 
-struct var *
+dash::ShellResult<struct var *>
 setvareq(ShellContext &sh, char *s, int flags)
 {
 	struct var *vp, **vpp;
@@ -281,7 +281,7 @@ setvareq(ShellContext &sh, char *s, int flags)
 			const char *n = vp->text.c_str();
 			if (nosave)
 				ckfree(s);
-			sh_error(sh, "%.*s: is read only", strchrnul(n, '=') - n,
+			return sh_error(sh, "%.*s: is read only", strchrnul(n, '=') - n,
 				 n);
 		}
 
@@ -342,7 +342,7 @@ lookupvar(ShellContext &sh, const char *name)
 	return NULL;
 }
 
-intmax_t
+dash::ShellResult<intmax_t>
 lookupvarint(ShellContext &sh, const char *name)
 {
 	return atomax(sh, lookupvar(sh, name) ?: nullstr, 0);
@@ -401,7 +401,7 @@ listvars(ShellContext &sh, int on, int off, char ***end)
  * For now just roll 'em through qsort for printing...
  */
 
-int
+dash::ShellResult<int>
 showvars(ShellContext &sh, const char *prefix, int on, int off)
 {
 	const char *sep;
@@ -433,7 +433,7 @@ showvars(ShellContext &sh, const char *prefix, int on, int off)
  * The export and readonly commands.
  */
 
-int
+dash::ShellResult<int>
 exportcmd(ShellContext &sh, int argc, char **argv)
 {
 	struct var *vp;
@@ -443,7 +443,7 @@ exportcmd(ShellContext &sh, int argc, char **argv)
 	int flag = argv[0][0] == 'r'? VREADONLY : VEXPORT;
 	int notp;
 
-	notp = nextopt(sh, "p") - 'p';
+	notp = TRY_SH(nextopt(sh, "p")) - 'p';
 	if (notp && ((name = *(aptr = sh.argptr)))) {
 		do {
 			if ((p = strchr(name, '=')) != NULL) {
@@ -454,10 +454,10 @@ exportcmd(ShellContext &sh, int argc, char **argv)
 					continue;
 				}
 			}
-			setvar(sh, name, p, flag);
+			TRY_SHV(setvar(sh, name, p, flag));
 		} while ((name = *++aptr) != NULL);
 	} else {
-		showvars(sh, argv[0], flag, 0);
+		TRY_SHV(showvars(sh, argv[0], flag, 0));
 	}
 	return 0;
 }
@@ -467,17 +467,17 @@ exportcmd(ShellContext &sh, int argc, char **argv)
  * The "local" command.
  */
 
-int
+dash::ShellResult<int>
 localcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *name;
 
 	if (!sh.localvar_stack)
-		sh_error(sh, "not in a function");
+		return sh_error(sh, "not in a function");
 
 	argv = sh.argptr;
 	while ((name = *argv++) != NULL) {
-		mklocal(sh, name, 0);
+		TRY_SHV(mklocal(sh, name, 0));
 	}
 	return 0;
 }
@@ -490,7 +490,7 @@ localcmd(ShellContext &sh, int argc, char **argv)
  * "-" as a special case.
  */
 
-void
+dash::ShellResult<void>
 mklocal(ShellContext &sh, char *name, int flags)
 {
 	struct localvar *lvp;
@@ -508,22 +508,23 @@ mklocal(ShellContext &sh, char *name, int flags)
 		eq = strchr(name, '=');
 		if (vp == NULL) {
 			if (eq)
-				vp = setvareq(sh, name, VSTRFIXED | flags);
+				vp = TRY_SH(setvareq(sh, name, VSTRFIXED | flags));
 			else
-				vp = setvar(sh, name, NULL, VSTRFIXED | flags);
+				vp = TRY_SH(setvar(sh, name, NULL, VSTRFIXED | flags));
 			lvp->flags = VUNSET;
 		} else {
 			lvp->text = vp->text;
 			lvp->flags = vp->flags;
 			vp->flags |= VSTRFIXED;
 			if (eq)
-				setvareq(sh, name, flags);
+				TRY_SHV(setvareq(sh, name, flags));
 		}
 	}
 	lvp->vp = vp;
 	lvp->next = sh.localvar_stack->lv;
 	sh.localvar_stack->lv = lvp;
 	INTON;
+	return {};
 }
 
 
@@ -532,7 +533,7 @@ mklocal(ShellContext &sh, char *name, int flags)
  * Interrupts must be off.
  */
 
-static void
+static dash::ShellResult<void>
 poplocalvars(ShellContext &sh)
 {
 	struct localvar_list *ll;
@@ -565,13 +566,14 @@ poplocalvars(ShellContext &sh)
 		delete lvp;
 	}
 	INTON;
+	return {};
 }
 
 
 /*
  * Create a new localvar environment.
  */
-struct localvar_list *
+dash::ShellResult<struct localvar_list *>
 pushlocalvars(ShellContext &sh, int push)
 {
 	struct localvar_list *ll;
@@ -593,11 +595,12 @@ out:
 }
 
 
-void
+dash::ShellResult<void>
 unwindlocalvars(ShellContext &sh, struct localvar_list *stop)
 {
 	while (sh.localvar_stack != stop)
-		poplocalvars(sh);
+		TRY_SHV(poplocalvars(sh));
+	return {};
 }
 
 
@@ -607,20 +610,20 @@ unwindlocalvars(ShellContext &sh, struct localvar_list *stop)
  * with the same name.
  */
 
-int
+dash::ShellResult<int>
 unsetcmd(ShellContext &sh, int argc, char **argv)
 {
 	char **ap;
 	int i;
 	int flag = 0;
 
-	while ((i = nextopt(sh, "vf")) != '\0') {
+	while ((i = TRY_SH(nextopt(sh, "vf"))) != '\0') {
 		flag = i;
 	}
 
 	for (ap = sh.argptr; *ap ; ap++) {
 		if (flag != 'f') {
-			unsetvar(sh, *ap);
+			TRY_SHV(unsetvar(sh, *ap));
 			continue;
 		}
 		if (flag != 'v')
@@ -634,10 +637,11 @@ unsetcmd(ShellContext &sh, int argc, char **argv)
  * Unset the specified variable.
  */
 
-void
+dash::ShellResult<void>
 unsetvar(ShellContext &sh, const char *s)
 {
-	setvar(sh, s, 0, 0);
+	TRY_SHV(setvar(sh, s, 0, 0));
+	return {};
 }
 
 

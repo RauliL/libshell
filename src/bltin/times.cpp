@@ -12,7 +12,7 @@
 #include "bltin.h"
 #endif
 
-int
+dash::ShellResult<int>
 timescmd(ShellContext &sh, int argc, char *argv[])
 {
 	struct tms buf;

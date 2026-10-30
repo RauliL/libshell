@@ -37,6 +37,7 @@
  */
 
 #include <string>
+#include "error.h"
 
 #define ALIASINUSE	1
 #define ALIASDEAD	2
@@ -50,8 +51,8 @@ struct alias {
 
 struct ShellContext;
 struct alias *lookupalias(ShellContext &sh, const char *, int);
-int aliascmd(ShellContext &sh, int, char **);
-int unaliascmd(ShellContext &sh, int, char **);
-int unalias(ShellContext &sh, const char *);
+dash::ShellResult<int> aliascmd(ShellContext &sh, int, char **);
+dash::ShellResult<int> unaliascmd(ShellContext &sh, int, char **);
+dash::ShellResult<int> unalias(ShellContext &sh, const char *);
 void printalias(ShellContext &sh, const struct alias *);
 #endif

@@ -130,10 +130,13 @@ inline EvalFlags operator|(EvalFlag a, EvalFlag b)
 static_assert(std::is_trivially_copyable_v<EvalFlags>);
 static_assert(std::is_trivially_destructible_v<EvalFlags>);
 
-int evalstring(char *, EvalFlags);
+#include "error.h"
+
+struct ShellContext;
+dash::ShellResult<int> evalstring(ShellContext &sh, char *, EvalFlags);
 union node;	/* BLETCH for ansi C */
-int evaltree(union node *, EvalFlags);
-void evalbackcmd(union node *, struct backcmd *);
+dash::ShellResult<int> evaltree(ShellContext &sh, union node *, EvalFlags);
+dash::ShellResult<void> evalbackcmd(ShellContext &sh, union node *, struct backcmd *);
 
 extern int evalskip;
 

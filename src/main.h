@@ -38,6 +38,8 @@
 
 #include <errno.h>
 
+#include "result.h"
+
 struct ShellContext;
 
 /* shell level: 0 for the main shell, 1 for its children, and so on */
@@ -50,10 +52,10 @@ extern int *dash_errno;
 #define errno (*dash_errno)
 #endif
 
-int cmdloop(ShellContext &sh);
-void readcmdfile(ShellContext &sh, char *);
-int dotcmd(ShellContext &sh, int, char **);
-int exitcmd(ShellContext &sh, int, char **);
+dash::ShellResult<int> cmdloop(ShellContext &sh);
+dash::ShellResult<void> readcmdfile(ShellContext &sh, char *);
+dash::ShellResult<int> dotcmd(ShellContext &sh, int, char **);
+dash::ShellResult<int> exitcmd(ShellContext &sh, int, char **);
 #endif
 
 

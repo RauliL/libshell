@@ -306,7 +306,7 @@ inline int parser_eof(ShellContext &sh)
 	return sh.tokpushback && sh.lasttoken == TEOF;
 }
 
-inline int execute(ShellContext &sh, char *command, EvalFlags flags)
+inline dash::ShellResult<int> execute(ShellContext &sh, char *command, EvalFlags flags)
 {
 	return evalstring(sh, command, flags);
 }

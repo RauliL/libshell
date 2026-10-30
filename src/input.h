@@ -39,6 +39,8 @@
 #include <limits.h>
 #include <stdbool.h>
 
+#include "error.h"
+
 #define PUNGETC_MAX (MB_LEN_MAX > 16 ? MB_LEN_MAX : 16)
 #define IBUFSIZ (BUFSIZ + PUNGETC_MAX + 1)
 
@@ -100,7 +102,7 @@ int pgetc_eoa(ShellContext &sh);
 void pungetc(ShellContext &sh);
 void pungetn(ShellContext &sh, int);
 void pushstring(ShellContext &sh, char *, void *);
-int setinputfile(ShellContext &sh, const char *, int);
+dash::ShellResult<int> setinputfile(ShellContext &sh, const char *, int);
 void setinputstring(ShellContext &sh, char *);
 void pushstdin(ShellContext &sh);
 void popfile(ShellContext &sh);

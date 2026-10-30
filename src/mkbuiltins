@@ -113,9 +113,11 @@ echo '
 
 struct ShellContext;
 
+#include "error.h"
+
 struct builtincmd {
 	const char *name;
-	int (*builtin)(ShellContext &, int, char **);
+	dash::ShellResult<int> (*builtin)(ShellContext &, int, char **);
 	unsigned flags;
 };
 

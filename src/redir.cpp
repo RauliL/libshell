@@ -84,13 +84,13 @@ struct redirtab {
 /* Bit map of currently closed file descriptors. */
 
 
-static int openredirect(ShellContext &sh, union node *);
+static dash::ShellResult<int> openredirect(ShellContext &sh, union node *);
 #ifdef notyet
-static void dupredirect(ShellContext &sh, union node *, int, char[10]);
+static dash::ShellResult<void> dupredirect(ShellContext &sh, union node *, int, char[10]);
 #else
-static void dupredirect(ShellContext &sh, union node *, int);
+static dash::ShellResult<void> dupredirect(ShellContext &sh, union node *, int);
 #endif
-static int openhere(ShellContext &sh, union node *);
+static dash::ShellResult<int> openhere(ShellContext &sh, union node *);
 
 
 static unsigned
@@ -116,7 +116,7 @@ update_closed_redirs(ShellContext &sh, int fd, int nfd)
  * stdout, is saved in memory.
  */
 
-void
+dash::ShellResult<void>
 redirect(ShellContext &sh, union node *redir, int flags)
 {
 	union node *n;
@@ -133,14 +133,14 @@ redirect(ShellContext &sh, union node *redir, int flags)
 	memory[1] = flags & REDIR_BACKQ;
 #endif
 	if (!redir)
-		return;
+		return {};
 	sv = NULL;
 	INTOFF;
 	if (likely(flags & REDIR_PUSH))
 		sv = sh.redirlist;
 	n = redir;
 	do {
-		newfd = openredirect(sh, n);
+		newfd = TRY_SH(openredirect(sh, n));
 		if (newfd < -1)
 			continue;
 
@@ -159,7 +159,7 @@ redirect(ShellContext &sh, union node *redir, int flags)
 			if (likely(i == EMPTY)) {
 				i = CLOSED;
 				if (fd != newfd && !closed) {
-					i = savefd(sh, fd, fd);
+					i = TRY_SH(savefd(sh, fd, fd));
 					fd = -1;
 				}
 			}
@@ -171,9 +171,9 @@ redirect(ShellContext &sh, union node *redir, int flags)
 			continue;
 
 #ifdef notyet
-		dupredirect(sh, n, newfd, memory);
+		TRY_SHV(dupredirect(sh, n, newfd, memory));
 #else
-		dupredirect(sh, n, newfd);
+		TRY_SHV(dupredirect(sh, n, newfd));
 #endif
 	} while ((n = n->nfile.next));
 	INTON;
@@ -185,11 +185,11 @@ redirect(ShellContext &sh, union node *redir, int flags)
 #endif
 	if (flags & REDIR_SAVEFD2 && sv->renamed[2] >= 0)
 		sh.preverrout.fd = sv->renamed[2];
+	return {};
 }
 
 
-static int sh_open_fail(ShellContext &sh, const char *, int, int) __attribute__((__noreturn__));
-static int
+static tl::unexpected<dash::ShellErr>
 sh_open_fail(ShellContext &sh, const char *pathname, int flags, int e)
 {
 	const char *word;
@@ -202,11 +202,11 @@ sh_open_fail(ShellContext &sh, const char *pathname, int flags, int e)
 		action = E_CREAT;
 	}
 
-	sh_error(sh, "cannot %s %s: %s", word, pathname, errmsg(sh, e, action));
+	return sh_error(sh, "cannot %s %s: %s", word, pathname, errmsg(sh, e, action));
 }
 
 
-int
+dash::ShellResult<int>
 sh_open(ShellContext &sh, const char *pathname, int flags, int mayfail)
 {
 	int fd;
@@ -220,11 +220,11 @@ sh_open(ShellContext &sh, const char *pathname, int flags, int mayfail)
 	if (mayfail || fd >= 0)
 		return fd;
 
-	sh_open_fail(sh, pathname, flags, e);
+	return sh_open_fail(sh, pathname, flags, e);
 }
 
 
-static int
+static dash::ShellResult<int>
 openredirect(ShellContext &sh, union node *redir)
 {
 	struct stat64 sb;
@@ -236,7 +236,7 @@ openredirect(ShellContext &sh, union node *redir)
 	case NFROM:
 		flags = O_RDONLY;
 do_open:
-		f = sh_open(sh, redir->nfile.expfname.c_str(), flags, 0);
+		f = TRY_SH(sh_open(sh, redir->nfile.expfname.c_str(), flags, 0));
 		break;
 	case NFROMTO:
 		flags = O_RDWR|O_CREAT;
@@ -253,7 +253,7 @@ do_open:
 			if (S_ISREG(sb.st_mode))
 				goto ecreate;
 
-			f = sh_open(sh, fname, O_WRONLY, 0);
+			f = TRY_SH(sh_open(sh, fname, O_WRONLY, 0));
 			if (!fstat64(f, &sb) && S_ISREG(sb.st_mode)) {
 				close(f);
 				goto ecreate;
@@ -280,16 +280,16 @@ do_open:
 		/* Fall through to eliminate warning. */
 	case NHERE:
 	case NXHERE:
-		f = openhere(sh, redir);
+		f = TRY_SH(openhere(sh, redir));
 		break;
 	}
 
 	return f;
 ecreate:
-	sh_open_fail(sh, fname, O_CREAT, EEXIST);
+	return sh_open_fail(sh, fname, O_CREAT, EEXIST);
 }
 
-static int
+static dash::ShellResult<int>
 sh_dup2(ShellContext &sh, int ofd, int nfd, int cfd)
 {
 	if (nfd < 0) {
@@ -301,15 +301,15 @@ sh_dup2(ShellContext &sh, int ofd, int nfd, int cfd)
 	if (likely(cfd >= 0))
 		close(cfd);
 	if (nfd < 0)
-		sh_error(sh, "%d: %s", ofd, strerror(errno));
+		return sh_error(sh, "%d: %s", ofd, strerror(errno));
 
 	return nfd;
 }
 
 #ifdef notyet
-static void dupredirect(ShellContext &sh, union node *redir, int f, char memory[10])
+static dash::ShellResult<void> dupredirect(ShellContext &sh, union node *redir, int f, char memory[10])
 #else
-static void dupredirect(ShellContext &sh, union node *redir, int f)
+static dash::ShellResult<void> dupredirect(ShellContext &sh, union node *redir, int f)
 #endif
 {
 	int fd = redir->nfile.fd;
@@ -325,27 +325,28 @@ static void dupredirect(ShellContext &sh, union node *redir, int f)
 				memory[fd] = 1;
 			else
 #endif
-				sh_dup2(sh, f, fd, -1);
-			return;
+				TRY_SHV(sh_dup2(sh, f, fd, -1));
+			return {};
 		}
 		close(fd);
 	} else
-		sh_dup2(sh, f, fd, f);
+		TRY_SHV(sh_dup2(sh, f, fd, f));
+	return {};
 }
 
-int
+dash::ShellResult<int>
 sh_pipe(ShellContext &sh, int pip[2], int memfd)
 {
 	if (memfd) {
 		pip[0] = USE_MEMFD_CREATE ? memfd_create("dash", 0) : -1;
 		if (pip[0] >= 0) {
-			pip[1] = sh_dup2(sh, pip[0], -1, pip[0]);
+			pip[1] = TRY_SH(sh_dup2(sh, pip[0], -1, pip[0]));
 			return 1;
 		}
 	}
 
 	if (pipe(pip) < 0)
-		sh_error(sh, "Pipe call failed");
+		return sh_error(sh, "Pipe call failed");
 
 	return 0;
 }
@@ -356,7 +357,7 @@ sh_pipe(ShellContext &sh, int pip[2], int memfd)
  * the pipe without forking.
  */
 
-static int
+static dash::ShellResult<int>
 openhere(ShellContext &sh, union node *redir)
 {
 	size_t len = 0;
@@ -366,12 +367,12 @@ openhere(ShellContext &sh, union node *redir)
 
 	p = redir->nhere.doc->narg.text.data();
 	if (redir->type == NXHERE) {
-		expandarg(sh, redir->nhere.doc, NULL, EXP_QUOTED);
+		TRY_SHV(expandarg(sh, redir->nhere.doc, NULL, EXP_QUOTED));
 		p = stackblock();
 	}
 
 	len = strlen(p);
-	memfd = sh_pipe(sh, pip, len > PIPESIZE);
+	memfd = TRY_SH(sh_pipe(sh, pip, len > PIPESIZE));
 
 	if (memfd || len <= PIPESIZE) {
 		xwrite(sh, pip[1], p, len);
@@ -379,7 +380,7 @@ openhere(ShellContext &sh, union node *redir)
 		goto out;
 	}
 
-	if (forkshell(sh, (struct job *)NULL, (union node *)NULL, FORK_NOJOB) == 0) {
+	if (TRY_SH(forkshell(sh, (struct job *)NULL, (union node *)NULL, FORK_NOJOB)) == 0) {
 		close(pip[0]);
 		signal(SIGINT, SIG_IGN);
 		signal(SIGQUIT, SIG_IGN);
@@ -402,7 +403,7 @@ out:
  * Undo the effects of the last redirection.
  */
 
-void
+dash::ShellResult<void>
 popredir(ShellContext &sh, int drop)
 {
 	struct redirtab *rp;
@@ -436,6 +437,7 @@ popredir(ShellContext &sh, int drop)
 	sh.redirlist = rp->next;
 	ckfree(rp);
 	INTON;
+	return {};
 }
 
 /*
@@ -466,7 +468,7 @@ FORKRESET {
  * the original file dscriptor is not open.
  */
 
-int
+dash::ShellResult<int>
 savefd(ShellContext &sh, int from, int ofd)
 {
 	int newfd;
@@ -482,7 +484,7 @@ savefd(ShellContext &sh, int from, int ofd)
 	if (err != EBADF) {
 		close(ofd);
 		if (err)
-			sh_error(sh, "%d: %s", from, strerror(err));
+			return sh_error(sh, "%d: %s", from, strerror(err));
 		else if(!HAVE_F_DUPFD_CLOEXEC)
 			fcntl(newfd, F_SETFD, FD_CLOEXEC);
 	}
@@ -491,30 +493,29 @@ savefd(ShellContext &sh, int from, int ofd)
 }
 
 
-int
+dash::ShellResult<int>
 redirectsafe(ShellContext &sh, union node *redir, int flags)
 {
 	int err = 0;
-	volatile int saveint;
+	int saveint;
 
 	SAVEINT(saveint);
-	try {
-		redirect(sh, redir, flags);
-	} catch (const dash::ShellError &ex) {
-		sh.exception = ex.code();
-		err = 2;
+	if (auto r = redirect(sh, redir, flags); !r) {
+		sh.exception = r.error().code;
+		err = (r.error().code == EXERROR) ? 2 : r.error().code;
 	}
-	restore_handler_expandarg(sh, err);
+	TRY_SHV(restore_handler_expandarg(sh, err));
 	RESTOREINT(saveint);
 	return err;
 }
 
 
-void
+dash::ShellResult<void>
 unwindredir(ShellContext &sh, struct redirtab *stop)
 {
 	while (sh.redirlist != stop)
-		popredir(sh, 0);
+		TRY_SHV(popredir(sh, 0));
+	return {};
 }
 
 

@@ -36,6 +36,8 @@
  *	@(#)redir.h	8.2 (Berkeley) 5/4/95
  */
 
+#include "error.h"
+
 /* flags passed to redirect */
 #define REDIR_PUSH 01		/* save previous values of file descriptors */
 #ifdef notyet
@@ -45,13 +47,14 @@
 
 struct redirtab;
 union node;
-void redirect(union node *, int);
-void popredir(int);
-int savefd(int, int);
-int redirectsafe(union node *, int);
-void unwindredir(struct redirtab *stop);
-struct redirtab *pushredir(union node *redir);
-int sh_open(const char *pathname, int flags, int mayfail);
-int sh_pipe(int pip[2], int memfd);
+struct ShellContext;
+dash::ShellResult<void> redirect(ShellContext &sh, union node *, int);
+dash::ShellResult<void> popredir(ShellContext &sh, int);
+dash::ShellResult<int> savefd(ShellContext &sh, int, int);
+dash::ShellResult<int> redirectsafe(ShellContext &sh, union node *, int);
+dash::ShellResult<void> unwindredir(ShellContext &sh, struct redirtab *stop);
+struct redirtab *pushredir(ShellContext &sh, union node *redir);
+dash::ShellResult<int> sh_open(ShellContext &sh, const char *pathname, int flags, int mayfail);
+dash::ShellResult<int> sh_pipe(ShellContext &sh, int pip[2], int memfd);
 
 #endif

@@ -122,23 +122,22 @@ struct ifs_state {
 
 
 
-static char * argstr(ShellContext &sh, char *p, int flag);
+static dash::ShellResult<char *> argstr(ShellContext &sh, char *p, int flag);
 static char * exptilde(ShellContext &sh, char *startp, int flag);
-static char * expari(ShellContext &sh, char *start, int flag);
-static void expbackq(ShellContext &sh, union node *, int);
-static char * evalvar(ShellContext &sh, char *, int);
+static dash::ShellResult<char *> expari(ShellContext &sh, char *start, int flag);
+static dash::ShellResult<void> expbackq(ShellContext &sh, union node *, int);
+static dash::ShellResult<char *> evalvar(ShellContext &sh, char *, int);
 static size_t strtodest(ShellContext &sh, const char *p, int flags);
 static size_t memtodest(ShellContext &sh, const char *p, size_t len, int flags);
-static ssize_t varvalue(ShellContext &sh, char *, int, unsigned);
-static void expandmeta(ShellContext &sh, ArgList &);
+static dash::ShellResult<ssize_t> varvalue(ShellContext &sh, char *, int, unsigned);
+static dash::ShellResult<void> expandmeta(ShellContext &sh, ArgList &);
 static void addglob(ShellContext &sh, const glob64_t *);
 static char * expmeta(ShellContext &sh, char *, unsigned, size_t);
 static void addfname(ShellContext &sh, char *);
 static int patmatch(ShellContext &sh, char *, const char *);
 static int pmatch(ShellContext &sh, char *, const char *);
 static size_t cvtnum(ShellContext &sh, intmax_t num, int flags);
-static void varunset(ShellContext &sh, const char *, const char *, const char *, int)
-	__attribute__((__noreturn__));
+static tl::unexpected<dash::ShellErr> varunset(ShellContext &sh, const char *, const char *, const char *, int);
 
 
 /*
@@ -222,7 +221,7 @@ getpwhome(ShellContext &sh, const char *name)
  * here document expansion.
  */
 
-void
+dash::ShellResult<void>
 expandarg(ShellContext &sh, union node *arg, ArgList *alist, int flag)
 {
 	char *p;
@@ -230,7 +229,7 @@ expandarg(ShellContext &sh, union node *arg, ArgList *alist, int flag)
 	sh.argbackq = &arg->narg.backquote;
 	sh.argbackq_i = 0;
 	STARTSTACKSTR(sh.expdest);
-	argstr(sh, arg->narg.text.data(), flag);
+	TRY_SHV(argstr(sh, arg->narg.text.data(), flag));
 	if (alist == NULL) {
 		/* here document expanded */
 		goto out;
@@ -243,7 +242,7 @@ expandarg(ShellContext &sh, union node *arg, ArgList *alist, int flag)
 		 */
 		if (flag & EXP_FULL) {
 			ifsbreakup(sh, p, -1, &words);
-			expandmeta(sh, words);
+			TRY_SHV(expandmeta(sh, words));
 		} else {
 			words.emplace_back(p);
 		}
@@ -254,6 +253,7 @@ expandarg(ShellContext &sh, union node *arg, ArgList *alist, int flag)
 
 out:
 	ifsfree(sh);
+	return {};
 }
 
 
@@ -264,7 +264,7 @@ out:
  * $@ like $* since no splitting will be performed.
  */
 
-static char *
+static dash::ShellResult<char *>
 argstr(ShellContext &sh, char *p, int flag)
 {
 	static const char spclchars[] = {
@@ -352,7 +352,7 @@ start:
 		case CTLQUOTEMARK:
 			/* "$@" syntax adherence hack */
 			if (!inquotes && !strcmp(p, dolatstr + 1)) {
-				p = evalvar(sh, p + 1, flag | EXP_QUOTED) + 1;
+				p = TRY_SH(evalvar(sh, p + 1, flag | EXP_QUOTED)) + 1;
 				goto start;
 			}
 			inquotes ^= EXP_QUOTED;
@@ -385,13 +385,13 @@ addquote:
 			length++;
 			goto addquote;
 		case CTLVAR:
-			p = evalvar(sh, p, flag | inquotes);
+			p = TRY_SH(evalvar(sh, p, flag | inquotes));
 			goto start;
 		case CTLBACKQ:
-			expbackq(sh, (*sh.argbackq)[sh.argbackq_i], flag | inquotes);
+			TRY_SHV(expbackq(sh, (*sh.argbackq)[sh.argbackq_i], flag | inquotes));
 			goto start;
 		case CTLARI:
-			p = expari(sh, p, flag | inquotes);
+			p = TRY_SH(expari(sh, p, flag | inquotes));
 			goto start;
 		}
 	}
@@ -444,11 +444,11 @@ lose:
 }
 
 
-void
+dash::ShellResult<void>
 removerecordregions(ShellContext &sh, int endoff)
 {
 	if (sh.ifslastp == NULL)
-		return;
+		return {};
 
 	if (sh.ifsfirst.endoff > endoff) {
 		while (sh.ifsfirst.next != NULL) {
@@ -465,7 +465,7 @@ removerecordregions(ShellContext &sh, int endoff)
 			sh.ifslastp = &sh.ifsfirst;
 			sh.ifsfirst.endoff = endoff;
 		}
-		return;
+		return {};
 	}
 	
 	sh.ifslastp = &sh.ifsfirst;
@@ -481,6 +481,7 @@ removerecordregions(ShellContext &sh, int endoff)
 	}
 	if (sh.ifslastp->endoff > endoff)
 		sh.ifslastp->endoff = endoff;
+	return {};
 }
 
 
@@ -488,7 +489,7 @@ removerecordregions(ShellContext &sh, int endoff)
  * Expand arithmetic expression.  Backup to start of expression,
  * evaluate, place result in (backed up) result, adjust string position.
  */
-static char *
+static dash::ShellResult<char *>
 expari(ShellContext &sh, char *start, int flag)
 {
 	int begoff;
@@ -499,7 +500,7 @@ expari(ShellContext &sh, char *start, int flag)
 
 	p = stackblock();
 	begoff = sh.expdest - p;
-	p = argstr(sh, start, flag & EXP_DISCARD);
+	p = TRY_SH(argstr(sh, start, flag & EXP_DISCARD));
 
 	if (flag & EXP_DISCARD)
 		goto out;
@@ -509,13 +510,13 @@ expari(ShellContext &sh, char *start, int flag)
 	start += begoff;
 	STADJUST(start - sh.expdest, sh.expdest);
 
-	removerecordregions(sh, begoff);
+	TRY_SHV(removerecordregions(sh, begoff));
 
 	{
 		std::size_t su = sh.stackstr.used;
 		std::size_t hc = sh.stackheaps.size();
 		sh.stackstr.commit(endoff);
-		result = arith(sh, start);
+		result = TRY_SH(arith(sh, start));
 		while (sh.stackheaps.size() > hc) {
 			ckfree(sh.stackheaps.back());
 			sh.stackheaps.pop_back();
@@ -537,7 +538,7 @@ out:
  * Expand stuff in backwards quotes.
  */
 
-static void
+static dash::ShellResult<void>
 expbackq(ShellContext &sh, union node *cmd, int flag)
 {
 	struct backcmd in;
@@ -556,7 +557,7 @@ expbackq(ShellContext &sh, union node *cmd, int flag)
 		std::size_t su = sh.stackstr.used;
 		std::size_t hc = sh.stackheaps.size();
 		sh.stackstr.commit(startloc);
-		evalbackcmd(sh, cmd, (struct backcmd *) &in);
+		TRY_SHV(evalbackcmd(sh, cmd, (struct backcmd *) &in));
 		while (sh.stackheaps.size() > hc) {
 			ckfree(sh.stackheaps.back());
 			sh.stackheaps.pop_back();
@@ -584,7 +585,7 @@ read:
 
 	if (in.fd >= 0) {
 		close(in.fd);
-		sh.back_exitstatus = waitforjob(sh, in.jp);
+		sh.back_exitstatus = TRY_SH(waitforjob(sh, in.jp));
 	}
 	INTON;
 
@@ -603,6 +604,7 @@ read:
 
 out:
 	sh.argbackq_i++;
+	return {};
 }
 
 
@@ -687,7 +689,7 @@ scanright(ShellContext &sh, char *startp, char *endp, char *rmesc, char *rmescen
 	return 0;
 }
 
-static char *
+static dash::ShellResult<char *>
 subevalvar(ShellContext &sh, char *start, char *str, int strloc, int startloc,
 			int varflags, int flag)
 {
@@ -703,8 +705,8 @@ subevalvar(ShellContext &sh, char *start, char *str, int strloc, int startloc,
 	char *endp;
 	char *p;
 
-	p = argstr(sh, start, (flag & EXP_DISCARD) | EXP_TILDE |
-			  (str ?  0 : EXP_CASE));
+	p = TRY_SH(argstr(sh, start, (flag & EXP_DISCARD) | EXP_TILDE |
+			  (str ?  0 : EXP_CASE)));
 	if (flag & EXP_DISCARD)
 		return p;
 
@@ -712,14 +714,13 @@ subevalvar(ShellContext &sh, char *start, char *str, int strloc, int startloc,
 
 	switch (subtype) {
 	case VSASSIGN:
-		setvar(sh, str, startp, 0);
+		TRY_SHV(setvar(sh, str, startp, 0));
 
 		loc = startp;
 		goto out;
 
 	case VSQUESTION:
-		varunset(sh, start, str, startp, varflags);
-		/* NOTREACHED */
+		return varunset(sh, start, str, startp, varflags);
 	}
 
 	subtype -= VSTRIMRIGHT;
@@ -780,7 +781,7 @@ out:
 	STADJUST(amount, sh.expdest);
 
 	/* Remove any recorded regions beyond start of variable */
-	removerecordregions(sh, startloc);
+	TRY_SHV(removerecordregions(sh, startloc));
 
 	return p;
 }
@@ -790,7 +791,7 @@ out:
  * Expand a variable, and return a pointer to the next character in the
  * input string.
  */
-static char *
+static dash::ShellResult<char *>
 evalvar(ShellContext &sh, char *p, int flag)
 {
 	int subtype;
@@ -822,7 +823,7 @@ evalvar(ShellContext &sh, char *p, int flag)
 	}
 
 again:
-	varlen = varvalue(sh, var, varflags, flag | mbchar);
+	varlen = TRY_SH(varvalue(sh, var, varflags, flag | mbchar));
 	if (varflags & VSNUL)
 		varlen--;
 
@@ -835,15 +836,15 @@ again:
 
 	case 0:
 	case VSMINUS:
-		p = argstr(sh, p, flag | EXP_TILDE | EXP_WORD |
-			      (discard ^ EXP_DISCARD));
+		p = TRY_SH(argstr(sh, p, flag | EXP_TILDE | EXP_WORD |
+			      (discard ^ EXP_DISCARD)));
 		goto record;
 
 	case VSASSIGN:
 	case VSQUESTION:
-		p = subevalvar(sh, p, var, 0, startloc, varflags,
+		p = TRY_SH(subevalvar(sh, p, var, 0, startloc, varflags,
 			       (flag & ~QUOTES_ESC) |
-			       (discard ^ EXP_DISCARD));
+			       (discard ^ EXP_DISCARD)));
 
 		if ((flag | ~discard) & EXP_DISCARD)
 			goto record;
@@ -854,7 +855,7 @@ again:
 	}
 
 	if ((discard & ~flag) && uflag)
-		varunset(sh, p, var, 0, 0);
+		return varunset(sh, p, var, 0, 0);
 
 	if (subtype == VSLENGTH) {
 		p++;
@@ -889,7 +890,7 @@ again:
 	}
 
 	patloc = sh.expdest - (char *)stackblock();
-	p = subevalvar(sh, p, NULL, patloc, startloc, varflags, flag);
+	p = TRY_SH(subevalvar(sh, p, NULL, patloc, startloc, varflags, flag));
 
 record:
 	if ((flag | discard) & EXP_DISCARD)
@@ -1036,7 +1037,7 @@ strtodest(ShellContext &sh, const char *p, int flags)
  * Add the value of a specialized variable to the stack string.
  */
 
-static ssize_t
+static dash::ShellResult<ssize_t>
 varvalue(ShellContext &sh, char *name, int varflags, unsigned flags)
 {
 	int subtype = varflags & VSTYPE;
@@ -1057,7 +1058,7 @@ varvalue(ShellContext &sh, char *name, int varflags, unsigned flags)
 		if (discard)
 			return -1;
 
-		sh_error(sh, "Bad substitution");
+		return sh_error(sh, "Bad substitution");
 	}
 
 	flags &= discard ? ~QUOTES_ESC : ~0;
@@ -1182,7 +1183,7 @@ recordregion(ShellContext &sh, int start, int end, int nulonly)
 		ifsp = (struct ifsregion *)ckmalloc(sh, sizeof (struct ifsregion));
 		ifsp->next = NULL;
 		sh.ifslastp->next = ifsp;
-		INTON;
+		INTON_DEFER;
 	}
 	sh.ifslastp = ifsp;
 	sh.ifslastp->begoff = start;
@@ -1411,7 +1412,7 @@ ifsfree(ShellContext &sh)
 		p = ifsp;
 	} while (p);
 	sh.ifsfirst.next = NULL;
-	INTON;
+	INTON_DEFER;
 
 out:
 	sh.ifslastp = NULL;
@@ -1490,7 +1491,7 @@ opendir_interruptible(ShellContext &sh, const char *pathname)
 #define GLOB_ALTDIRFUNC 0
 #endif
 
-static void
+static dash::ShellResult<void>
 expandmeta_glob(ShellContext &sh, ArgList &strs)
 {
 	ArgList out;
@@ -1531,21 +1532,22 @@ expandmeta_glob(ShellContext &sh, ArgList &strs)
 				   std::make_move_iterator(sh.exparg.end()));
 			sh.exparg.clear();
 			globfree64(&pglob);
-			INTON;
+			INTON_DEFER;
 			break;
 		case GLOB_NOMATCH:
 nometa2:
 			globfree64(&pglob);
-			INTON;
+			INTON_DEFER;
 nometa:
 			rmescapes(s.data());
 			out.push_back(std::move(s));
 			break;
 		default:	/* GLOB_NOSPACE */
-			sh_error(sh, "Out of space");
+			return sh_error(sh, "Out of space");
 		}
 	}
 	strs = std::move(out);
+	return {};
 }
 
 
@@ -1563,7 +1565,7 @@ addglob(ShellContext &sh, const glob64_t *pglob)
 	} while (*++p);
 }
 
-static void
+static dash::ShellResult<void>
 expandmeta(ShellContext &sh, ArgList &strs)
 {
 	/* TODO - EXP_REDIR */
@@ -1609,6 +1611,7 @@ nometa:
 		}
 	}
 	strs = std::move(out);
+	return {};
 }
 
 static void
@@ -1689,7 +1692,6 @@ expmeta(ShellContext &sh, char *name, unsigned name_len, size_t expdir_len)
 	char *p;
 	int c;
 
-	try {
 	len = expdir_len + name_len + 1;
 	cp = growstackto(sh, len);
 	enddir = cp + expdir_len;
@@ -1782,11 +1784,6 @@ check_int:
 		closedir(dirp);
 out_opendir:
 	return cp;
-	} catch (...) {
-		if (dirp)
-			closedir(dirp);
-		throw;
-	}
 }
 
 
@@ -2121,7 +2118,7 @@ setnesc:
  * See if a pattern matches in a case statement.
  */
 
-int
+dash::ShellResult<int>
 casematch(ShellContext &sh, union node *pattern, char *val)
 {
 	int result;
@@ -2131,7 +2128,7 @@ casematch(ShellContext &sh, union node *pattern, char *val)
 	sh.argbackq = &pattern->narg.backquote;
 	sh.argbackq_i = 0;
 	STARTSTACKSTR(sh.expdest);
-	argstr(sh, pattern->narg.text.data(), EXP_TILDE | EXP_CASE);
+	TRY_SHV(argstr(sh, pattern->narg.text.data(), EXP_TILDE | EXP_CASE));
 	ifsfree(sh);
 	result = patmatch(sh, stackblock(), val);
 	while (sh.stackheaps.size() > hc) {
@@ -2156,7 +2153,7 @@ cvtnum(ShellContext &sh, intmax_t num, int flags)
 	return memtodest(sh, buf, len, flags);
 }
 
-static void
+static tl::unexpected<dash::ShellErr>
 varunset(ShellContext &sh, const char *end, const char *var, const char *umsg, int varflags)
 {
 	const char *msg;
@@ -2171,17 +2168,18 @@ varunset(ShellContext &sh, const char *end, const char *var, const char *umsg, i
 		} else
 			msg = umsg;
 	}
-	sh_error(sh, "%.*s: %s%s", end - var - 1, var, msg, tail);
+	return sh_error(sh, "%.*s: %s%s", end - var - 1, var, msg, tail);
 }
 
-void
+dash::ShellResult<void>
 restore_handler_expandarg(ShellContext &sh, int err)
 {
 	if (err) {
 		if (sh.exception != EXERROR)
-			exraise(sh, sh.exception);
+			return exraise(sh, sh.exception);
 		ifsfree(sh);
 	}
+	return {};
 }
 
 #ifdef mkinit

@@ -49,11 +49,11 @@
 
 #define ATABSIZE 39
 
-static void setalias(ShellContext &sh, const char *, const char *);
+static dash::ShellResult<void> setalias(ShellContext &sh, const char *, const char *);
 static struct alias * freealias(ShellContext &sh, struct alias *);
 static struct alias ** __lookupalias(ShellContext &sh, const char *);
 
-static void
+static dash::ShellResult<void>
 setalias(ShellContext &sh, const char *name, const char *val)
 {
 	struct alias *ap, **app;
@@ -62,7 +62,7 @@ setalias(ShellContext &sh, const char *name, const char *val)
 
 	do {
 		if (BASESYNTAX[(signed char)*p] != CWORD)
-			sh_error(sh, "Invalid alias name: %s", name);
+			return sh_error(sh, "Invalid alias name: %s", name);
 	} while (*++p != '=');
 
 	namelen = static_cast<size_t>(val - name - 1); /* bytes before '=' */
@@ -81,9 +81,10 @@ setalias(ShellContext &sh, const char *name, const char *val)
 	ap->name.assign(name, namelen);
 	ap->val = val;
 	INTON;
+	return {};
 }
 
-int
+dash::ShellResult<int>
 unalias(ShellContext &sh, const char *name)
 {
 	struct alias **app;
@@ -94,13 +95,13 @@ unalias(ShellContext &sh, const char *name)
 		INTOFF;
 		*app = freealias(sh, *app);
 		INTON;
-		return (0);
+		return 0;
 	}
 
-	return (1);
+	return 1;
 }
 
-static void
+static dash::ShellResult<void>
 rmaliases(ShellContext &sh)
 {
 	struct alias *ap, **app;
@@ -117,6 +118,7 @@ rmaliases(ShellContext &sh)
 		}
 	}
 	INTON;
+	return {};
 }
 
 struct alias *
@@ -129,7 +131,7 @@ lookupalias(ShellContext &sh, const char *name, int check)
 	return (ap);
 }
 
-int
+dash::ShellResult<int>
 aliascmd(ShellContext &sh, int argc, char **argv)
 {
 	char *n, *v;
@@ -143,7 +145,7 @@ aliascmd(ShellContext &sh, int argc, char **argv)
 			for (ap = sh.atab[i]; ap; ap = ap->next) {
 				printalias(sh, ap);
 			}
-		return (0);
+		return 0;
 	}
 	while ((n = *++argv) != NULL) {
 		if (!*n || !(v = strchr(n + 1, '='))) {
@@ -153,32 +155,32 @@ aliascmd(ShellContext &sh, int argc, char **argv)
 			} else
 				printalias(sh, ap);
 		} else {
-			setalias(sh, n, v + 1);
+			TRY_SHV(setalias(sh, n, v + 1));
 		}
 	}
 
-	return (ret);
+	return ret;
 }
 
-int
+dash::ShellResult<int>
 unaliascmd(ShellContext &sh, int argc, char **argv)
 {
 	int i;
 
-	while ((i = nextopt(sh, "a")) != '\0') {
+	while ((i = TRY_SH(nextopt(sh, "a"))) != '\0') {
 		if (i == 'a') {
-			rmaliases(sh);
-			return (0);
+			TRY_SHV(rmaliases(sh));
+			return 0;
 		}
 	}
 	for (i = 0; *sh.argptr; sh.argptr++) {
-		if (unalias(sh, *sh.argptr)) {
+		if (TRY_SH(unalias(sh, *sh.argptr))) {
 			outfmt(sh, sh.out2, "%s: %s not found\n", "unalias", *sh.argptr);
 			i = 1;
 		}
 	}
 
-	return (i);
+	return i;
 }
 
 static struct alias *

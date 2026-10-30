@@ -141,12 +141,12 @@ static const struct t_op ops[] = {
 
 
 
-static void syntax(ShellContext &sh, const char *, const char *);
-static int oexpr(ShellContext &sh, enum token);
-static int aexpr(ShellContext &sh, enum token);
-static int nexpr(ShellContext &sh, enum token);
-static int primary(ShellContext &sh, enum token);
-static int binop(ShellContext &sh);
+static tl::unexpected<dash::ShellErr> syntax(ShellContext &sh, const char *, const char *);
+static dash::ShellResult<int> oexpr(ShellContext &sh, enum token);
+static dash::ShellResult<int> aexpr(ShellContext &sh, enum token);
+static dash::ShellResult<int> nexpr(ShellContext &sh, enum token);
+static dash::ShellResult<int> primary(ShellContext &sh, enum token);
+static dash::ShellResult<int> binop(ShellContext &sh);
 static int filstat(ShellContext &sh, char *, enum token);
 static enum token t_lex(ShellContext &sh, char **);
 static int isoperand(ShellContext &sh, char **);
@@ -166,7 +166,7 @@ faccessat_confused_about_superuser(ShellContext &sh)
 # endif
 #endif
 
-static inline intmax_t
+static inline dash::ShellResult<intmax_t>
 getn(ShellContext &sh, const char *s)
 {
 	return atomax10(sh, s);
@@ -185,7 +185,7 @@ getop(ShellContext &sh, const char *s)
 	return NULL;
 }
 
-int
+dash::ShellResult<int>
 testcmd(ShellContext &sh, int argc, char **argv)
 {
 	const struct t_op *op;
@@ -194,7 +194,7 @@ testcmd(ShellContext &sh, int argc, char **argv)
 
 	if (*argv[0] == '[') {
 		if (*argv[--argc] != ']')
-			error("missing ]");
+			return error("missing ]");
 		argv[argc] = NULL;
 	}
 
@@ -235,31 +235,31 @@ recheck:
 
 eval:
 	sh.t_wp = argv;
-	res ^= oexpr(sh, n);
+	res ^= TRY_SH(oexpr(sh, n));
 	argv = sh.t_wp;
 
 	if (argv[0] != NULL && argv[1] != NULL)
-		syntax(sh, argv[0], "unexpected operator");
+		return syntax(sh, argv[0], "unexpected operator");
 
 	return res;
 }
 
-static void
+static tl::unexpected<dash::ShellErr>
 syntax(ShellContext &sh, const char *op, const char *msg)
 {
 	if (op && *op)
-		error("%s: %s", op, msg);
+		return error("%s: %s", op, msg);
 	else
-		error("%s", msg);
+		return error("%s", msg);
 }
 
-static int
+static dash::ShellResult<int>
 oexpr(ShellContext &sh, enum token n)
 {
 	int res = 0;
 
 	for (;;) {
-		res |= aexpr(sh, n);
+		res |= TRY_SH(aexpr(sh, n));
 		if (!*sh.t_wp)
 			break;
 		n = t_lex(sh, sh.t_wp + 1);
@@ -270,13 +270,13 @@ oexpr(ShellContext &sh, enum token n)
 	return res;
 }
 
-static int
+static dash::ShellResult<int>
 aexpr(ShellContext &sh, enum token n)
 {
 	int res = 1;
 
 	for (;;) {
-		if (!nexpr(sh, n))
+		if (!TRY_SH(nexpr(sh, n)))
 			res = 0;
 		if (!*sh.t_wp)
 			break;
@@ -288,7 +288,7 @@ aexpr(ShellContext &sh, enum token n)
 	return res;
 }
 
-static int
+static dash::ShellResult<int>
 nexpr(ShellContext &sh, enum token n)
 {
 	if (n != UNOT)
@@ -297,10 +297,10 @@ nexpr(ShellContext &sh, enum token n)
 	n = t_lex(sh, sh.t_wp + 1);
 	if (n != EOI)
 		sh.t_wp++;
-	return !nexpr(sh, n);
+	return !TRY_SH(nexpr(sh, n));
 }
 
-static int
+static dash::ShellResult<int>
 primary(ShellContext &sh, enum token n)
 {
 	enum token nn;
@@ -311,22 +311,22 @@ primary(ShellContext &sh, enum token n)
 	if (n == LPAREN) {
 		if ((nn = t_lex(sh, ++sh.t_wp)) == RPAREN)
 			return 0;	/* missing expression */
-		res = oexpr(sh, nn);
+		res = TRY_SH(oexpr(sh, nn));
 		if (t_lex(sh, ++sh.t_wp) != RPAREN)
-			syntax(sh, NULL, "closing paren expected");
+			return syntax(sh, NULL, "closing paren expected");
 		return res;
 	}
 	if (sh.t_wp_op && sh.t_wp_op->op_type == UNOP) {
 		/* unary expression */
 		if (*++sh.t_wp == NULL)
-			syntax(sh, sh.t_wp_op->op_text, "argument expected");
+			return syntax(sh, sh.t_wp_op->op_text, "argument expected");
 		switch (n) {
 		case STREZ:
 			return strlen(*sh.t_wp) == 0;
 		case STRNZ:
 			return strlen(*sh.t_wp) != 0;
 		case FILTT:
-			return isatty(getn(sh, *sh.t_wp));
+			return isatty(TRY_SH(getn(sh, *sh.t_wp)));
 #ifdef HAVE_FACCESSAT
 		case FILRD:
 			return test_file_access(sh, *sh.t_wp, R_OK);
@@ -347,7 +347,7 @@ primary(ShellContext &sh, enum token n)
 	return strlen(*sh.t_wp) > 0;
 }
 
-static int
+static dash::ShellResult<int>
 binop(ShellContext &sh)
 {
 	const char *opnd1, *opnd2;
@@ -358,7 +358,7 @@ binop(ShellContext &sh)
 	op = sh.t_wp_op;
 
 	if ((opnd2 = *++sh.t_wp) == (char *)0)
-		syntax(sh, op->op_text, "argument expected");
+		return syntax(sh, op->op_text, "argument expected");
 
 	switch (op->op_num) {
 	default:
@@ -375,17 +375,17 @@ binop(ShellContext &sh)
 	case STRGT:
 		return strcoll(opnd1, opnd2) > 0;
 	case INTEQ:
-		return getn(sh, opnd1) == getn(sh, opnd2);
+		return TRY_SH(getn(sh, opnd1)) == TRY_SH(getn(sh, opnd2));
 	case INTNE:
-		return getn(sh, opnd1) != getn(sh, opnd2);
+		return TRY_SH(getn(sh, opnd1)) != TRY_SH(getn(sh, opnd2));
 	case INTGE:
-		return getn(sh, opnd1) >= getn(sh, opnd2);
+		return TRY_SH(getn(sh, opnd1)) >= TRY_SH(getn(sh, opnd2));
 	case INTGT:
-		return getn(sh, opnd1) > getn(sh, opnd2);
+		return TRY_SH(getn(sh, opnd1)) > TRY_SH(getn(sh, opnd2));
 	case INTLE:
-		return getn(sh, opnd1) <= getn(sh, opnd2);
+		return TRY_SH(getn(sh, opnd1)) <= TRY_SH(getn(sh, opnd2));
 	case INTLT:
-		return getn(sh, opnd1) < getn(sh, opnd2);
+		return TRY_SH(getn(sh, opnd1)) < TRY_SH(getn(sh, opnd2));
 	case FILNT:
 		return newerf(sh, opnd1, opnd2);
 	case FILOT:
