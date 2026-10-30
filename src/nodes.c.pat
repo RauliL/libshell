@@ -41,71 +41,27 @@
 
 #include "shell.h"
 #include "shell_context.h"
-#include "shell_access.h"
 #include "nodes.h"
+#include "nodes_free.h"
 #include "memalloc.h"
-#include "machdep.h"
 #include "mystring.h"
 #include "system.h"
 
-
-		/* size of structures in function */
-		/* size of strings in node */
-		/* block to allocate function from */
-		/* block to allocate strings from */
-
-%SIZES
-
-
-static void calcsize(ShellContext &sh, union node *);
-static void sizenodelist(ShellContext &sh, struct nodelist *);
 static union node *copynode(ShellContext &sh, union node *);
-static struct nodelist *copynodelist(ShellContext &sh, struct nodelist *);
-static char *nodesavestr(ShellContext &sh, char *);
-
-
+static std::vector<union node *>
+copynodelist(ShellContext &sh, const std::vector<union node *> &);
 
 /*
- * Make a copy of a parse tree.
+ * Make a deep copy of a parse tree for a function definition.
  */
-
 struct funcnode *
 copyfunc(ShellContext &sh, union node *n)
 {
-	struct funcnode *f;
-	size_t blocksize;
-
-	funcblocksize = offsetof(struct funcnode, n);
-	funcstringsize = 0;
-	calcsize(sh, n);
-	blocksize = funcblocksize;
-	f = ckmalloc(sh, blocksize + funcstringsize);
-	funcblock = (char *) f + offsetof(struct funcnode, n);
-	funcstring = (char *) f + blocksize;
-	copynode(sh, n);
+	struct funcnode *f = new funcnode;
 	f->count = 0;
+	f->n = copynode(sh, n);
 	return f;
 }
-
-
-
-static void calcsize(ShellContext &sh, union node *n)
-{
-	%CALCSIZE
-}
-
-
-
-static void sizenodelist(ShellContext &sh, struct nodelist *lp)
-{
-	while (lp) {
-		funcblocksize += SHELL_ALIGN(sizeof(struct nodelist));
-		calcsize(sh, lp->n);
-		lp = lp->next;
-	}
-}
-
-
 
 static union node *copynode(ShellContext &sh, union node *n)
 {
@@ -115,45 +71,25 @@ static union node *copynode(ShellContext &sh, union node *n)
 	return copied;
 }
 
-
-static struct nodelist *copynodelist(ShellContext &sh, struct nodelist *lp)
+static std::vector<union node *>
+copynodelist(ShellContext &sh, const std::vector<union node *> &src)
 {
-	struct nodelist *start;
-	struct nodelist **lpp;
-
-	lpp = &start;
-	while (lp) {
-		*lpp = static_cast<struct nodelist *>(funcblock);
-		funcblock = (char *) funcblock +
-		    SHELL_ALIGN(sizeof(struct nodelist));
-		(*lpp)->n = copynode(sh, lp->n);
-		lp = lp->next;
-		lpp = &(*lpp)->next;
-	}
-	*lpp = NULL;
-	return start;
+	std::vector<union node *> out;
+	out.reserve(src.size());
+	for (union node *child : src)
+		out.push_back(copynode(sh, child));
+	return out;
 }
-
-
-
-static char *nodesavestr(ShellContext &sh, char *s)
-{
-	char   *rtn = funcstring;
-
-	funcstring = stpcpy(funcstring, s) + 1;
-	return rtn;
-}
-
-
 
 /*
- * Free a parse tree.
+ * Free a function parse tree when the last reference drops.
  */
-
 void
 freefunc(ShellContext &sh, struct funcnode *f)
 {
 	(void)sh;
-	if (f && --f->count < 0)
-		ckfree(f);
+	if (f && --f->count < 0) {
+		freenode(f->n);
+		delete f;
+	}
 }

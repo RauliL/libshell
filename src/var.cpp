@@ -32,6 +32,7 @@
  * SUCH DAMAGE.
  */
 
+#include <cstring>
 #include <locale.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -349,24 +350,34 @@ listvars(ShellContext &sh, int on, int off, char ***end)
 	struct var *vp;
 	char **ep;
 	int mask;
+	std::size_t n = 0;
+	std::size_t cap = 32;
+	char **list = stalloc(sh, cap * sizeof(char *));
 
-	STARTSTACKSTR(ep);
 	vpp = sh.vartab;
 	mask = on | off;
 	do {
 		for (vp = *vpp ; vp ; vp = vp->next)
 			if ((vp->flags & mask) == on) {
-				if (ep == stackstrend())
-					ep = growstackstr(sh);
-				*ep++ = (char *) vp->text;
+				if (n + 1 >= cap) {
+					cap *= 2;
+					char **nl = stalloc(sh, cap * sizeof(char *));
+					std::memcpy(nl, list, n * sizeof(char *));
+					list = nl;
+				}
+				list[n++] = const_cast<char *>(vp->text);
 			}
 	} while (++vpp < sh.vartab + VTABSIZE);
-	if (ep == stackstrend())
-		ep = growstackstr(sh);
+	if (n + 1 >= cap) {
+		char **nl = stalloc(sh, (n + 1) * sizeof(char *));
+		std::memcpy(nl, list, n * sizeof(char *));
+		list = nl;
+	}
+	ep = list + n;
 	if (end)
 		*end = ep;
-	*ep++ = NULL;
-	return grabstackstr(ep);
+	*ep = NULL;
+	return list;
 }
 
 

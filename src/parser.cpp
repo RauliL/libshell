@@ -47,6 +47,7 @@
 #include "shell_context.h"
 #include "parser.h"
 #include "nodes.h"
+#include "nodes_new.h"
 #include "expand.h"	/* defines rmescapes() */
 #include "exec.h"	/* defines find_builtin() */
 #include "syntax.h"
@@ -145,7 +146,7 @@ int
 issimplecmd(ShellContext &sh, union node *n, const char *name)
 {
 	return n && n->type == NCMD && n->ncmd.args &&
-	       equal(n->ncmd.args->narg.text, name);
+	       equal(n->ncmd.args->narg.text.c_str(), name);
 }
 
 static inline int
@@ -212,7 +213,7 @@ out_eof:
 				n2->npipe.backgnd = 1;
 			} else {
 				if (n2->type != NREDIR) {
-					n3 = astalloc(sh, sizeof(struct nredir));
+					n3 = new_node<nredir>();
 					n3->nredir.n = n2;
 					n3->nredir.redirect = NULL;
 					n2 = n3;
@@ -224,7 +225,7 @@ out_eof:
 			n1 = n2;
 		}
 		else {
-			n3 = (union node *)astalloc(sh, sizeof(struct nbinary));
+			n3 = new_node<nbinary>();
 			n3->type = NSEMI;
 			n3->nbinary.ch1 = n1;
 			n3->nbinary.ch2 = n2;
@@ -268,7 +269,7 @@ andor(ShellContext &sh)
 		}
 		sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		n2 = pipeline(sh);
-		n3 = (union node *)astalloc(sh, sizeof(struct nbinary));
+		n3 = new_node<nbinary>();
 		n3->type = t;
 		n3->nbinary.ch1 = n1;
 		n3->nbinary.ch2 = n2;
@@ -282,7 +283,6 @@ static union node *
 pipeline(ShellContext &sh)
 {
 	union node *n1, *n2, *pipenode;
-	struct nodelist *lp, *prev;
 	int negate;
 
 	negate = 0;
@@ -294,25 +294,19 @@ pipeline(ShellContext &sh)
 		sh.tokpushback++;
 	n1 = command(sh);
 	if (readtoken(sh) == TPIPE) {
-		pipenode = (union node *)astalloc(sh, sizeof(struct npipe));
+		pipenode = new_node<npipe>();
 		pipenode->type = NPIPE;
 		pipenode->npipe.backgnd = 0;
-		lp = (struct nodelist *)astalloc(sh, sizeof(struct nodelist));
-		pipenode->npipe.cmdlist = lp;
-		lp->n = n1;
+		pipenode->npipe.cmdlist.push_back(n1);
 		do {
-			prev = lp;
-			lp = (struct nodelist *)astalloc(sh, sizeof(struct nodelist));
 			sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
-			lp->n = command(sh);
-			prev->next = lp;
+			pipenode->npipe.cmdlist.push_back(command(sh));
 		} while (readtoken(sh) == TPIPE);
-		lp->next = NULL;
 		n1 = pipenode;
 	}
 	sh.tokpushback++;
 	if (negate) {
-		n2 = (union node *)astalloc(sh, sizeof(struct nnot));
+		n2 = new_node<nnot>();
 		n2->type = NNOT;
 		n2->nnot.com = n1;
 		return n2;
@@ -343,7 +337,7 @@ command(ShellContext &sh)
 		synexpect(sh, -1);
 		/* NOTREACHED */
 	case TIF:
-		n1 = (union node *)astalloc(sh, sizeof(struct nif));
+		n1 = new_node<nif>();
 		n1->type = NIF;
 		n1->nif.test = list(sh, 0);
 		if (readtoken(sh) != TTHEN)
@@ -351,7 +345,7 @@ command(ShellContext &sh)
 		n1->nif.ifpart = list(sh, 0);
 		n2 = n1;
 		while (readtoken(sh) == TELIF) {
-			n2->nif.elsepart = (union node *)astalloc(sh, sizeof(struct nif));
+			n2->nif.elsepart = new_node<nif>();
 			n2 = n2->nif.elsepart;
 			n2->type = NIF;
 			n2->nif.test = list(sh, 0);
@@ -370,7 +364,7 @@ command(ShellContext &sh)
 	case TWHILE:
 	case TUNTIL: {
 		int got;
-		n1 = (union node *)astalloc(sh, sizeof(struct nbinary));
+		n1 = new_node<nbinary>();
 		n1->type = (sh.lasttoken == TWHILE)? NWHILE : NUNTIL;
 		n1->nbinary.ch1 = list(sh, 0);
 		if ((got=readtoken(sh)) != TDO) {
@@ -384,18 +378,18 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? sh.wordtext : ""
 	case TFOR:
 		if (readtoken(sh) != TWORD || sh.quoteflag || ! goodname(sh, sh.wordtext))
 			synerror(sh, "Bad for loop variable");
-		n1 = (union node *)astalloc(sh, sizeof(struct nfor));
+		n1 = new_node<nfor>();
 		n1->type = NFOR;
 		n1->nfor.linno = savelinno;
-		n1->nfor.var = savestr(sh, sh.wordtext);
+		n1->nfor.var = sh.wordtext;
 		sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		if (readtoken(sh) == TIN) {
 			app = &ap;
 			while (readtoken(sh) == TWORD) {
-				n2 = (union node *)astalloc(sh, sizeof(struct narg));
+				n2 = new_node<narg>();
 				n2->type = NARG;
-				n2->narg.text = savestr(sh, sh.wordtext);
-				n2->narg.backquote = sh.backquotelist;
+				n2->narg.text = sh.wordtext;
+				n2->narg.backquote = std::move(sh.backquotelist);
 				*app = n2;
 				app = &n2->narg.next;
 			}
@@ -404,10 +398,9 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? sh.wordtext : ""
 			if (sh.lasttoken != TNL && sh.lasttoken != TSEMI)
 				synexpect(sh, -1);
 		} else {
-			n2 = (union node *)astalloc(sh, sizeof(struct narg));
+			n2 = new_node<narg>();
 			n2->type = NARG;
-			n2->narg.text = savestr(sh, dolatstr);
-			n2->narg.backquote = NULL;
+			n2->narg.text = dolatstr;
 			n2->narg.next = NULL;
 			n1->nfor.args = n2;
 			/*
@@ -424,15 +417,15 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? sh.wordtext : ""
 		t = TDONE;
 		break;
 	case TCASE:
-		n1 = (union node *)astalloc(sh, sizeof(struct ncase));
+		n1 = new_node<ncase>();
 		n1->type = NCASE;
 		n1->ncase.linno = savelinno;
 		if (readtoken(sh) != TWORD)
 			synexpect(sh, TWORD);
-		n1->ncase.expr = n2 = (union node *)astalloc(sh, sizeof(struct narg));
+		n1->ncase.expr = n2 = new_node<narg>();
 		n2->type = NARG;
-		n2->narg.text = savestr(sh, sh.wordtext);
-		n2->narg.backquote = sh.backquotelist;
+		n2->narg.text = sh.wordtext;
+		n2->narg.backquote = std::move(sh.backquotelist);
 		n2->narg.next = NULL;
 		sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		if (readtoken(sh) != TIN)
@@ -444,16 +437,16 @@ next_case:
 		while(t != TESAC) {
 			if (sh.lasttoken == TLP)
 				readtoken(sh);
-			*cpp = cp = (union node *)astalloc(sh, sizeof(struct nclist));
+			*cpp = cp = new_node<nclist>();
 			cp->type = NCLIST;
 			app = &cp->nclist.pattern;
 			for (;;) {
 				if (sh.lasttoken < TWORD)
 					synexpect(sh, TWORD);
-				*app = ap = (union node *)astalloc(sh, sizeof(struct narg));
+				*app = ap = new_node<narg>();
 				ap->type = NARG;
-				ap->narg.text = savestr(sh, sh.wordtext);
-				ap->narg.backquote = sh.backquotelist;
+				ap->narg.text = sh.wordtext;
+				ap->narg.backquote = std::move(sh.backquotelist);
 				if (readtoken(sh) != TPIPE)
 					break;
 				app = &ap->narg.next;
@@ -477,7 +470,7 @@ next_case:
 		*cpp = NULL;
 		goto redir;
 	case TLP:
-		n1 = (union node *)astalloc(sh, sizeof(struct nredir));
+		n1 = new_node<nredir>();
 		n1->type = NSUBSHELL;
 		n1->nredir.linno = savelinno;
 		n1->nredir.n = list(sh, 0);
@@ -510,7 +503,7 @@ redir:
 	*rpp = NULL;
 	if (redir) {
 		if (n1->type != NSUBSHELL) {
-			n2 = (union node *)astalloc(sh, sizeof(struct nredir));
+			n2 = new_node<nredir>();
 			n2->type = NREDIR;
 			n2->nredir.linno = savelinno;
 			n2->nredir.n = n1;
@@ -546,10 +539,10 @@ simplecmd(ShellContext &sh)
 		sh.checkkwd = savecheckkwd;
 		switch (readtoken(sh)) {
 		case TWORD:
-			n = (union node *)astalloc(sh, sizeof(struct narg));
+			n = new_node<narg>();
 			n->type = NARG;
-			n->narg.text = savestr(sh, sh.wordtext);
-			n->narg.backquote = sh.backquotelist;
+			n->narg.text = sh.wordtext;
+			n->narg.backquote = std::move(sh.backquotelist);
 			if (savecheckkwd && isassignment(sh, sh.wordtext)) {
 				*vpp = n;
 				vpp = &n->narg.next;
@@ -570,22 +563,24 @@ simplecmd(ShellContext &sh)
 				!vars && !redir
 			) {
 				struct builtincmd *bcmd;
-				const char *name;
+				std::string fname = std::move(n->narg.text);
 
 				/* We have a function */
 				if (readtoken(sh) != TRP)
 					synexpect(sh, TRP);
-				name = n->narg.text;
 				if (
-					!goodname(sh, name) || (
-						(bcmd = find_builtin(sh, name)) &&
+					!goodname(sh, fname.c_str()) || (
+						(bcmd = find_builtin(sh, fname.c_str())) &&
 						bcmd->flags & BUILTIN_SPECIAL
 					)
 				)
 					synerror(sh, "Bad function name");
+				freenodelist(n->narg.backquote);
+				delete reinterpret_cast<struct narg *>(n);
+				n = new_node<ndefun>();
 				n->type = NDEFUN;
 				sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
-				n->ndefun.text = n->narg.text;
+				n->ndefun.text = std::move(fname);
 				n->ndefun.linno = plinno;
 				n->ndefun.body = command(sh);
 				return n;
@@ -600,7 +595,7 @@ out:
 	*app = NULL;
 	*vpp = NULL;
 	*rpp = NULL;
-	n = (union node *)astalloc(sh, sizeof(struct ncmd));
+	n = new_node<ncmd>();
 	n->type = NCMD;
 	n->ncmd.linno = savelinno;
 	n->ncmd.args = args;
@@ -614,11 +609,11 @@ makename(ShellContext &sh)
 {
 	union node *n;
 
-	n = (union node *)astalloc(sh, sizeof(struct narg));
+	n = new_node<narg>();
 	n->type = NARG;
 	n->narg.next = NULL;
-	n->narg.text = savestr(sh, sh.wordtext);
-	n->narg.backquote = sh.backquotelist;
+	n->narg.text = sh.wordtext;
+	n->narg.backquote = std::move(sh.backquotelist);
 	return n;
 }
 
@@ -699,11 +694,11 @@ parseheredoc(ShellContext &sh)
 			readtoken1(sh, pgetc(sh), SQSYNTAX, here->eofmark, here->striptabs);
 		else
 			readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, here->eofmark, here->striptabs);
-		n = (union node *)astalloc(sh, sizeof(struct narg));
+		n = new_node<narg>();
 		n->narg.type = NARG;
 		n->narg.next = NULL;
-		n->narg.text = savestr(sh, sh.wordtext);
-		n->narg.backquote = sh.backquotelist;
+		n->narg.text = sh.wordtext;
+		n->narg.backquote = std::move(sh.backquotelist);
 		here->here->nhere.doc = n;
 		here = here->next;
 	}
@@ -1023,7 +1018,7 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, char *eofmark, int 
 	struct synstack *synstack = &synbase;
 	bool printesc = syntax == SQSYNTAX;
 	const char *newsyn = nullptr;
-	struct nodelist *bqlist = NULL;
+	std::vector<union node *> bqlist;
 	int dollarsq = 0;
 	int c = firstc;
 	int quotef = 0;
@@ -1245,7 +1240,7 @@ endword:
 		}
 	}
 	sh.quoteflag = quotef;
-	sh.backquotelist = bqlist;
+	sh.backquotelist = std::move(bqlist);
 	grabstackblock(sh, len);
 	sh.wordtext = out;
 	return sh.lasttoken = TWORD;
@@ -1317,56 +1312,62 @@ more_heredoc:
 parseredir: {
 	char fd = *out;
 	union node *np;
+	int redir_type;
+	int default_fd;
+	int striptabs = 0;
 
-	np = (union node *)astalloc(sh, sizeof(struct nfile));
 	if (c == '>') {
-		np->nfile.fd = 1;
+		default_fd = 1;
 		c = pgetc_eatbnl(sh);
 		if (c == '>')
-			np->type = NAPPEND;
+			redir_type = NAPPEND;
 		else if (c == '|')
-			np->type = NCLOBBER;
+			redir_type = NCLOBBER;
 		else if (c == '&')
-			np->type = NTOFD;
+			redir_type = NTOFD;
 		else {
-			np->type = NTO;
+			redir_type = NTO;
 			pungetc(sh);
 		}
 	} else {	/* c == '<' */
-		np->nfile.fd = 0;
+		default_fd = 0;
 		switch (c = pgetc_eatbnl(sh)) {
 		case '<':
-			if (sizeof (struct nfile) != sizeof (struct nhere)) {
-				np = (union node *)astalloc(sh, sizeof(struct nhere));
-				np->nfile.fd = 0;
-			}
-			np->type = NHERE;
-			sh.heredoc = (struct heredoc *)stalloc(sh, sizeof(struct heredoc));
-			sh.heredoc->here = np;
+			redir_type = NHERE;
 			if ((c = pgetc_eatbnl(sh)) == '-') {
-				sh.heredoc->striptabs = 1;
+				striptabs = 1;
 			} else {
-				sh.heredoc->striptabs = 0;
 				pungetc(sh);
 			}
 			break;
 
 		case '&':
-			np->type = NFROMFD;
+			redir_type = NFROMFD;
 			break;
 
 		case '>':
-			np->type = NFROMTO;
+			redir_type = NFROMTO;
 			break;
 
 		default:
-			np->type = NFROM;
+			redir_type = NFROM;
 			pungetc(sh);
 			break;
 		}
 	}
-	if (fd != '\0')
-		np->nfile.fd = digit_val(fd);
+	if (redir_type == NHERE)
+		np = new_node<nhere>();
+	else if (redir_type == NTOFD || redir_type == NFROMFD)
+		np = new_node<ndup>();
+	else
+		np = new_node<nfile>();
+	np->type = redir_type;
+	np->nfile.fd = fd != '\0' ? digit_val(fd) : default_fd;
+	if (redir_type == NHERE) {
+		sh.heredoc = (struct heredoc *)stalloc(sh, sizeof(struct heredoc));
+		sh.heredoc->here = np;
+		sh.heredoc->striptabs = striptabs;
+	}
 	sh.redirnode = np;
 	goto parseredir_return;
 }
@@ -1540,7 +1541,6 @@ badsub:
 parsebackq: {
 	int uninitialized_var(saveprompt);
 	struct heredoc *saveheredoclist;
-	struct nodelist **nlpp;
 	size_t savelen;
 	union node *n;
 	unsigned ml;
@@ -1606,12 +1606,6 @@ parsebackq: {
 		pstr = grabstackstr(pout);
 		setinputstring(sh, pstr);
         }
-	nlpp = &bqlist;
-	while (*nlpp)
-		nlpp = &(*nlpp)->next;
-	*nlpp = (struct nodelist *)astalloc(sh, sizeof(struct nodelist));
-	(*nlpp)->next = NULL;
-
 	saveheredoclist = sh.heredoclist;
 	sh.heredoclist = NULL;
 
@@ -1633,7 +1627,7 @@ parsebackq: {
 	parseheredoc(sh);
 	sh.heredoclist = saveheredoclist;
 
-	(*nlpp)->n = n;
+	bqlist.push_back(n);
 	/* Start reading from old file again. */
 	popfile(sh);
 
@@ -1790,7 +1784,7 @@ expandstr(ShellContext &sh, const char *ps)
 	struct heredoc *saveheredoclist;
 	const char *result;
 	int saveprompt;
-	union node n;
+	struct narg n{};
 	int err = 0;
 
 	file_stop = sh.parsefile;
@@ -1807,12 +1801,12 @@ expandstr(ShellContext &sh, const char *ps)
 	try {
 		readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, FAKEEOFMARK, 0);
 
-		n.narg.type = NARG;
-		n.narg.next = NULL;
-		n.narg.text = sh.wordtext;
-		n.narg.backquote = sh.backquotelist;
+		n.type = NARG;
+		n.next = NULL;
+		n.text = sh.wordtext ? sh.wordtext : "";
+		n.backquote = std::move(sh.backquotelist);
 
-		expandarg(sh, &n, NULL, EXP_QUOTED);
+		expandarg(sh, reinterpret_cast<union node *>(&n), NULL, EXP_QUOTED);
 		result = stackblock();
 	} catch (const dash::ParseError &) {
 		err = 1;

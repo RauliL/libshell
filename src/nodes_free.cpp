@@ -1,19 +1,12 @@
 #include "nodes_free.h"
 
-#include <cstdlib>
-
 #include "nodes.h"
 
-static void free_narg_chain(union node *n);
-
-void freenodelist(struct nodelist *lp)
+void freenodelist(std::vector<union node *> &list)
 {
-	while (lp) {
-		struct nodelist *next = lp->next;
-		freenode(lp->n);
-		std::free(lp);
-		lp = next;
-	}
+	for (union node *n : list)
+		freenode(n);
+	list.clear();
 }
 
 static void free_narg_chain(union node *n)
@@ -21,8 +14,7 @@ static void free_narg_chain(union node *n)
 	while (n) {
 		union node *next = n->narg.next;
 		freenodelist(n->narg.backquote);
-		std::free(n->narg.text);
-		std::free(n);
+		delete reinterpret_cast<struct narg *>(n);
 		n = next;
 	}
 }
@@ -33,27 +25,25 @@ void freenode(union node *n)
 		return;
 
 	switch (n->type) {
-	case NCMD:
+	case NCMD: {
 		free_narg_chain(n->ncmd.assign);
 		free_narg_chain(n->ncmd.args);
 		freenode(n->ncmd.redirect);
-		break;
+		delete reinterpret_cast<struct ncmd *>(n);
+		return;
+	}
 	case NPIPE: {
-		struct nodelist *lp = n->npipe.cmdlist;
-		while (lp) {
-			struct nodelist *next = lp->next;
-			freenode(lp->n);
-			std::free(lp);
-			lp = next;
-		}
-		break;
+		freenodelist(n->npipe.cmdlist);
+		delete reinterpret_cast<struct npipe *>(n);
+		return;
 	}
 	case NREDIR:
 	case NBACKGND:
 	case NSUBSHELL:
 		freenode(n->nredir.n);
 		freenode(n->nredir.redirect);
-		break;
+		delete reinterpret_cast<struct nredir *>(n);
+		return;
 	case NAND:
 	case NOR:
 	case NSEMI:
@@ -61,30 +51,34 @@ void freenode(union node *n)
 	case NUNTIL:
 		freenode(n->nbinary.ch1);
 		freenode(n->nbinary.ch2);
-		break;
+		delete reinterpret_cast<struct nbinary *>(n);
+		return;
 	case NIF:
 		freenode(n->nif.test);
 		freenode(n->nif.ifpart);
 		freenode(n->nif.elsepart);
-		break;
+		delete reinterpret_cast<struct nif *>(n);
+		return;
 	case NFOR:
 		free_narg_chain(n->nfor.args);
 		freenode(n->nfor.body);
-		std::free(n->nfor.var);
-		break;
+		delete reinterpret_cast<struct nfor *>(n);
+		return;
 	case NCASE:
 		freenode(n->ncase.expr);
 		freenode(n->ncase.cases);
-		break;
+		delete reinterpret_cast<struct ncase *>(n);
+		return;
 	case NCLIST:
 		freenode(n->nclist.next);
 		free_narg_chain(n->nclist.pattern);
 		freenode(n->nclist.body);
-		break;
+		delete reinterpret_cast<struct nclist *>(n);
+		return;
 	case NDEFUN:
-		std::free(n->ndefun.text);
 		freenode(n->ndefun.body);
-		break;
+		delete reinterpret_cast<struct ndefun *>(n);
+		return;
 	case NARG:
 		free_narg_chain(n);
 		return;
@@ -95,23 +89,25 @@ void freenode(union node *n)
 	case NAPPEND:
 		freenode(n->nfile.next);
 		freenode(n->nfile.fname);
-		std::free(n->nfile.expfname);
-		break;
+		delete reinterpret_cast<struct nfile *>(n);
+		return;
 	case NTOFD:
 	case NFROMFD:
 		freenode(n->ndup.next);
 		freenode(n->ndup.vname);
-		break;
+		delete reinterpret_cast<struct ndup *>(n);
+		return;
 	case NHERE:
 	case NXHERE:
 		freenode(n->nhere.next);
 		freenode(n->nhere.doc);
-		break;
+		delete reinterpret_cast<struct nhere *>(n);
+		return;
 	case NNOT:
 		freenode(n->nnot.com);
-		break;
+		delete reinterpret_cast<struct nnot *>(n);
+		return;
 	default:
 		break;
 	}
-	std::free(n);
 }

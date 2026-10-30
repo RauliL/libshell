@@ -41,8 +41,8 @@
 # A field of a structure is described by the name of the field followed
 # by a type.  The currently implemented types are:
 #	nodeptr - a pointer to a node
-#	nodelist - a pointer to a list of nodes
-#	string - a pointer to a nul terminated string
+#	nodelist - a std::vector of node pointers
+#	string - a std::string field
 #	int - an integer
 #	other - any type that can be copied by assignment
 #	temp - a field that doesn't have to be copied when the node is copied

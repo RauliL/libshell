@@ -1283,7 +1283,6 @@ static void
 cmdtxt(ShellContext &sh, union node *n)
 {
 	union node *np;
-	struct nodelist *lp;
 	const char *p;
 	char s[2];
 
@@ -1295,13 +1294,10 @@ cmdtxt(ShellContext &sh, union node *n)
 		abort();
 #endif
 	case NPIPE:
-		lp = n->npipe.cmdlist;
-		for (;;) {
-			cmdtxt(sh, lp->n);
-			lp = lp->next;
-			if (!lp)
-				break;
-			cmdputs(sh, " | ");
+		for (std::size_t i = 0; i < n->npipe.cmdlist.size(); i++) {
+			if (i)
+				cmdputs(sh, " | ");
+			cmdtxt(sh, n->npipe.cmdlist[i]);
 		}
 		break;
 	case NSEMI:
@@ -1362,14 +1358,14 @@ dotail:
 		goto dotail2;
 	case NFOR:
 		cmdputs(sh, "for ");
-		cmdputs(sh, n->nfor.var);
+		cmdputs(sh, n->nfor.var.c_str());
 		cmdputs(sh, " in ");
 		cmdlist(sh, n->nfor.args, 1);
 		n = n->nfor.body;
 		p = "; done";
 		goto dodo;
 	case NDEFUN:
-		cmdputs(sh, n->ndefun.text);
+		cmdputs(sh, n->ndefun.text.c_str());
 		p = "() { ... }";
 		goto dotail2;
 	case NCMD:
@@ -1377,7 +1373,7 @@ dotail:
 		cmdlist(sh, n->ncmd.redirect, 0);
 		break;
 	case NARG:
-		p = n->narg.text;
+		p = n->narg.text.c_str();
 dotail2:
 		cmdputs(sh, p);
 		break;
@@ -1387,7 +1383,7 @@ dotail2:
 		goto dotail2;
 	case NCASE:
 		cmdputs(sh, "case ");
-		cmdputs(sh, n->ncase.expr->narg.text);
+		cmdputs(sh, n->ncase.expr->narg.text.c_str());
 		cmdputs(sh, " in ");
 		for (np = n->ncase.cases; np; np = np->nclist.next) {
 			cmdtxt(sh, np->nclist.pattern);

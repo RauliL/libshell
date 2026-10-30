@@ -50,7 +50,7 @@ savestr(ShellContext &sh, const char *s)
 /*
  * Allocate nbytes on the heap. Tracked for mark-based / command-scope cleanup.
  * String commits go through stackstr_commit() (see grabstackstr).
- * AST nodes should use astalloc() so freenode() owns them.
+ * AST nodes use new via nodes_new.h / freenode().
  */
 rawmem
 stalloc(ShellContext &sh, std::size_t nbytes)
@@ -58,15 +58,6 @@ stalloc(ShellContext &sh, std::size_t nbytes)
 	std::size_t aligned = SHELL_ALIGN(nbytes);
 	void *p = ckmalloc(sh, aligned);
 	sh.stackheaps.push_back(p);
-	return {p};
-}
-
-rawmem
-astalloc(ShellContext &sh, std::size_t nbytes)
-{
-	std::size_t n = SHELL_ALIGN(nbytes);
-	void *p = ckmalloc(sh, n);
-	std::memset(p, 0, n);
 	return {p};
 }
 

@@ -88,7 +88,6 @@ __attribute__((__noinline__)) rawmem ckmalloc(ShellContext &sh, std::size_t nbyt
 __attribute__((__noinline__)) rawmem ckrealloc(ShellContext &sh, void *p, std::size_t nbytes);
 char * savestr(ShellContext &sh, const char *s);
 rawmem stalloc(ShellContext &sh, std::size_t nbytes);
-rawmem astalloc(ShellContext &sh, std::size_t nbytes);
 void clear_stack_temps(ShellContext &sh);
 void stunalloc(ShellContext &sh, void *p);
 void grabstackblock(ShellContext &sh, size_t len);

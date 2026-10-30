@@ -442,7 +442,7 @@ evalfor(ShellContext &sh, union node *n, EvalFlags flags)
 	sh.loopnest++;
 	flags &= EvalFlag::tested;
 	for (sp = arglist.list ; sp ; sp = sp->next) {
-		setvar(sh, n->nfor.var, sp->text, 0);
+		setvar(sh, n->nfor.var.c_str(), sp->text, 0);
 		status = evaltree(sh, n->nfor.body, flags);
 		if (skiploop(sh) & ~SKIPCONT)
 			break;
@@ -576,30 +576,28 @@ static int
 evalpipe(ShellContext &sh, union node *n, EvalFlags flags)
 {
 	struct job *jp;
-	struct nodelist *lp;
 	int pipelen;
 	int prevfd;
 	int pip[2];
 	int status = 0;
 
 	TRACE(("evalpipe(0x%lx) called\n", (long)n));
-	pipelen = 0;
-	for (lp = n->npipe.cmdlist ; lp ; lp = lp->next)
-		pipelen++;
+	pipelen = static_cast<int>(n->npipe.cmdlist.size());
 	flags.set(EvalFlag::exit);
 	INTOFF;
 	jp = makejob(sh, pipelen);
 	prevfd = -1;
-	for (lp = n->npipe.cmdlist ; lp ; lp = lp->next) {
-		prehash(sh, lp->n);
+	for (std::size_t i = 0; i < n->npipe.cmdlist.size(); i++) {
+		union node *cmd = n->npipe.cmdlist[i];
+		prehash(sh, cmd);
 		pip[1] = -1;
-		if (lp->next) {
+		if (i + 1 < n->npipe.cmdlist.size()) {
 			if (pipe(pip) < 0) {
 				close(prevfd);
 				sh_error(sh, "Pipe call failed");
 			}
 		}
-		if (forkshell(sh, jp, lp->n, n->npipe.backgnd) == 0) {
+		if (forkshell(sh, jp, cmd, n->npipe.backgnd) == 0) {
 			INTON;
 			if (pip[1] >= 0) {
 				close(pip[0]);
@@ -613,7 +611,7 @@ evalpipe(ShellContext &sh, union node *n, EvalFlags flags)
 				dup2(pip[1], 1);
 				close(pip[1]);
 			}
-			evaltreenr(sh, lp->n, flags);
+			evaltreenr(sh, cmd, flags);
 			/* never returns */
 		}
 		if (prevfd >= 0)
@@ -830,7 +828,7 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 		for (; argp; argp = argp->narg.next)
 			expandarg(sh, argp, &arglist,
 				  pseudovarflag &&
-				  isassignment(sh, argp->narg.text) ?
+				  isassignment(sh, argp->narg.text.c_str()) ?
 				  EXP_VARTILDE : EXP_FULL | EXP_TILDE);
 
 		for (sp = arglist.list; sp; sp = sp->next)
@@ -998,7 +996,7 @@ evalfun(ShellContext &sh, struct funcnode *func, int argc, char **argv, EvalFlag
 	try {
 		INTOFF;
 		func->count++;
-		sh.funcline = func->n.ndefun.linno;
+		sh.funcline = func->n->ndefun.linno;
 		sh.loopnest = 0;
 		INTON;
 		sh.shellparam.p.clear();
@@ -1006,7 +1004,7 @@ evalfun(ShellContext &sh, struct funcnode *func, int argc, char **argv, EvalFlag
 			sh.shellparam.p.emplace_back(argv[i]);
 		sh.shellparam.optind = 1;
 		sh.shellparam.optoff = -1;
-		evaltree(sh, func->n.ndefun.body, flags & EvalFlag::tested);
+		evaltree(sh, func->n->ndefun.body, flags & EvalFlag::tested);
 	} catch (const dash::ShellError &ex) {
 		sh.exception = ex.code();
 		failed = true;
@@ -1037,8 +1035,8 @@ prehash(ShellContext &sh, union node *n)
 	struct cmdentry entry;
 
 	if (n->type == NCMD && n->ncmd.args)
-		if (goodname(sh, n->ncmd.args->narg.text))
-			find_command(sh, n->ncmd.args->narg.text, &entry, 0,
+		if (goodname(sh, n->ncmd.args->narg.text.c_str()))
+			find_command(sh, n->ncmd.args->narg.text.data(), &entry, 0,
 				     pathval());
 }
 

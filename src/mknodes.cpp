@@ -48,7 +48,7 @@
 
 /* field types */
 #define T_NODE 1		/* union node *field */
-#define T_NODELIST 2		/* struct nodelist *field */
+#define T_NODELIST 2		/* std::vector<union node *> field */
 #define T_STRING 3
 #define T_INT 4			/* int field */
 #define T_OTHER 5		/* other */
@@ -84,7 +84,6 @@ static char *linep;
 static void parsenode(void);
 static void parsefield(void);
 static void output(char *);
-static void outsizes(FILE *);
 static void outfunc(FILE *, int);
 static void indent(int, FILE *);
 static int nextfield(char *);
@@ -173,10 +172,10 @@ parsefield(void)
 		sprintf(decl, "union node *%s", name);
 	} else if (strcmp(type, "nodelist") == 0) {
 		fp->type = T_NODELIST;
-		sprintf(decl, "struct nodelist *%s", name);
+		sprintf(decl, "std::vector<union node *> %s", name);
 	} else if (strcmp(type, "string") == 0) {
 		fp->type = T_STRING;
-		sprintf(decl, "char *%s", name);
+		sprintf(decl, "std::string %s", name);
 	} else if (strcmp(type, "int") == 0) {
 		fp->type = T_INT;
 		sprintf(decl, "int %s", name);
@@ -223,6 +222,10 @@ output(char *file)
 	if ((cfile = fopen("nodes.cpp", "w")) == NULL)
 		error("Can't create nodes.cpp");
 	fputs(writer, hfile);
+	fputs("#ifndef NODES_H\n#define NODES_H\n", hfile);
+	fputs("#include <string>\n", hfile);
+	fputs("#include <vector>\n\n", hfile);
+	fputs("union node;\n\n", hfile);
 	for (i = 0 ; i < ntypes ; i++)
 		fprintf(hfile, "#define %s %d\n", nodename[i], i);
 	fputs("\n\n\n", hfile);
@@ -239,26 +242,19 @@ output(char *file)
 		fprintf(hfile, "      struct %s %s;\n", sp->tag, sp->tag);
 	}
 	fputs("};\n\n\n", hfile);
-	fputs("struct nodelist {\n", hfile);
-	fputs("\tstruct nodelist *next;\n", hfile);
-	fputs("\tunion node *n;\n", hfile);
-	fputs("};\n\n\n", hfile);
 	fputs("struct funcnode {\n", hfile);
 	fputs("\tint count;\n", hfile);
-	fputs("\tunion node n;\n", hfile);
+	fputs("\tunion node *n;\n", hfile);
 	fputs("};\n\n\n", hfile);
 	fputs("struct ShellContext;\n", hfile);
 	fputs("struct funcnode *copyfunc(ShellContext &, union node *);\n", hfile);
 	fputs("void freefunc(ShellContext &, struct funcnode *);\n", hfile);
+	fputs("\n#endif /* NODES_H */\n", hfile);
 
 	fputs(writer, cfile);
 	while (fgets(line, sizeof line, patfile) != NULL) {
 		for (p = line ; *p == ' ' || *p == '\t' ; p++);
-		if (strcmp(p, "%SIZES\n") == 0)
-			outsizes(cfile);
-		else if (strcmp(p, "%CALCSIZE\n") == 0)
-			outfunc(cfile, 1);
-		else if (strcmp(p, "%COPY\n") == 0)
+		if (strcmp(p, "%COPY\n") == 0)
 			outfunc(cfile, 0);
 		else
 			fputs(line, cfile);
@@ -268,95 +264,54 @@ output(char *file)
 
 
 static void
-outsizes(FILE *cfile)
-{
-	int i;
-
-	fprintf(cfile, "static const short nodesize[%d] = {\n", ntypes);
-	for (i = 0 ; i < ntypes ; i++) {
-		fprintf(cfile, "      SHELL_ALIGN(sizeof (struct %s)),\n",
-		    nodestr[i]->tag);
-	}
-	fprintf(cfile, "};\n");
-}
-
-
-static void
 outfunc(FILE *cfile, int calcsize)
 {
 	struct str *sp;
 	struct field *fp;
 	int i;
 
+	(void)calcsize;
 	fputs("      if (n == NULL)\n", cfile);
-	if (calcsize)
-		fputs("	    return;\n", cfile);
-	else
-		fputs("	    return NULL;\n", cfile);
-	if (calcsize)
-		fputs("      funcblocksize += nodesize[n->type];\n", cfile);
-	else {
-		fputs("      copied = static_cast<union node *>(funcblock);\n", cfile);
-		fputs("      funcblock = (char *) funcblock + nodesize[n->type];\n", cfile);
-	}
+	fputs("	    return NULL;\n", cfile);
 	fputs("      switch (n->type) {\n", cfile);
 	for (sp = str ; sp < &str[nstr] ; sp++) {
 		for (i = 0 ; i < ntypes ; i++) {
 			if (nodestr[i] == sp)
 				fprintf(cfile, "      case %s:\n", nodename[i]);
 		}
+		indent(12, cfile);
+		fprintf(cfile,
+			"copied = reinterpret_cast<union node *>(new struct %s());\n",
+			sp->tag);
 		for (i = sp->nfields ; --i >= 1 ; ) {
 			fp = &sp->field[i];
 			switch (fp->type) {
 			case T_NODE:
-				if (calcsize) {
-					indent(12, cfile);
-					fprintf(cfile, "calcsize(sh, n->%s.%s);\n",
-						sp->tag, fp->name);
-				} else {
-					indent(12, cfile);
-					fprintf(cfile, "copied->%s.%s = copynode(sh, n->%s.%s);\n",
-						sp->tag, fp->name, sp->tag, fp->name);
-				}
+				indent(12, cfile);
+				fprintf(cfile, "copied->%s.%s = copynode(sh, n->%s.%s);\n",
+					sp->tag, fp->name, sp->tag, fp->name);
 				break;
 			case T_NODELIST:
-				if (calcsize) {
-					indent(12, cfile);
-					fprintf(cfile, "sizenodelist(sh, n->%s.%s);\n",
-						sp->tag, fp->name);
-				} else {
-					indent(12, cfile);
-					fprintf(cfile, "copied->%s.%s = copynodelist(sh, n->%s.%s);\n",
-						sp->tag, fp->name, sp->tag, fp->name);
-				}
+				indent(12, cfile);
+				fprintf(cfile, "copied->%s.%s = copynodelist(sh, n->%s.%s);\n",
+					sp->tag, fp->name, sp->tag, fp->name);
 				break;
 			case T_STRING:
-				if (calcsize) {
-					indent(12, cfile);
-					fprintf(cfile, "funcstringsize += strlen(n->%s.%s) + 1;\n",
-						sp->tag, fp->name);
-				} else {
-					indent(12, cfile);
-					fprintf(cfile, "copied->%s.%s = nodesavestr(sh, n->%s.%s);\n",
-						sp->tag, fp->name, sp->tag, fp->name);
-				}
-				break;
 			case T_INT:
 			case T_OTHER:
-				if (! calcsize) {
-					indent(12, cfile);
-					fprintf(cfile, "copied->%s.%s = n->%s.%s;\n",
-						sp->tag, fp->name, sp->tag, fp->name);
-				}
+				indent(12, cfile);
+				fprintf(cfile, "copied->%s.%s = n->%s.%s;\n",
+					sp->tag, fp->name, sp->tag, fp->name);
 				break;
 			}
 		}
 		indent(12, cfile);
 		fputs("break;\n", cfile);
 	}
+	fputs("      default:\n", cfile);
+	fputs("	    return NULL;\n", cfile);
 	fputs("      };\n", cfile);
-	if (! calcsize)
-		fputs("      copied->type = n->type;\n", cfile);
+	fputs("      copied->type = n->type;\n", cfile);
 }
 
 

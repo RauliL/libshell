@@ -39,7 +39,6 @@
 #include "var.h"
 
 union node;
-struct nodelist;
 struct funcnode;
 struct job;
 struct backcmd;
@@ -167,7 +166,8 @@ struct ShellContext {
 	struct var *vartab[39] = {};
 
 	char *expdest = nullptr;
-	struct nodelist *argbackq = nullptr;
+	const std::vector<union node *> *argbackq = nullptr;
+	std::size_t argbackq_i = 0;
 	struct ifsregion ifsfirst = {};
 	struct ifsregion *ifslastp = nullptr;
 	struct arglist exparg = {};
@@ -183,7 +183,7 @@ struct ShellContext {
 	int tokpushback = 0;
 	char *wordtext = nullptr;
 	int checkkwd = 0;
-	struct nodelist *backquotelist = nullptr;
+	std::vector<union node *> backquotelist;
 	union node *redirnode = nullptr;
 	struct heredoc *heredoc = nullptr;
 	int quoteflag = 0;
@@ -234,11 +234,6 @@ struct ShellContext {
 	const struct t_op *t_wp_op = nullptr;
 	int rval = 0;
 	char **gargv = nullptr;
-
-	int funcblocksize = 0;
-	int funcstringsize = 0;
-	pointer funcblock = nullptr;
-	char *funcstring = nullptr;
 
 #ifdef DEBUG
 	FILE *tracefile = nullptr;

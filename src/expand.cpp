@@ -227,9 +227,10 @@ expandarg(ShellContext &sh, union node *arg, struct arglist *arglist, int flag)
 	struct strlist *sp;
 	char *p;
 
-	sh.argbackq = arg->narg.backquote;
+	sh.argbackq = &arg->narg.backquote;
+	sh.argbackq_i = 0;
 	STARTSTACKSTR(sh.expdest);
-	argstr(sh, arg->narg.text, flag);
+	argstr(sh, arg->narg.text.data(), flag);
 	if (arglist == NULL) {
 		/* here document expanded */
 		goto out;
@@ -392,7 +393,7 @@ addquote:
 			p = evalvar(sh, p, flag | inquotes);
 			goto start;
 		case CTLBACKQ:
-			expbackq(sh, sh.argbackq->n, flag | inquotes);
+			expbackq(sh, (*sh.argbackq)[sh.argbackq_i], flag | inquotes);
 			goto start;
 		case CTLARI:
 			p = expari(sh, p, flag | inquotes);
@@ -608,7 +609,7 @@ read:
 		stackblock() + startloc));
 
 out:
-	sh.argbackq = sh.argbackq->next;
+	sh.argbackq_i++;
 }
 
 
@@ -2197,9 +2198,10 @@ casematch(ShellContext &sh, union node *pattern, char *val)
 	std::size_t su = sh.stackstr.used;
 	std::size_t hc = sh.stackheaps.size();
 
-	sh.argbackq = pattern->narg.backquote;
+	sh.argbackq = &pattern->narg.backquote;
+	sh.argbackq_i = 0;
 	STARTSTACKSTR(sh.expdest);
-	argstr(sh, pattern->narg.text, EXP_TILDE | EXP_CASE);
+	argstr(sh, pattern->narg.text.data(), EXP_TILDE | EXP_CASE);
 	ifsfree(sh);
 	result = patmatch(sh, stackblock(), val);
 	while (sh.stackheaps.size() > hc) {

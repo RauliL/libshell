@@ -364,7 +364,7 @@ openhere(ShellContext &sh, union node *redir)
 	int memfd;
 	char *p;
 
-	p = redir->nhere.doc->narg.text;
+	p = redir->nhere.doc->narg.text.data();
 	if (redir->type == NXHERE) {
 		expandarg(sh, redir->nhere.doc, NULL, EXP_QUOTED);
 		p = stackblock();

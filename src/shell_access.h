@@ -99,10 +99,6 @@
 #define t_wp_op (sh.t_wp_op)
 #define rval (sh.rval)
 #define gargv (sh.gargv)
-#define funcblocksize (sh.funcblocksize)
-#define funcstringsize (sh.funcstringsize)
-#define funcblock (sh.funcblock)
-#define funcstring (sh.funcstring)
 #define tracefile (sh.tracefile)
 
 #endif

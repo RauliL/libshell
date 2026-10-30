@@ -748,7 +748,7 @@ defun(ShellContext &sh, union node *func)
 	INTOFF;
 	entry.cmdtype = CMDFUNCTION;
 	entry.u.func = copyfunc(sh, func);
-	addcmdentry(sh, func->ndefun.text, &entry);
+	addcmdentry(sh, const_cast<char *>(func->ndefun.text.c_str()), &entry);
 	INTON;
 }
 
