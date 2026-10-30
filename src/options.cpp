@@ -51,9 +51,6 @@
 #include "memalloc.h"
 #include "error.h"
 #include "mystring.h"
-#ifndef SMALL
-#include "myhistedit.h"
-#endif
 #include "show.h"
 
 			/* value of $0 */
@@ -184,9 +181,6 @@ optschanged(ShellContext &sh)
 	opentrace(sh);
 #endif
 	setinteractive(sh, iflag);
-#ifndef SMALL
-	histedit(sh);
-#endif
 	setjobctl(sh, mflag);
 }
 

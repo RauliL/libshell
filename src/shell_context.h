@@ -35,9 +35,6 @@
 #include "stackstr.h"
 #include "system.h"
 #include "var.h"
-#ifndef SMALL
-#include "myhistedit.h"
-#endif
 
 union node;
 struct nodelist;
@@ -70,9 +67,6 @@ void changeifs(ShellContext &sh, const char *val);
 void changemail(ShellContext &sh, const char *val);
 void changepath(ShellContext &sh, const char *val);
 void getoptsreset(ShellContext &sh, const char *val);
-#ifndef SMALL
-void sethistsize(ShellContext &sh, const char *val);
-#endif
 void changelocale(ShellContext &sh, const char *val);
 
 struct ShellContext {
@@ -146,9 +140,6 @@ struct ShellContext {
 #ifdef WITH_LINENO
 		+ 1
 #endif
-#ifndef SMALL
-		+ 2
-#endif
 		+ 5;
 	struct var varinit[varinit_len] = {
 #if ATTY
@@ -164,10 +155,6 @@ struct ShellContext {
 		{ nullptr, VSTRFIXED|VTEXTFIXED|VNOFUNC, defoptindvar, getoptsreset },
 #ifdef WITH_LINENO
 		{ nullptr, VSTRFIXED|VTEXTFIXED, linenovar, nullptr },
-#endif
-#ifndef SMALL
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "TERM\0", nullptr },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "HISTSIZE\0", sethistsize },
 #endif
 		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_ALL\0", changelocale },
 		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_COLLATE\0", changelocale },
@@ -253,16 +240,6 @@ struct ShellContext {
 	pointer funcblock = nullptr;
 	char *funcstring = nullptr;
 
-#ifndef SMALL
-	History *hist = nullptr;
-	EditLine *el = nullptr;
-	int displayhist = 0;
-	FILE *el_in = nullptr;
-	FILE *el_out = nullptr;
-	int fc_active = 0;
-	const char *rl_cp = nullptr;
-	int el_len = 0;
-#endif
 #ifdef DEBUG
 	FILE *tracefile = nullptr;
 #endif

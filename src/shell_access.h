@@ -105,14 +105,6 @@
 #define funcstringsize (sh.funcstringsize)
 #define funcblock (sh.funcblock)
 #define funcstring (sh.funcstring)
-#define hist (sh.hist)
-#define el (sh.el)
-#define displayhist (sh.displayhist)
-#define el_in (sh.el_in)
-#define el_out (sh.el_out)
-#define fc_active (sh.fc_active)
-#define rl_cp (sh.rl_cp)
-#define el_len (sh.el_len)
 #define tracefile (sh.tracefile)
 
 #endif

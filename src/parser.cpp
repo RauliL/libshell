@@ -65,9 +65,6 @@
 #include "parse_error.h"
 #include "nodes_free.h"
 #include "result.h"
-#ifndef SMALL
-#include "myhistedit.h"
-#endif
 
 /*
  * Shell command parser.
@@ -1772,17 +1769,10 @@ try_parse_string(ShellContext &sh, char *s)
 static void __attribute__((noinline))
 setprompt(ShellContext &sh, int which)
 {
-	int show;
-
 	sh.needprompt = 0;
 	sh.whichprompt = which;
 
-#ifdef SMALL
-	show = 1;
-#else
-	show = !sh.el;
-#endif
-	if (show && !sh.parsefile->nleft) {
+	if (!sh.parsefile->nleft) {
 		std::size_t su = sh.stackstr.used;
 		std::size_t hc = sh.stackheaps.size();
 		sh.stackstr.commit(stackblocksize());

@@ -65,9 +65,6 @@
 #include "mystring.h"
 #include "parse_error.h"
 #include "nodes_free.h"
-#ifndef SMALL
-#include "myhistedit.h"
-#endif
 
 
 			/* set if we are skipping commands */
@@ -237,9 +234,6 @@ evaltree(ShellContext &sh, union node *n, EvalFlags flags)
 
 	dotrap(sh);
 
-#ifndef SMALL
-	sh.displayhist = 1;	/* show history substitutions done with fc */
-#endif
 	TRACE(("pid %d, evaltree(%p: %d, %lu) called\n",
 	    getpid(), n, n->type, flags.to_ulong()));
 	switch (n->type) {
@@ -954,10 +948,6 @@ out:
 	unwindfiles(sh, file_stop);
 	unwindlocalvars(sh, localvar_stop);
 	if (lastarg)
-		/* dsl: I think this is intended to be used to support
-		 * '_' in 'vi' command mode during line editing...
-		 * However I implemented that within libedit itself.
-		 */
 		setvar(sh, "_", lastarg, 0);
 
 	return status;

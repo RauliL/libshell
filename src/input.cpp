@@ -50,7 +50,6 @@
 #include "input.h"
 #include "main.h"
 #include "memalloc.h"
-#include "myhistedit.h"
 #include "options.h"
 #include "output.h"
 #include "parser.h"
@@ -248,7 +247,7 @@ nextc:
 		c = preadbuffer(sh);
 
 	/* delete nul characters */
-	if (IS_DEFINED_SMALL && unlikely(!c)) {
+	if (unlikely(!c)) {
 		sh.parsefile->nextc = static_cast<char *>(memmove(
 			sh.parsefile->nextc - 1, sh.parsefile->nextc, sh.parsefile->nleft));
 		goto nextc;
@@ -287,60 +286,20 @@ preadfd(ShellContext &sh)
 	int pnr;
 	int nr;
 
-	nr = input_get_lleft(sh.parsefile);
-
 	unget = sh.parsefile->nextc - buf;
 	if (unget > PUNGETC_MAX)
 		unget = PUNGETC_MAX;
 
-	memmove(buf, sh.parsefile->nextc - unget, unget + nr);
+	memmove(buf, sh.parsefile->nextc - unget, unget);
 	buf += unget;
 	sh.parsefile->nextc = buf;
-	buf += nr;
 
-	nr = BUFSIZ - nr;
-	if (!IS_DEFINED_SMALL && !nr)
-		return nr;
-
-	use_tee = likely(!fd) &&
-#ifndef SMALL
-		  !sh.el &&
-#endif
-		  !stdin_bufferable(sh);
+	nr = BUFSIZ;
+	use_tee = likely(!fd) && !stdin_bufferable(sh);
 
 	pnr = nr;
 retry:
 	nr = pnr;
-#ifndef SMALL
-	if (fd == 0 && sh.el) {
-
-		if (sh.rl_cp == NULL) {
-			std::size_t su = sh.stackstr.used;
-			std::size_t hc = sh.stackheaps.size();
-			sh.stackstr.commit(stackblocksize());
-			sh.rl_cp = el_gets(sh.el, &sh.el_len);
-			while (sh.stackheaps.size() > hc) {
-				ckfree(sh.stackheaps.back());
-				sh.stackheaps.pop_back();
-			}
-			sh.stackstr.rewind(su);
-		}
-		if (sh.rl_cp == NULL)
-			nr = 0;
-		else {
-			if (nr > sh.el_len)
-				nr = sh.el_len;
-			memcpy(buf, sh.rl_cp, nr);
-			if (nr != sh.el_len) {
-				sh.el_len -= nr;
-				sh.rl_cp += nr;
-			} else
-				sh.rl_cp = 0;
-		}
-
-		return nr;
-	}
-#endif
 
 	if (likely(use_tee)) {
 		nr = stdin_tee(sh, buf, nr);
@@ -379,9 +338,6 @@ retry:
 static int
 preadbuffer(ShellContext &sh)
 {
-	int first = sh.whichprompt == 1;
-	int something;
-	char savec;
 	int more;
 	char *q;
 
@@ -393,81 +349,22 @@ eof:
 	flushall(sh);
 
 	q = sh.parsefile->nextc;
-	something = !first;
-
-	more = input_get_lleft(sh.parsefile);
 
 	INTOFF;
-	if (more <= 0) {
-		int nr;
-
-again:
-		nr = q - sh.parsefile->nextc;
-		input_set_lleft(sh.parsefile, nr);
+	{
+		int nr = q - sh.parsefile->nextc;
 		more = preadfd(sh);
 		q = sh.parsefile->nextc + nr;
 		if (more <= 0) {
-			input_set_lleft(sh.parsefile, sh.parsefile->nleft = 0);
-			if (!IS_DEFINED_SMALL && nr > 0)
-				goto save;
+			sh.parsefile->nleft = 0;
 			INTON;
 			goto eof;
 		}
 	}
 
-	if (IS_DEFINED_SMALL) {
-		q += more;
-		more = 0;
-		goto done;
-	}
-
-	/* delete nul characters */
-	for (;;) {
-		int c;
-
-		more--;
-		c = *q;
-
-		if (!c) {
-			memmove(q, q + 1, more);
-			goto check;
-		}
-
-		q++;
-
-		switch (c) {
-		case '\n':
-			goto done;
-
-		default:
-			something = 1;
-			/* fall through */
-
-		case '\t':
-		case ' ':
-			break;
-		}
-
-check:
-		if (more <= 0)
-			goto again;
-	}
-done:
-	input_set_lleft(sh.parsefile, more);
-
-save:
+	q += more;
 	sh.parsefile->nleft = q - sh.parsefile->nextc - 1;
-	if (!IS_DEFINED_SMALL)
-		savec = *q;
 	*q = '\0';
-
-#ifndef SMALL
-	if (sh.parsefile->fd == 0 && sh.hist && something) {
-		HistEvent he;
-		history(sh.hist, &he, first ? H_ENTER : H_APPEND,
-			sh.parsefile->nextc);
-	}
-#endif
 	INTON;
 
 	if (vflag) {
@@ -476,9 +373,6 @@ save:
 		flushout(sh, sh.out2);
 #endif
 	}
-
-	if (!IS_DEFINED_SMALL)
-		*q = savec;
 
 	return (signed char)*sh.parsefile->nextc++;
 }
@@ -692,7 +586,7 @@ popallfiles(ShellContext &sh)
 void __attribute__((noinline))
 flush_input(ShellContext &sh)
 {
-	int left = sh.basepf.nleft + input_get_lleft(&sh.basepf);
+	int left = sh.basepf.nleft;
 
 	INTOFF;
 	if (sh.stdin_state.seekable && left)
@@ -701,7 +595,7 @@ flush_input(ShellContext &sh)
 		flush_tee(sh, sh.basebuf, BUFSIZ, sh.stdin_state.pending - left);
 		sh.stdin_state.pending = 0;
 	}
-	input_set_lleft(&sh.basepf, sh.basepf.nleft = 0);
+	sh.basepf.nleft = 0;
 	INTON;
 }
 

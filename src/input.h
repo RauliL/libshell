@@ -39,12 +39,6 @@
 #include <limits.h>
 #include <stdbool.h>
 
-#ifdef SMALL
-#define IS_DEFINED_SMALL 1
-#else
-#define IS_DEFINED_SMALL 0
-#endif
-
 #define PUNGETC_MAX (MB_LEN_MAX > 16 ? MB_LEN_MAX : 16)
 #define IBUFSIZ (BUFSIZ + PUNGETC_MAX + 1)
 
@@ -91,10 +85,6 @@ struct parsefile {
 	/* Delay freeing so we can stop nested aliases. */
 	struct strpush *spfree;
 
-#ifndef SMALL
-	int lleft;		/* number of chars left in this buffer */
-#endif
-
 	/* Number of outstanding calls to pungetc. */
 	int unget;
 };
@@ -119,19 +109,4 @@ void popallfiles(ShellContext &sh);
 void flush_input(ShellContext &sh);
 void reset_input(ShellContext &sh);
 
-static inline int input_get_lleft(struct parsefile *pf)
-{
-#ifdef SMALL
-	return 0;
-#else
-	return pf->lleft;
-#endif
-}
-
-static inline void input_set_lleft(struct parsefile *pf, int len)
-{
-#ifndef SMALL
-	pf->lleft = len;
-#endif
-}
 #endif

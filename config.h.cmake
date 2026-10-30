@@ -38,7 +38,6 @@
 #cmakedefine HAVE_GLOB 1
 #cmakedefine HAVE_ST_MTIM 1
 #cmakedefine HAVE_TRADITIONAL_FACCESSAT 1
-#cmakedefine SMALL 1
 #cmakedefine WITH_LINENO 1
 #cmakedefine PRIdMAX "${PRIdMAX}"
 

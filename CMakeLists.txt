@@ -16,7 +16,6 @@ include(CheckSymbolExists)
 
 set(CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 
-option(WITH_LIBEDIT "Build with libedit line editing" OFF)
 option(WITH_LINENO "Track LINENO" ON)
 option(ENABLE_FNMATCH "Use fnmatch(3) from libc" OFF)
 option(ENABLE_GLOB "Use glob(3) from libc" OFF)
@@ -163,16 +162,6 @@ else()
   set(USE_MEMFD_CREATE 0)
 endif()
 
-if(WITH_LIBEDIT)
-  find_path(EDIT_INCLUDE_DIR histedit.h)
-  find_library(EDIT_LIBRARY edit)
-  if(NOT EDIT_INCLUDE_DIR OR NOT EDIT_LIBRARY)
-    message(FATAL_ERROR "libedit was requested but histedit.h or -ledit was not found")
-  endif()
-else()
-  set(SMALL 1)
-endif()
-
 configure_file(config.h.cmake config.h)
 
 set(DASH_COMPILE_DEFS BSD=1 SHELL _GNU_SOURCE)
@@ -196,7 +185,6 @@ set(DASH_SOURCES
   src/eval.cpp
   src/exec.cpp
   src/expand.cpp
-  src/histedit.cpp
   src/input.cpp
   src/jobs.cpp
   src/mail.cpp
@@ -323,10 +311,6 @@ add_library(dash_lib STATIC
   ${DASH_GENERATED_SOURCES}
 )
 dash_configure_tool(dash_lib)
-if(WITH_LIBEDIT)
-  target_include_directories(dash_lib PUBLIC "${EDIT_INCLUDE_DIR}")
-  target_link_libraries(dash_lib PUBLIC "${EDIT_LIBRARY}")
-endif()
 
 add_executable(dash src/dash_main.cpp)
 target_link_libraries(dash PRIVATE dash_lib)

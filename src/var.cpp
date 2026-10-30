@@ -59,9 +59,6 @@
 #include "mystring.h"
 #include "parser.h"
 #include "show.h"
-#ifndef SMALL
-#include "myhistedit.h"
-#endif
 #include "system.h"
 
 

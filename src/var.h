@@ -94,14 +94,6 @@ struct localvar_list;
 #ifdef WITH_LINENO
 #define vlineno (&voptind)[1]
 #endif
-#ifndef SMALL
-#ifdef WITH_LINENO
-#define vterm (&vlineno)[1]
-#else
-#define vterm (&voptind)[1]
-#endif
-#define vhistsize (&vterm)[1]
-#endif
 
 extern const char defpathvar[];
 #define defifs (sh.defifsvar + 4)
@@ -123,10 +115,6 @@ extern const char defpathvar[];
 #define ps4val()	(vps4.text + 4)
 #define optindval()	(voptind.text + 7)
 #define linenoval()	(vlineno.text + 7)
-#ifndef SMALL
-#define histsizeval()	(vhistsize.text + 9)
-#define termval()	(vterm.text + 5)
-#endif
 
 #if ATTY
 #define attyset()	((vatty.flags & VUNSET) == 0)
