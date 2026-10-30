@@ -228,7 +228,7 @@ static int
 openredirect(ShellContext &sh, union node *redir)
 {
 	struct stat64 sb;
-	char *fname;
+	const char *fname;
 	int flags;
 	int f;
 
@@ -236,7 +236,7 @@ openredirect(ShellContext &sh, union node *redir)
 	case NFROM:
 		flags = O_RDONLY;
 do_open:
-		f = sh_open(sh, redir->nfile.expfname, flags, 0);
+		f = sh_open(sh, redir->nfile.expfname.c_str(), flags, 0);
 		break;
 	case NFROMTO:
 		flags = O_RDWR|O_CREAT;
@@ -244,7 +244,7 @@ do_open:
 	case NTO:
 		/* Take care of noclobber mode. */
 		if (Cflag) {
-			fname = redir->nfile.expfname;
+			fname = redir->nfile.expfname.c_str();
 			if (stat64(fname, &sb) < 0) {
 				flags = O_WRONLY|O_CREAT|O_EXCL;
 				goto do_open;

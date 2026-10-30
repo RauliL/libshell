@@ -144,24 +144,24 @@ struct ShellContext {
 		+ 5;
 	struct var varinit[varinit_len] = {
 #if ATTY
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "ATTY\0", nullptr },
+		{ nullptr, VSTRFIXED|VUNSET, "ATTY=", nullptr },
 #endif
-		{ nullptr, VSTRFIXED|VTEXTFIXED, defifsvar, changeifs },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "MAIL\0", changemail },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VUNSET, "MAILPATH\0", changemail },
-		{ nullptr, VSTRFIXED|VTEXTFIXED, defpathvar, changepath },
-		{ nullptr, VSTRFIXED|VTEXTFIXED, "PS1=$ ", nullptr },
-		{ nullptr, VSTRFIXED|VTEXTFIXED, "PS2=> ", nullptr },
-		{ nullptr, VSTRFIXED|VTEXTFIXED, "PS4=+ ", nullptr },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VNOFUNC, defoptindvar, getoptsreset },
+		{ nullptr, VSTRFIXED, defifsvar, changeifs },
+		{ nullptr, VSTRFIXED|VUNSET, "MAIL=", changemail },
+		{ nullptr, VSTRFIXED|VUNSET, "MAILPATH=", changemail },
+		{ nullptr, VSTRFIXED, defpathvar, changepath },
+		{ nullptr, VSTRFIXED, "PS1=$ ", nullptr },
+		{ nullptr, VSTRFIXED, "PS2=> ", nullptr },
+		{ nullptr, VSTRFIXED, "PS4=+ ", nullptr },
+		{ nullptr, VSTRFIXED|VNOFUNC, defoptindvar, getoptsreset },
 #ifdef WITH_LINENO
-		{ nullptr, VSTRFIXED|VTEXTFIXED, linenovar, nullptr },
+		{ nullptr, VSTRFIXED, linenovar, nullptr },
 #endif
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_ALL\0", changelocale },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_COLLATE\0", changelocale },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_CTYPE\0", changelocale },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LC_NUMERIC\0", changelocale },
-		{ nullptr, VSTRFIXED|VTEXTFIXED|VFULL|VUNSET, "LANG\0", changelocale },
+		{ nullptr, VSTRFIXED|VFULL|VUNSET, "LC_ALL=", changelocale },
+		{ nullptr, VSTRFIXED|VFULL|VUNSET, "LC_COLLATE=", changelocale },
+		{ nullptr, VSTRFIXED|VFULL|VUNSET, "LC_CTYPE=", changelocale },
+		{ nullptr, VSTRFIXED|VFULL|VUNSET, "LC_NUMERIC=", changelocale },
+		{ nullptr, VSTRFIXED|VFULL|VUNSET, "LANG=", changelocale },
 	};
 	struct var *vartab[39] = {};
 
@@ -170,7 +170,7 @@ struct ShellContext {
 	std::size_t argbackq_i = 0;
 	struct ifsregion ifsfirst = {};
 	struct ifsregion *ifslastp = nullptr;
-	struct arglist exparg = {};
+	ArgList exparg;
 	char ifsmap[128] = {};
 	const char *ncifs = nullptr;
 	size_t ifsmb0len = 0;
@@ -181,7 +181,7 @@ struct ShellContext {
 	int needprompt = 0;
 	int lasttoken = 0;
 	int tokpushback = 0;
-	char *wordtext = nullptr;
+	std::string wordtext;
 	int checkkwd = 0;
 	std::vector<union node *> backquotelist;
 	union node *redirnode = nullptr;

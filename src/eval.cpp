@@ -100,7 +100,7 @@ static int evalcommand(ShellContext &sh, union node *, EvalFlags);
 static int evalbltin(ShellContext &sh, const struct builtincmd *, int, char **, EvalFlags);
 static int evalfun(ShellContext &sh, struct funcnode *, int, char **, EvalFlags);
 static void prehash(ShellContext &sh, union node *);
-static int eprintlist(ShellContext &sh, struct output *, struct strlist *, int);
+static int eprintlist(ShellContext &sh, struct output *, const ArgList &, int);
 static int bltincmd(ShellContext &sh, int, char **);
 
 
@@ -423,26 +423,23 @@ evalloop(ShellContext &sh, union node *n, EvalFlags flags)
 static int
 evalfor(ShellContext &sh, union node *n, EvalFlags flags)
 {
-	struct arglist arglist;
+	ArgList args;
 	union node *argp;
-	struct strlist *sp;
 	int status;
 
 	sh.errlinno = sh.lineno = n->nfor.linno;
 	if (sh.funcline)
 		sh.lineno -= sh.funcline - 1;
 
-	arglist.lastp = &arglist.list;
 	for (argp = n->nfor.args ; argp ; argp = argp->narg.next) {
-		expandarg(sh, argp, &arglist, EXP_FULL | EXP_TILDE);
+		expandarg(sh, argp, &args, EXP_FULL | EXP_TILDE);
 	}
-	*arglist.lastp = NULL;
 
 	status = 0;
 	sh.loopnest++;
 	flags &= EvalFlag::tested;
-	for (sp = arglist.list ; sp ; sp = sp->next) {
-		setvar(sh, n->nfor.var.c_str(), sp->text, 0);
+	for (const std::string &word : args) {
+		setvar(sh, n->nfor.var.c_str(), word.c_str(), 0);
 		status = evaltree(sh, n->nfor.body, flags);
 		if (skiploop(sh) & ~SKIPCONT)
 			break;
@@ -459,19 +456,18 @@ evalcase(ShellContext &sh, union node *n, EvalFlags flags)
 {
 	union node *cp;
 	union node *patp;
-	struct arglist arglist;
+	ArgList args;
 	int status = 0;
 
 	sh.errlinno = sh.lineno = n->ncase.linno;
 	if (sh.funcline)
 		sh.lineno -= sh.funcline - 1;
 
-	arglist.lastp = &arglist.list;
-	expandarg(sh, n->ncase.expr, &arglist, FNMATCH_IS_ENABLED ? EXP_TILDE :
+	expandarg(sh, n->ncase.expr, &args, FNMATCH_IS_ENABLED ? EXP_TILDE :
 					   EXP_TILDE | EXP_MBCHAR);
 	for (cp = n->ncase.cases ; cp && sh.evalskip == 0 ; cp = cp->nclist.next) {
 		for (patp = cp->nclist.pattern ; patp ; patp = patp->narg.next) {
-			if (casematch(sh, patp, arglist.list->text)) {
+			if (casematch(sh, patp, args[0].data())) {
 				/* Ensure body is non-empty as otherwise
 				 * EvalFlag::exit may prevent us from setting the
 				 * exit status.
@@ -541,8 +537,7 @@ expredir(ShellContext &sh, union node *n)
 	union node *redir;
 
 	for (redir = n ; redir ; redir = redir->nfile.next) {
-		struct arglist fn;
-		fn.lastp = &fn.list;
+		ArgList fn;
 		switch (redir->type) {
 		case NFROMTO:
 		case NFROM:
@@ -550,13 +545,13 @@ expredir(ShellContext &sh, union node *n)
 		case NCLOBBER:
 		case NAPPEND:
 			expandarg(sh, redir->nfile.fname, &fn, EXP_TILDE | EXP_REDIR);
-			redir->nfile.expfname = fn.list->text;
+			redir->nfile.expfname = fn[0];
 			break;
 		case NFROMFD:
 		case NTOFD:
 			if (redir->ndup.vname) {
 				expandarg(sh, redir->ndup.vname, &fn, EXP_TILDE | EXP_REDIR);
-				fixredir(sh, redir, fn.list->text, 1);
+				fixredir(sh, redir, fn[0].c_str(), 1);
 			}
 			break;
 		}
@@ -675,44 +670,46 @@ out:
 		result->fd, result->buf.size(), result->jp));
 }
 
-static struct strlist *
-fill_arglist(ShellContext &sh, struct arglist *arglist,
-				    union node **argpp)
+/* Expand at least one more word into ArgList; return false if none. */
+static bool
+fill_arglist(ShellContext &sh, ArgList *alist, union node **argpp)
 {
-	struct strlist **lastp = arglist->lastp;
+	size_t before = alist->size();
 	union node *argp;
 
 	while ((argp = *argpp)) {
-		expandarg(sh, argp, arglist, EXP_FULL | EXP_TILDE);
+		expandarg(sh, argp, alist, EXP_FULL | EXP_TILDE);
 		*argpp = argp->narg.next;
-		if (*lastp)
-			break;
+		if (alist->size() > before)
+			return true;
 	}
 
-	return *lastp;
+	return false;
 }
 
+/* Skip `command [-p] [--]` words; set *arg0 to the real command index. */
 static int
-parse_command_args(ShellContext &sh, struct arglist *arglist, union node **argpp,
-			      const char **path)
+parse_command_args(ShellContext &sh, ArgList *alist, union node **argpp,
+			      const char **path, size_t *arg0)
 {
-	struct strlist *sp = arglist->list;
-	char *cp, c;
+	size_t start = *arg0;
 
 	for (;;) {
-		sp = unlikely(sp->next) ? sp->next :
-					  fill_arglist(sh, arglist, argpp);
-		if (!sp)
+		if (start + 1 >= alist->size() &&
+		    !fill_arglist(sh, alist, argpp))
 			return 0;
-		cp = sp->text;
+		start++;
+		char *cp = (*alist)[start].data();
 		if (*cp++ != '-')
 			break;
+		char c;
 		if (!(c = *cp++))
 			break;
 		if (c == '-' && !*cp) {
-			if (likely(!sp->next) && !fill_arglist(sh, arglist, argpp))
+			if (start + 1 >= alist->size() &&
+			    !fill_arglist(sh, alist, argpp))
 				return 0;
-			sp = sp->next;
+			start++;
 			break;
 		}
 		do {
@@ -727,7 +724,7 @@ parse_command_args(ShellContext &sh, struct arglist *arglist, union node **argpp
 		} while ((c = *cp++));
 	}
 
-	arglist->list = sp;
+	*arg0 = start;
 	return DO_NOFUNC;
 }
 
@@ -746,12 +743,12 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 	struct parsefile *file_stop;
 	struct redirtab *redir_stop;
 	union node *argp;
-	struct arglist arglist;
-	struct arglist varlist;
+	ArgList args;
+	ArgList vars;
 	char **argv;
 	int argc;
-	struct strlist *osp;
-	struct strlist *sp;
+	size_t arg0 = 0;
+	size_t xtrace_end = 0;
 #ifdef notyet
 	int pip[2];
 #endif
@@ -778,10 +775,6 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 
 	cmdentry.cmdtype = CMDBUILTIN;
 	cmdentry.u.cmd = &bltin;
-	varlist.lastp = &varlist.list;
-	*varlist.lastp = NULL;
-	arglist.lastp = &arglist.list;
-	*arglist.lastp = NULL;
 
 	cmd_flag = 0;
 	execcmd = 0;
@@ -792,11 +785,13 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 
 	argc = 0;
 	argp = cmd->ncmd.args;
-	if ((osp = fill_arglist(sh, &arglist, &argp))) {
+	if (fill_arglist(sh, &args, &argp)) {
 		int pseudovarflag = 0;
 
+		arg0 = 0;
+		xtrace_end = args.size();
 		for (;;) {
-			find_command(sh, arglist.list->text, &cmdentry,
+			find_command(sh, args[arg0].data(), &cmdentry,
 				     cmd_flag | DO_REGBLTIN, pathval());
 
 			vlocal++;
@@ -817,19 +812,20 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 			if (likely(cmdentry.u.cmd != COMMANDCMD))
 				break;
 
-			cmd_flag = parse_command_args(sh, &arglist, &argp, &path);
+			cmd_flag = parse_command_args(sh, &args, &argp, &path,
+						     &arg0);
 			if (!cmd_flag)
 				break;
+			xtrace_end = args.size();
 		}
 
 		for (; argp; argp = argp->narg.next)
-			expandarg(sh, argp, &arglist,
+			expandarg(sh, argp, &args,
 				  pseudovarflag &&
 				  isassignment(sh, argp->narg.text.c_str()) ?
 				  EXP_VARTILDE : EXP_FULL | EXP_TILDE);
 
-		for (sp = arglist.list; sp; sp = sp->next)
-			argc++;
+		argc = static_cast<int>(args.size() - arg0);
 
 		if (execcmd && argc > 1)
 			vflags = VEXPORT;
@@ -840,9 +836,9 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 	/* Reserve one extra spot at the front for shellexec. */
 	nargv = stalloc(sh, sizeof (char *) * (argc + 2));
 	argv = ++nargv;
-	for (sp = arglist.list ; sp ; sp = sp->next) {
-		TRACE(("evalcommand arg: %s\n", sp->text));
-		*nargv++ = sp->text;
+	for (size_t i = arg0; i < args.size(); i++) {
+		TRACE(("evalcommand arg: %s\n", args[i].c_str()));
+		*nargv++ = args[i].data();
 	}
 	*nargv = NULL;
 
@@ -867,15 +863,14 @@ bail:
 	}
 
 	for (argp = cmd->ncmd.assign; argp; argp = argp->narg.next) {
-		struct strlist **spp;
-
-		spp = varlist.lastp;
-		expandarg(sh, argp, &varlist, EXP_VARTILDE);
-
-		if (vlocal)
-			mklocal(sh, (*spp)->text, VEXPORT);
-		else
-			setvareq(sh, (*spp)->text, vflags);
+		size_t before = vars.size();
+		expandarg(sh, argp, &vars, EXP_VARTILDE);
+		for (size_t i = before; i < vars.size(); i++) {
+			if (vlocal)
+				mklocal(sh, vars[i].data(), VEXPORT);
+			else
+				setvareq(sh, vars[i].data(), vflags);
+		}
 	}
 
 	/* Print the command if xflag is set. */
@@ -888,8 +883,12 @@ bail:
 		outstr(sh, expandstr(sh, ps4val()), out);
 		sh.inps4 = 0;
 		sep = 0;
-		sep = eprintlist(sh, out, varlist.list, sep);
-		eprintlist(sh, out, osp, sep);
+		sep = eprintlist(sh, out, vars, sep);
+		{
+			ArgList xargs(args.begin(),
+				      args.begin() + static_cast<std::ptrdiff_t>(xtrace_end));
+			eprintlist(sh, out, xargs, sep);
+		}
 		outcslow(sh, '\n', out);
 #ifdef FLUSHERR
 		flushout(sh, out);
@@ -1143,16 +1142,15 @@ execcmd(ShellContext &sh, int argc, char **argv)
 
 
 int
-eprintlist(ShellContext &sh, struct output *out, struct strlist *sp, int sep)
+eprintlist(ShellContext &sh, struct output *out, const ArgList &list, int sep)
 {
-	while (sp) {
+	for (const std::string &s : list) {
 		const char *p;
 
 		p = " %s";
 		p += (1 - sep);
 		sep |= 1;
-		outfmt(sh, out, p, sp->text);
-		sp = sp->next;
+		outfmt(sh, out, p, s.c_str());
 	}
 
 	return sep;

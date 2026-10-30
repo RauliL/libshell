@@ -48,6 +48,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <algorithm>
+#include <iterator>
 #include <string>
 #include <string.h>
 #include <sys/types.h>
@@ -128,11 +130,9 @@ static char * evalvar(ShellContext &sh, char *, int);
 static size_t strtodest(ShellContext &sh, const char *p, int flags);
 static size_t memtodest(ShellContext &sh, const char *p, size_t len, int flags);
 static ssize_t varvalue(ShellContext &sh, char *, int, unsigned);
-static void expandmeta(ShellContext &sh, struct strlist *);
+static void expandmeta(ShellContext &sh, ArgList &);
 static void addglob(ShellContext &sh, const glob64_t *);
 static char * expmeta(ShellContext &sh, char *, unsigned, size_t);
-static struct strlist * expsort(ShellContext &sh, struct strlist *);
-static struct strlist * msort(ShellContext &sh, struct strlist *, int);
 static void addfname(ShellContext &sh, char *);
 static int patmatch(ShellContext &sh, char *, const char *);
 static int pmatch(ShellContext &sh, char *, const char *);
@@ -217,45 +217,39 @@ getpwhome(ShellContext &sh, const char *name)
 
 /*
  * Perform variable substitution and command substitution on an argument,
- * placing the resulting list of arguments in arglist.  If EXP_FULL is true,
- * perform splitting and file name expansion.  When arglist is NULL, perform
+ * placing the resulting list of arguments in ArgList.  If EXP_FULL is true,
+ * perform splitting and file name expansion.  When ArgList is NULL, perform
  * here document expansion.
  */
 
 void
-expandarg(ShellContext &sh, union node *arg, struct arglist *arglist, int flag)
+expandarg(ShellContext &sh, union node *arg, ArgList *alist, int flag)
 {
-	struct strlist *sp;
 	char *p;
 
 	sh.argbackq = &arg->narg.backquote;
 	sh.argbackq_i = 0;
 	STARTSTACKSTR(sh.expdest);
 	argstr(sh, arg->narg.text.data(), flag);
-	if (arglist == NULL) {
+	if (alist == NULL) {
 		/* here document expanded */
 		goto out;
 	}
 	p = grabstackstr(sh.expdest);
-	sh.exparg.lastp = &sh.exparg.list;
-	/*
-	 * TODO - EXP_REDIR
-	 */
-	if (flag & EXP_FULL) {
-		ifsbreakup(sh, p, -1, &sh.exparg);
-		*sh.exparg.lastp = NULL;
-		sh.exparg.lastp = &sh.exparg.list;
-		expandmeta(sh, sh.exparg.list);
-	} else {
-		sp = (struct strlist *)stalloc(sh, sizeof (struct strlist));
-		sp->text = p;
-		*sh.exparg.lastp = sp;
-		sh.exparg.lastp = &sp->next;
-	}
-	*sh.exparg.lastp = NULL;
-	if (sh.exparg.list) {
-		*arglist->lastp = sh.exparg.list;
-		arglist->lastp = sh.exparg.lastp;
+	{
+		ArgList words;
+		/*
+		 * TODO - EXP_REDIR
+		 */
+		if (flag & EXP_FULL) {
+			ifsbreakup(sh, p, -1, &words);
+			expandmeta(sh, words);
+		} else {
+			words.emplace_back(p);
+		}
+		alist->insert(alist->end(),
+				std::make_move_iterator(words.begin()),
+				std::make_move_iterator(words.end()));
 	}
 
 out:
@@ -1229,10 +1223,9 @@ out:
 }
 
 static char *
-ifsbreakup_slow(ShellContext &sh, struct ifs_state *ifst, struct arglist *arglist,
+ifsbreakup_slow(ShellContext &sh, struct ifs_state *ifst, ArgList *alist,
 			     int nulonly, char *p)
 {
-	struct strlist *sp;
 	unsigned ifschar;
 	unsigned sisifs;
 	bool isdefifs;
@@ -1307,10 +1300,7 @@ ifsbreakup_slow(ShellContext &sh, struct ifs_state *ifst, struct arglist *arglis
 			return p;
 		}
 		*q = '\0';
-		sp = (struct strlist *)stalloc(sh, sizeof *sp);
-		sp->text = ifst->start;
-		*arglist->lastp = sp;
-		arglist->lastp = &sp->next;
+		alist->emplace_back(ifst->start);
 		ifst->start = p;
 		return p;
 	}
@@ -1328,12 +1318,11 @@ out_zero_ifsspc:
  * joining together the last arguments.
  */
 void
-ifsbreakup(ShellContext &sh, char *string, int maxargs, struct arglist *arglist)
+ifsbreakup(ShellContext &sh, char *string, int maxargs, ArgList *alist)
 {
 	struct ifsregion *ifsp;
 	struct ifs_state ifst;
 	const char *realifs;
-	struct strlist *sp;
 	int nulonly;
 	char *p;
 
@@ -1389,7 +1378,7 @@ ifsbreakup(ShellContext &sh, char *string, int maxargs, struct arglist *arglist)
 				if (p >= string + ifsp->endoff)
 					break;
 
-				p = ifsbreakup_slow(sh, &ifst, arglist,
+				p = ifsbreakup_slow(sh, &ifst, alist,
 						    afternul | nulonly, p);
 			}
 		} while ((ifsp = ifsp->next) != NULL);
@@ -1403,10 +1392,7 @@ ifsbreakup(ShellContext &sh, char *string, int maxargs, struct arglist *arglist)
 		return;
 
 add:
-	sp = (struct strlist *)stalloc(sh, sizeof *sp);
-	sp->text = ifst.start;
-	*arglist->lastp = sp;
-	arglist->lastp = &sp->next;
+	alist->emplace_back(ifst.start);
 }
 
 void
@@ -1505,9 +1491,11 @@ opendir_interruptible(ShellContext &sh, const char *pathname)
 #endif
 
 static void
-expandmeta_glob(ShellContext &sh, struct strlist *str)
+expandmeta_glob(ShellContext &sh, ArgList &strs)
 {
-	while (str) {
+	ArgList out;
+
+	for (std::string &s : strs) {
 		const char *p;
 		glob64_t pglob;
 		int i;
@@ -1527,16 +1515,21 @@ expandmeta_glob(ShellContext &sh, struct strlist *str)
 #endif
 
 		INTOFF;
-		p = preglob(sh, str->text, RMESCAPE_HEAP);
+		p = preglob(sh, s.c_str(), RMESCAPE_HEAP);
 		i = glob64(p, GLOB_ALTDIRFUNC | GLOB_NOMAGIC, 0, &pglob);
-		if (p != str->text)
+		if (p != s.c_str())
 			ckfree(p);
 		switch (i) {
 		case 0:
 			if ((pglob.gl_flags & (GLOB_NOMAGIC | GLOB_NOCHECK)) ==
 			    (GLOB_NOMAGIC | GLOB_NOCHECK))
 				goto nometa2;
+			sh.exparg.clear();
 			addglob(sh, &pglob);
+			out.insert(out.end(),
+				   std::make_move_iterator(sh.exparg.begin()),
+				   std::make_move_iterator(sh.exparg.end()));
+			sh.exparg.clear();
 			globfree64(&pglob);
 			INTON;
 			break;
@@ -1545,15 +1538,14 @@ nometa2:
 			globfree64(&pglob);
 			INTON;
 nometa:
-			*sh.exparg.lastp = str;
-			rmescapes(str->text);
-			sh.exparg.lastp = &str->next;
+			rmescapes(s.data());
+			out.push_back(std::move(s));
 			break;
 		default:	/* GLOB_NOSPACE */
 			sh_error(sh, "Out of space");
 		}
-		str = str->next;
 	}
+	strs = std::move(out);
 }
 
 
@@ -1572,61 +1564,57 @@ addglob(ShellContext &sh, const glob64_t *pglob)
 }
 
 static void
-expandmeta(ShellContext &sh, struct strlist *str)
+expandmeta(ShellContext &sh, ArgList &strs)
 {
 	/* TODO - EXP_REDIR */
 
 	if (GLOB_IS_ENABLED)
-		return expandmeta_glob(sh, str);
+		return expandmeta_glob(sh, strs);
 
-	while (str) {
-		struct strlist **savelastp;
-		struct strlist *sp;
+	ArgList out;
+	for (std::string &s : strs) {
 		char *p;
 		unsigned len;
 
 		if (fflag)
 			goto nometa;
-		if (!strpbrk(str->text, "*?]") || !strcmp(str->text, "]"))
+		if (!strpbrk(s.c_str(), "*?]") || !strcmp(s.c_str(), "]"))
 			goto nometa;
-		savelastp = sh.exparg.lastp;
 
 		INTOFF;
-		p = preglob(sh, str->text, RMESCAPE_ALLOC | RMESCAPE_HEAP);
+		p = preglob(sh, s.c_str(), RMESCAPE_ALLOC | RMESCAPE_HEAP);
 		len = strlen(p);
 
+		sh.exparg.clear();
 		expmeta(sh, p, len, 0);
-		if (p != str->text)
+		if (p != s.c_str())
 			ckfree(p);
 		INTON;
-		if (sh.exparg.lastp == savelastp) {
+		if (sh.exparg.empty()) {
 			/*
 			 * no matches
 			 */
 nometa:
-			*sh.exparg.lastp = str;
-			rmescapes(str->text);
-			sh.exparg.lastp = &str->next;
+			rmescapes(s.data());
+			out.push_back(std::move(s));
 		} else {
-			*sh.exparg.lastp = NULL;
-			*savelastp = sp = expsort(sh, *savelastp);
-			while (sp->next != NULL)
-				sp = sp->next;
-			sh.exparg.lastp = &sp->next;
+			std::sort(sh.exparg.begin(), sh.exparg.end(),
+				  [](const std::string &a, const std::string &b) {
+					  return strcoll(a.c_str(), b.c_str()) < 0;
+				  });
+			out.insert(out.end(),
+				   std::make_move_iterator(sh.exparg.begin()),
+				   std::make_move_iterator(sh.exparg.end()));
+			sh.exparg.clear();
 		}
-		str = str->next;
 	}
+	strs = std::move(out);
 }
 
 static void
 addfname_common(ShellContext &sh, char *name)
 {
-	struct strlist *sp;
-
-	sp = (struct strlist *)stalloc(sh, sizeof *sp);
-	sp->text = name;
-	*sh.exparg.lastp = sp;
-	sh.exparg.lastp = &sp->next;
+	sh.exparg.emplace_back(name);
 }
 
 static char *
@@ -1813,64 +1801,6 @@ addfname(ShellContext &sh, char *name)
 }
 
 
-/*
- * Sort the results of file name expansion.  It calculates the number of
- * strings to sort and then calls msort (short for merge sort) to do the
- * work.
- */
-
-static struct strlist *
-expsort(ShellContext &sh, struct strlist *str)
-{
-	int len;
-	struct strlist *sp;
-
-	len = 0;
-	for (sp = str ; sp ; sp = sp->next)
-		len++;
-	return msort(sh, str, len);
-}
-
-
-static struct strlist *
-msort(ShellContext &sh, struct strlist *list, int len)
-{
-	struct strlist *p, *q = NULL;
-	struct strlist **lpp;
-	int half;
-	int n;
-
-	if (len <= 1)
-		return list;
-	half = len >> 1;
-	p = list;
-	for (n = half ; --n >= 0 ; ) {
-		q = p;
-		p = p->next;
-	}
-	q->next = NULL;			/* terminate first half of list */
-	q = msort(sh, list, half);		/* sort first half of list */
-	p = msort(sh, p, len - half);		/* sort second half */
-	lpp = &list;
-	for (;;) {
-		if (strcoll(p->text, q->text) < 0) {
-			*lpp = p;
-			lpp = &p->next;
-			if ((p = *lpp) == NULL) {
-				*lpp = q;
-				break;
-			}
-		} else {
-			*lpp = q;
-			lpp = &q->next;
-			if ((q = *lpp) == NULL) {
-				*lpp = p;
-				break;
-			}
-		}
-	}
-	return list;
-}
 
 
 /*

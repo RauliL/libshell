@@ -37,6 +37,7 @@
  */
 
 #include <inttypes.h>
+#include <string>
 
 struct ShellContext;
 
@@ -48,18 +49,18 @@ struct ShellContext;
 #define VEXPORT		0x01	/* variable is exported */
 #define VREADONLY	0x02	/* variable cannot be modified */
 #define VSTRFIXED	0x04	/* variable struct is statically allocated */
-#define VTEXTFIXED	0x08	/* text is statically allocated */
-#define VSTACK		0x10	/* text is allocated on the stack */
+#define VTEXTFIXED	0x08	/* legacy: ignored (text always owned) */
+#define VSTACK		0x10	/* legacy: unused */
 #define VUNSET		0x20	/* the variable is not set */
 #define VNOFUNC		0x40	/* don't call the callback function */
 #define VFULL		0x80	/* pass value suitable for putenv */
-#define VNOSAVE		0x100	/* when text is on the heap before setvareq */
+#define VNOSAVE		0x100	/* caller heap buffer; setvareq copies then frees */
 
 
 struct var {
 	struct var *next;		/* next entry in hash list */
 	int flags;			/* flags are defined above */
-	const char *text;		/* name=value */
+	std::string text;		/* name=value (owned; empty value when VUNSET) */
 	void (*func)(ShellContext &, const char *);
 					/* function to be called when  */
 					/* the variable gets set/unset */
@@ -70,7 +71,7 @@ struct localvar {
 	struct localvar *next;		/* next local variable in list */
 	struct var *vp;			/* the variable that was made local */
 	int flags;			/* saved flags */
-	const char *text;		/* saved text */
+	std::string text;		/* saved text or $- optlist bytes */
 };
 
 struct localvar_list;
@@ -105,16 +106,16 @@ extern const char defpathvar[];
  * for unset variables.
  */
 
-#define ifsval()	(vifs.text + 4)
+#define ifsval()	(vifs.text.c_str() + 4)
 #define ifsset()	((vifs.flags & VUNSET) == 0)
-#define mailval()	(vmail.text + 5)
-#define mpathval()	(vmpath.text + 9)
-#define pathval()	(vpath.text + 5)
-#define ps1val()	(vps1.text + 4)
-#define ps2val()	(vps2.text + 4)
-#define ps4val()	(vps4.text + 4)
-#define optindval()	(voptind.text + 7)
-#define linenoval()	(vlineno.text + 7)
+#define mailval()	(vmail.text.c_str() + 5)
+#define mpathval()	(vmpath.text.c_str() + 9)
+#define pathval()	(vpath.text.c_str() + 5)
+#define ps1val()	(vps1.text.c_str() + 4)
+#define ps2val()	(vps2.text.c_str() + 4)
+#define ps4val()	(vps4.text.c_str() + 4)
+#define optindval()	(voptind.text.c_str() + 7)
+#define linenoval()	(vlineno.text.c_str() + 7)
 
 #if ATTY
 #define attyset()	((vatty.flags & VUNSET) == 0)
@@ -126,7 +127,6 @@ void initvar(ShellContext &sh);
 struct var *setvar(ShellContext &sh, const char *name, const char *val, int flags);
 intmax_t setvarint(ShellContext &sh, const char *, intmax_t, int);
 struct var *setvareq(ShellContext &sh, char *s, int flags);
-struct strlist;
 char *lookupvar(ShellContext &sh, const char *);
 intmax_t lookupvarint(ShellContext &sh, const char *);
 char **listvars(ShellContext &sh, int, int, char ***);

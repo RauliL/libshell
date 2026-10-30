@@ -128,7 +128,7 @@ NAPPEND nfile			# fd>> fname
 	next	  nodeptr		# next redirection in list
 	fd	  int			# file descriptor being redirected
 	fname	  nodeptr		# file name, in a NARG node
-	expfname  temp	char *expfname	# actual file name
+	expfname  string		# actual file name (filled at eval)
 
 NTOFD ndup			# fd<&dupfd
 NFROMFD ndup			# fd>&dupfd

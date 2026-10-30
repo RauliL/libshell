@@ -78,21 +78,16 @@
 static void
 readcmd_handle_line(ShellContext &sh, char *s, int ac, char **ap)
 {
-	struct arglist arglist;
-	struct strlist *sl;
+	ArgList fields;
+	size_t i = 0;
 
 	s = grabstackstr(s);
 
-	arglist.lastp = &arglist.list;
-	
-	ifsbreakup(sh, s, ac, &arglist);
-	*arglist.lastp = NULL;
+	ifsbreakup(sh, s, ac, &fields);
 	ifsfree(sh);
 
-	sl = arglist.list;
-
 	do {
-		if (!sl) {
+		if (i >= fields.size()) {
 			/* nullify remaining arguments */
 			do {
 				setvar(sh, *ap, nullstr, 0);
@@ -102,9 +97,9 @@ readcmd_handle_line(ShellContext &sh, char *s, int ac, char **ap)
 		}
 
 		/* set variable to field */
-		rmescapes(sl->text);
-		setvar(sh, *ap, sl->text, 0);
-		sl = sl->next;
+		rmescapes(fields[i].data());
+		setvar(sh, *ap, fields[i].c_str(), 0);
+		i++;
 	} while (*++ap);
 }
 

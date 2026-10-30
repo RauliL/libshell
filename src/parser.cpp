@@ -370,7 +370,7 @@ command(ShellContext &sh)
 		n1->type = (sh.lasttoken == TWHILE)? NWHILE : NUNTIL;
 		n1->nbinary.ch1 = list(sh, 0);
 		if ((got=readtoken(sh)) != TDO) {
-TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? sh.wordtext : ""));
+TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? sh.wordtext.c_str() : ""));
 			synexpect(sh, TDO);
 		}
 		n1->nbinary.ch2 = list(sh, 0);
@@ -378,7 +378,7 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? sh.wordtext : ""
 		break;
 	}
 	case TFOR:
-		if (readtoken(sh) != TWORD || sh.quoteflag || ! goodname(sh, sh.wordtext))
+		if (readtoken(sh) != TWORD || sh.quoteflag || ! goodname(sh, sh.wordtext.c_str()))
 			synerror(sh, "Bad for loop variable");
 		n1 = new_node<nfor>();
 		n1->type = NFOR;
@@ -545,7 +545,7 @@ simplecmd(ShellContext &sh)
 			n->type = NARG;
 			n->narg.text = sh.wordtext;
 			n->narg.backquote = std::move(sh.backquotelist);
-			if (savecheckkwd && isassignment(sh, sh.wordtext)) {
+			if (savecheckkwd && isassignment(sh, sh.wordtext.c_str())) {
 				*vpp = n;
 				vpp = &n->narg.next;
 			} else {
@@ -658,8 +658,8 @@ parsefname(ShellContext &sh)
 		if (sh.quoteflag == 0)
 			n->type = NXHERE;
 		TRACE(("Here document %d\n", n->type));
-		rmescapes(sh.wordtext);
-		here->eofmark = sh.wordtext ? sh.wordtext : "";
+		rmescapes(sh.wordtext.data());
+		here->eofmark = sh.wordtext;
 		here->next = NULL;
 		if (sh.heredoclist == NULL)
 			sh.heredoclist = here;
@@ -668,7 +668,7 @@ parsefname(ShellContext &sh)
 			p->next = here;
 		}
 	} else if (n->type == NTOFD || n->type == NFROMFD) {
-		fixredir(sh, n, sh.wordtext, 0);
+		fixredir(sh, n, sh.wordtext.c_str(), 0);
 	} else {
 		n->nfile.fname = makename(sh);
 	}
@@ -744,7 +744,7 @@ top:
 	if (kwd & CHKKWD) {
 		const char *const *pp;
 
-		if ((pp = findkwd(sh, sh.wordtext))) {
+		if ((pp = findkwd(sh, sh.wordtext.c_str()))) {
 			sh.lasttoken = t = pp - parsekwd + KWDOFFSET;
 			TRACE(("keyword %s recognized\n", tokname[t]));
 			goto out;
@@ -753,7 +753,7 @@ top:
 
 	if (kwd & CHKALIAS) {
 		struct alias *ap;
-		if ((ap = lookupalias(sh, sh.wordtext, 1)) != NULL) {
+		if ((ap = lookupalias(sh, sh.wordtext.c_str(), 1)) != NULL) {
 			if (!ap->val.empty()) {
 				pushstring(sh, ap->val.data(), ap);
 			}
@@ -763,9 +763,9 @@ top:
 out:
 #ifdef DEBUG
 	if (!alreadyseen)
-	    TRACE(("token %s %s\n", tokname[t], t == TWORD ? sh.wordtext : ""));
+	    TRACE(("token %s %s\n", tokname[t], t == TWORD ? sh.wordtext.c_str() : ""));
 	else
-	    TRACE(("reread token %s %s\n", tokname[t], t == TWORD ? sh.wordtext : ""));
+	    TRACE(("reread token %s %s\n", tokname[t], t == TWORD ? sh.wordtext.c_str() : ""));
 #endif
 	return (t);
 }
@@ -1808,7 +1808,7 @@ expandstr(ShellContext &sh, const char *ps)
 
 		n.type = NARG;
 		n.next = NULL;
-		n.text = sh.wordtext ? sh.wordtext : "";
+		n.text = sh.wordtext;
 		n.backquote = std::move(sh.backquotelist);
 
 		expandarg(sh, reinterpret_cast<union node *>(&n), NULL, EXP_QUOTED);

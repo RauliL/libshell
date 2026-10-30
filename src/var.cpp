@@ -34,6 +34,7 @@
 
 #include <cstring>
 #include <locale.h>
+#include <string>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -84,7 +85,17 @@ const char defpathvar[] =
 void
 changelocale(ShellContext &sh, const char *val)
 {
-	putenv((char *)val);
+	(void)sh;
+	const char *eq = strchr(val, '=');
+	if (eq) {
+		std::string name(val, static_cast<size_t>(eq - val));
+		if (eq[1] == '\0')
+			unsetenv(name.c_str());
+		else
+			setenv(name.c_str(), eq + 1, 1);
+	} else {
+		unsetenv(val);
+	}
 	setlocale(LC_ALL, nullstr);
 }
 
@@ -141,11 +152,12 @@ RESET {
 }
 #endif
 
-static char *
-varnull(ShellContext &sh, const char *s)
+static const char *
+varnull(ShellContext &sh, const std::string &s)
 {
-	/* Unset variables always end with two NUL chars. */
-	return const_cast<char *>(strchrnul(s, '=')) + 1;
+	(void)sh;
+	/* Unset variables end with an extra NUL (name\0\0) or name=. */
+	return strchrnul(s.c_str(), '=') + 1;
 }
 
 static void
@@ -156,9 +168,9 @@ varfunc(ShellContext &sh, struct var *vp)
 	if (!vp->func)
 		return;
 
-	s = vp->text;
+	s = vp->text.c_str();
 	if (!(vp->flags & VFULL))
-		s = varnull(sh, s);
+		s = varnull(sh, vp->text);
 	vp->func(sh, s);
 }
 
@@ -177,7 +189,7 @@ initvar(ShellContext &sh)
 	vp = sh.varinit;
 	end = vp + sizeof(sh.varinit) / sizeof(sh.varinit[0]);
 	do {
-		vpp = hashvar(sh, vp->text);
+		vpp = hashvar(sh, vp->text.c_str());
 		vp->next = *vpp;
 		*vpp = vp;
 	} while (++vp < end);
@@ -214,11 +226,11 @@ setvar(ShellContext &sh, const char *name, const char *val, int flags)
 		vallen = strlen(val);
 	}
 	INTOFF;
-	p = static_cast<char *>(mempcpy(nameeq = ckmalloc(sh, namelen + vallen + 2), name, namelen + 1));
-	if (val) {
-		p[-1] = '=';
+	/* Always store name=value (empty value when unset) so std::string can own it. */
+	p = static_cast<char *>(mempcpy(nameeq = ckmalloc(sh, namelen + vallen + 2), name, namelen));
+	*p++ = '=';
+	if (val)
 		p = static_cast<char *>(mempcpy(p, val, vallen));
-	}
 	*p = '\0';
 	vp = setvareq(sh, nameeq, flags | VNOSAVE);
 	INTON;
@@ -256,35 +268,32 @@ struct var *
 setvareq(ShellContext &sh, char *s, int flags)
 {
 	struct var *vp, **vpp;
+	int nosave = flags & VNOSAVE;
 
 	flags |= (VEXPORT & (((unsigned) (1 - aflag)) - 1));
+	flags &= ~(VTEXTFIXED|VSTACK|VNOSAVE);
 	vpp = findvar(sh, s);
 	vp = *vpp;
 	if (vp) {
 		unsigned bits;
 
 		if (vp->flags & VREADONLY) {
-			const char *n;
-
-			if (flags & VNOSAVE)
-				free(s);
-			n = vp->text;
+			const char *n = vp->text.c_str();
+			if (nosave)
+				ckfree(s);
 			sh_error(sh, "%.*s: is read only", strchrnul(n, '=') - n,
 				 n);
 		}
 
-		if ((vp->flags & (VTEXTFIXED|VSTACK)) == 0)
-			ckfree(vp->text);
-
 		if ((flags & (VEXPORT|VREADONLY|VSTRFIXED|VUNSET)) != VUNSET)
-			bits = ~(VTEXTFIXED|VSTACK|VNOSAVE|VUNSET);
+			bits = ~VUNSET;
 		else if ((vp->flags & VSTRFIXED))
 			bits = VSTRFIXED;
 		else {
 			*vpp = vp->next;
-			ckfree(vp);
+			delete vp;
 out_free:
-			if ((flags & (VTEXTFIXED|VSTACK|VNOSAVE)) == VNOSAVE)
+			if (nosave)
 				ckfree(s);
 			goto out;
 		}
@@ -294,14 +303,14 @@ out_free:
 		if ((flags & (VEXPORT|VREADONLY|VSTRFIXED|VUNSET)) == VUNSET)
 			goto out_free;
 		/* not found */
-		vp = ckmalloc(sh, sizeof (*vp));
+		vp = new var;
 		vp->next = *vpp;
 		vp->func = NULL;
 		*vpp = vp;
 	}
-	if (!(flags & (VTEXTFIXED|VSTACK|VNOSAVE)))
-		s = savestr(sh, s);
 	vp->text = s;
+	if (nosave)
+		ckfree(s);
 	vp->flags = flags;
 
 	if (!(flags & VNOFUNC))
@@ -322,11 +331,13 @@ lookupvar(ShellContext &sh, const char *name)
 
 	if ((v = *findvar(sh, name)) && !(v->flags & VUNSET)) {
 #ifdef WITH_LINENO
-		if (v == &vlineno && v->text == sh.linenovar) {
-			fmtstr(sh, sh.linenovar+7, sizeof(sh.linenovar)-7, "%d", sh.lineno);
+		if (v == &vlineno) {
+			fmtstr(sh, sh.linenovar + 7, sizeof(sh.linenovar) - 7,
+			       "%d", sh.lineno);
+			v->text = sh.linenovar;
 		}
 #endif
-		return const_cast<char *>(strchrnul(v->text, '=')) + 1;
+		return const_cast<char *>(strchrnul(v->text.c_str(), '=')) + 1;
 	}
 	return NULL;
 }
@@ -365,7 +376,7 @@ listvars(ShellContext &sh, int on, int off, char ***end)
 					std::memcpy(nl, list, n * sizeof(char *));
 					list = nl;
 				}
-				list[n++] = const_cast<char *>(vp->text);
+				list[n++] = const_cast<char *>(vp->text.c_str());
 			}
 	} while (++vpp < sh.vartab + VTABSIZE);
 	if (n + 1 >= cap) {
@@ -486,11 +497,9 @@ mklocal(ShellContext &sh, char *name, int flags)
 	struct var *vp;
 
 	INTOFF;
-	lvp = ckmalloc(sh, sizeof (struct localvar));
+	lvp = new localvar;
 	if (name[0] == '-' && name[1] == '\0') {
-		char *p;
-		p = ckmalloc(sh, sizeof(sh.optlist));
-		lvp->text = static_cast<char *>(std::memcpy(p, sh.optlist, sizeof(sh.optlist)));
+		lvp->text.assign(sh.optlist, sizeof(sh.optlist));
 		vp = NULL;
 	} else {
 		char *eq;
@@ -506,7 +515,7 @@ mklocal(ShellContext &sh, char *name, int flags)
 		} else {
 			lvp->text = vp->text;
 			lvp->flags = vp->flags;
-			vp->flags |= VSTRFIXED|VTEXTFIXED;
+			vp->flags |= VSTRFIXED;
 			if (eq)
 				setvareq(sh, name, flags);
 		}
@@ -540,23 +549,20 @@ poplocalvars(ShellContext &sh)
 	while ((lvp = next) != NULL) {
 		next = lvp->next;
 		vp = lvp->vp;
-		TRACE(("poplocalvar %s\n", vp ? vp->text : "-"));
+		TRACE(("poplocalvar %s\n", vp ? vp->text.c_str() : "-"));
 		if (vp == NULL) {	/* $- saved */
-			memcpy(sh.optlist, lvp->text, sizeof(sh.optlist));
-			ckfree(lvp->text);
+			memcpy(sh.optlist, lvp->text.data(), sizeof(sh.optlist));
 			optschanged(sh);
 		} else if (lvp->flags == VUNSET) {
 			vp->flags &= ~(VSTRFIXED|VREADONLY);
-			unsetvar(sh, vp->text);
+			unsetvar(sh, vp->text.c_str());
 		} else {
-			if ((vp->flags & (VTEXTFIXED|VSTACK)) == 0)
-				ckfree(vp->text);
 			vp->flags = lvp->flags;
-			vp->text = lvp->text;
+			vp->text = std::move(lvp->text);
 			if (!(vp->flags & VNOFUNC))
 				varfunc(sh, vp);
 		}
-		ckfree(lvp);
+		delete lvp;
 	}
 	INTON;
 }
@@ -685,7 +691,7 @@ findvar(ShellContext &sh, const char *name)
 	struct var **vpp;
 
 	for (vpp = hashvar(sh, name); *vpp; vpp = &(*vpp)->next) {
-		if (varequal((*vpp)->text, name)) {
+		if (varequal((*vpp)->text.c_str(), name)) {
 			break;
 		}
 	}
