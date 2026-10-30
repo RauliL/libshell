@@ -164,6 +164,16 @@ endif()
 
 configure_file(config.h.cmake config.h)
 
+include(FetchContent)
+FetchContent_Declare(
+  expected
+  GIT_REPOSITORY https://github.com/TartanLlama/expected.git
+  GIT_TAG v1.1.0
+)
+set(EXPECTED_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(EXPECTED_BUILD_PACKAGE OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(expected)
+
 set(DASH_COMPILE_DEFS BSD=1 SHELL _GNU_SOURCE)
 set(DASH_INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -174,6 +184,8 @@ function(dash_configure_tool target)
   target_include_directories("${target}" PRIVATE ${DASH_INCLUDE_DIRS})
   target_compile_options("${target}" PRIVATE -Wall
     "SHELL:-include ${CMAKE_CURRENT_BINARY_DIR}/config.h")
+  # result.h (via parser.h / arith.h) needs tl::expected headers
+  target_link_libraries("${target}" PRIVATE expected)
 endfunction()
 
 set(DASH_SOURCES
@@ -311,6 +323,7 @@ add_library(dash_lib STATIC
   ${DASH_GENERATED_SOURCES}
 )
 dash_configure_tool(dash_lib)
+target_link_libraries(dash_lib PUBLIC expected)
 
 add_executable(dash src/dash_main.cpp)
 target_link_libraries(dash PRIVATE dash_lib)
@@ -323,7 +336,6 @@ install(TARGETS dash RUNTIME DESTINATION bin)
 
 include(CTest)
 if(BUILD_TESTING)
-  include(FetchContent)
   FetchContent_Declare(
     Catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git

@@ -1753,13 +1753,13 @@ try_parse_string(ShellContext &sh, char *s)
 		clear_stack_temps(sh);
 		popfile(sh);
 		nflag = save_nflag;
-		return dash::Result<void>::Ok();
+		return {};
 	} catch (const dash::ParseError &e) {
 		sh.errlinno = e.lineno();
 		clear_stack_temps(sh);
 		popfile(sh);
 		nflag = save_nflag;
-		return dash::Result<void>::Err(e.what());
+		return tl::unexpected(std::string(e.what()));
 	}
 }
 

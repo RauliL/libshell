@@ -2,8 +2,8 @@
 #define ARITH_H
 /*
  * Modern C++ arithmetic-expression parser for $((...)) / let-style eval.
- * Builds an AST, reports errors via Result, and evaluates with short-circuit
- * semantics matching POSIX shell arithmetic.
+ * Builds an AST, reports errors via tl::expected (dash::Result), and evaluates
+ * with short-circuit semantics matching POSIX shell arithmetic.
  */
 
 #include <cstdint>

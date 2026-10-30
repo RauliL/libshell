@@ -340,7 +340,7 @@ public:
 		if (!expr)
 			return expr;
 		if (tok_.kind != TokenKind::Eof)
-			return Result<ExprPtr>::Err("expecting EOF");
+			return tl::unexpected(std::string("expecting EOF"));
 		return expr;
 	}
 
@@ -357,7 +357,7 @@ private:
 
 	Result<ExprPtr> fail(const char *msg)
 	{
-		return Result<ExprPtr>::Err(msg);
+		return tl::unexpected(std::string(msg));
 	}
 
 	Result<ExprPtr> parse_assignment()
@@ -371,8 +371,7 @@ private:
 				auto rhs = parse_assignment();
 				if (!rhs)
 					return rhs;
-				return Result<ExprPtr>::Ok(
-					make_assign(op, std::move(var.name), std::move(*rhs)));
+				return make_assign(op, std::move(var.name), std::move(*rhs));
 			}
 			/* Not an assignment — put the variable back and parse a
 			 * normal expression starting at that primary. */
@@ -401,8 +400,7 @@ private:
 		auto else_expr = parse_cond();
 		if (!else_expr)
 			return else_expr;
-		return Result<ExprPtr>::Ok(
-			make_cond(std::move(*cond), std::move(*then_expr), std::move(*else_expr)));
+		return make_cond(std::move(*cond), std::move(*then_expr), std::move(*else_expr));
 	}
 
 	Result<ExprPtr> parse_or()
@@ -415,8 +413,7 @@ private:
 			auto rhs = parse_and();
 			if (!rhs)
 				return rhs;
-			lhs = Result<ExprPtr>::Ok(
-				make_binary(Op::LogOr, std::move(*lhs), std::move(*rhs)));
+			lhs = make_binary(Op::LogOr, std::move(*lhs), std::move(*rhs));
 		}
 		return lhs;
 	}
@@ -431,8 +428,7 @@ private:
 			auto rhs = parse_binop(7);
 			if (!rhs)
 				return rhs;
-			lhs = Result<ExprPtr>::Ok(
-				make_binary(Op::LogAnd, std::move(*lhs), std::move(*rhs)));
+			lhs = make_binary(Op::LogAnd, std::move(*lhs), std::move(*rhs));
 		}
 		return lhs;
 	}
@@ -454,8 +450,7 @@ private:
 			auto rhs = parse_binop(prec - 1);
 			if (!rhs)
 				return rhs;
-			lhs = Result<ExprPtr>::Ok(
-				make_binary(op, std::move(*lhs), std::move(*rhs)));
+			lhs = make_binary(op, std::move(*lhs), std::move(*rhs));
 		}
 	}
 
@@ -475,28 +470,28 @@ private:
 			return inner;
 		}
 		case TokenKind::Num:
-			return Result<ExprPtr>::Ok(make_num(cur.num));
+			return make_num(cur.num);
 		case TokenKind::Var:
-			return Result<ExprPtr>::Ok(make_var(std::move(cur.name)));
+			return make_var(std::move(cur.name));
 		case TokenKind::Add:
 			return parse_primary();
 		case TokenKind::Sub: {
 			auto operand = parse_primary();
 			if (!operand)
 				return operand;
-			return Result<ExprPtr>::Ok(make_unary(Op::Neg, std::move(*operand)));
+			return make_unary(Op::Neg, std::move(*operand));
 		}
 		case TokenKind::Not: {
 			auto operand = parse_primary();
 			if (!operand)
 				return operand;
-			return Result<ExprPtr>::Ok(make_unary(Op::Not, std::move(*operand)));
+			return make_unary(Op::Not, std::move(*operand));
 		}
 		case TokenKind::BitNot: {
 			auto operand = parse_primary();
 			if (!operand)
 				return operand;
-			return Result<ExprPtr>::Ok(make_unary(Op::BitNot, std::move(*operand)));
+			return make_unary(Op::BitNot, std::move(*operand));
 		}
 		default:
 			return fail("expecting primary");
@@ -551,42 +546,42 @@ Result<intmax_t> Evaluator::do_binop(Op op, intmax_t a, intmax_t b)
 	case Op::Rem:
 	case Op::Div:
 		if (!b || (a == INTMAX_MIN && b == -1))
-			return Result<intmax_t>::Err("division error");
-		return Result<intmax_t>::Ok(op == Op::Rem ? a % b : a / b);
+			return tl::unexpected(std::string("division error"));
+		return op == Op::Rem ? a % b : a / b;
 	case Op::Mul:
-		return Result<intmax_t>::Ok(a * b);
+		return a * b;
 	case Op::Add:
-		return Result<intmax_t>::Ok(a + b);
+		return a + b;
 	case Op::Sub:
-		return Result<intmax_t>::Ok(a - b);
+		return a - b;
 	case Op::LShift:
-		return Result<intmax_t>::Ok(a << b);
+		return a << b;
 	case Op::RShift:
-		return Result<intmax_t>::Ok(a >> b);
+		return a >> b;
 	case Op::Lt:
-		return Result<intmax_t>::Ok(a < b);
+		return a < b;
 	case Op::Le:
-		return Result<intmax_t>::Ok(a <= b);
+		return a <= b;
 	case Op::Gt:
-		return Result<intmax_t>::Ok(a > b);
+		return a > b;
 	case Op::Ge:
-		return Result<intmax_t>::Ok(a >= b);
+		return a >= b;
 	case Op::Eq:
-		return Result<intmax_t>::Ok(a == b);
+		return a == b;
 	case Op::Ne:
-		return Result<intmax_t>::Ok(a != b);
+		return a != b;
 	case Op::BitAnd:
-		return Result<intmax_t>::Ok(a & b);
+		return a & b;
 	case Op::BitXor:
-		return Result<intmax_t>::Ok(a ^ b);
+		return a ^ b;
 	case Op::BitOr:
-		return Result<intmax_t>::Ok(a | b);
+		return a | b;
 	case Op::LogAnd:
-		return Result<intmax_t>::Ok(a && b);
+		return a && b;
 	case Op::LogOr:
-		return Result<intmax_t>::Ok(a || b);
+		return a || b;
 	default:
-		return Result<intmax_t>::Err("bad binary operator");
+		return tl::unexpected(std::string("bad binary operator"));
 	}
 }
 
@@ -597,24 +592,24 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 			using T = std::decay_t<decltype(node)>;
 
 			if constexpr (std::is_same_v<T, NumExpr>) {
-				return Result<intmax_t>::Ok(node.value);
+				return node.value;
 			} else if constexpr (std::is_same_v<T, VarExpr>) {
 				if (noeval)
-					return Result<intmax_t>::Ok(0);
-				return Result<intmax_t>::Ok(lookupvarint(sh_, node.name.c_str()));
+					return 0;
+				return lookupvarint(sh_, node.name.c_str());
 			} else if constexpr (std::is_same_v<T, UnaryExpr>) {
 				auto v = eval_node(*node.operand, noeval);
 				if (!v || noeval)
 					return v;
 				switch (node.op) {
 				case Op::Neg:
-					return Result<intmax_t>::Ok(-*v);
+					return -*v;
 				case Op::Not:
-					return Result<intmax_t>::Ok(!*v);
+					return !*v;
 				case Op::BitNot:
-					return Result<intmax_t>::Ok(~*v);
+					return ~*v;
 				default:
-					return Result<intmax_t>::Err("bad unary operator");
+					return tl::unexpected(std::string("bad unary operator"));
 				}
 			} else if constexpr (std::is_same_v<T, BinaryExpr>) {
 				if (node.op == Op::LogAnd) {
@@ -624,7 +619,7 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 					auto b = eval_node(*node.rhs, noeval || !*a);
 					if (!b)
 						return b;
-					return Result<intmax_t>::Ok(*a && *b);
+					return *a && *b;
 				}
 				if (node.op == Op::LogOr) {
 					auto a = eval_node(*node.lhs, noeval);
@@ -633,7 +628,7 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 					auto b = eval_node(*node.rhs, noeval || !!*a);
 					if (!b)
 						return b;
-					return Result<intmax_t>::Ok(*a || *b);
+					return *a || *b;
 				}
 
 				auto a = eval_node(*node.lhs, noeval);
@@ -655,7 +650,7 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 				auto e = eval_node(*node.else_expr, noeval || !!*c);
 				if (!e)
 					return e;
-				return Result<intmax_t>::Ok(*c ? *t : *e);
+				return *c ? *t : *e;
 			} else if constexpr (std::is_same_v<T, AssignExpr>) {
 				auto rhs = eval_node(*node.value, noeval);
 				if (!rhs)
@@ -671,8 +666,7 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 						return combined;
 					result = *combined;
 				}
-				return Result<intmax_t>::Ok(
-					setvarint(sh_, node.name.c_str(), result, 0));
+				return setvarint(sh_, node.name.c_str(), result, 0);
 			}
 		},
 		expr.node);
@@ -681,7 +675,7 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 Result<intmax_t> Evaluator::eval(const ExprPtr &expr)
 {
 	if (!expr)
-		return Result<intmax_t>::Err("expecting primary");
+		return tl::unexpected(std::string("expecting primary"));
 	return eval_node(*expr, false);
 }
 
