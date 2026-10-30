@@ -227,10 +227,12 @@
 	__attribute__((__noinline__)) rawmem ckrealloc(void *p, std::size_t nbytes);
 	char * savestr(const char *s);
 	rawmem stalloc(std::size_t nbytes);
+	rawmem astalloc(std::size_t nbytes);
+	void clear_stack_temps();
 	void stunalloc(void *p);
-	__attribute__((__noinline__)) void pushstackmark(struct stackmark *mark, size_t len);
-	void setstackmark(struct stackmark *mark);
-	void popstackmark(struct stackmark *mark);
+	rawmem stackstr_commit(std::size_t nbytes);
+	void grabstackblock(size_t len);
+	char *_STPUTC(int c, char *p);
 	char *growstackblock(size_t min);
 	rawmem growstackstr();
 	__attribute__((__noinline__)) char *growstackto(size_t len);

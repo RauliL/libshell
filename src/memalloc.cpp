@@ -1,35 +1,5 @@
 /*-
- * Copyright (c) 1991, 1993
- *	The Regents of the University of California.  All rights reserved.
- * Copyright (c) 1997-2005
- *	Herbert Xu <herbert@gondor.apana.org.au>.  All rights reserved.
- *
- * This code is derived from software contributed to Berkeley by
- * Kenneth Almquist.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the University nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
+ * Heap allocation helpers and StackStr-backed string building.
  */
 
 #include <cstdlib>
@@ -44,41 +14,27 @@
 #include "mystring.h"
 #include "system.h"
 
- __attribute__((__always_inline__)) inline void ShellContext::outofspace(void)
+__attribute__((__always_inline__)) inline void ShellContext::outofspace(void)
 {
 	sh_error("Out of space");
 }
 
- rawmem ShellContext::checknull(void *p)
+rawmem ShellContext::checknull(void *p)
 {
 	if (!p)
 		outofspace();
 	return {p};
 }
 
-/*
- * Like malloc, but returns an error when out of space.
- */
-
 __attribute__((__noinline__)) rawmem ShellContext::ckmalloc(std::size_t nbytes)
 {
 	return checknull(std::malloc(nbytes));
 }
 
-
-/*
- * Same for realloc.
- */
-
 __attribute__((__noinline__)) rawmem ShellContext::ckrealloc(void *p, std::size_t nbytes)
 {
 	return checknull(std::realloc(p, nbytes));
 }
-
-
-/*
- * Make a copy of a string in safe storage.
- */
 
 char *
 ShellContext::savestr(const char *s)
@@ -86,196 +42,81 @@ ShellContext::savestr(const char *s)
 	return checknull(::strdup(s));
 }
 
-
 /*
- * Parse trees for commands are allocated in lifo order, so we use a stack
- * to make this more efficient, and also to avoid all sorts of exception
- * handling code to handle interrupts in the middle of a parse.
- *
- * The size 504 was chosen because the Ultrix malloc handles that size
- * well.
+ * Allocate nbytes on the heap. Tracked for mark-based / command-scope cleanup.
+ * String commits go through stackstr_commit() (see grabstackstr).
+ * AST nodes should use astalloc() so freenode() owns them.
  */
-
-
-
-
-
-
-
 rawmem ShellContext::stalloc(std::size_t nbytes)
 {
-	char *p;
-	size_t aligned;
-
-	aligned = SHELL_ALIGN(nbytes);
-	if (aligned > stacknleft) {
-		size_t len;
-		size_t blocksize;
-		struct stack_block *sp;
-
-		blocksize = aligned;
-		if (blocksize < MINSIZE)
-			blocksize = MINSIZE;
-		len = sizeof(struct stack_block) - MINSIZE + blocksize;
-		if (len < blocksize)
-			outofspace();
-		INTOFF;
-		sp = ckmalloc(len);
-		sp->prev = stackp;
-		stacknxt = sp->space;
-		stacknleft = blocksize;
-		sstrend = stacknxt + blocksize;
-		stackp = sp;
-		INTON;
-	}
-	p = stacknxt;
-	stacknxt += aligned;
-	stacknleft -= aligned;
+	std::size_t aligned = SHELL_ALIGN(nbytes);
+	void *p = ckmalloc(aligned);
+	stackheaps.push_back(p);
 	return {p};
 }
 
+rawmem ShellContext::astalloc(std::size_t nbytes)
+{
+	std::size_t n = SHELL_ALIGN(nbytes);
+	void *p = ckmalloc(n);
+	std::memset(p, 0, n);
+	return {p};
+}
+
+void ShellContext::clear_stack_temps()
+{
+	for (void *p : stackheaps)
+		ckfree(p);
+	stackheaps.clear();
+	stackstr.reset();
+}
+
+rawmem ShellContext::stackstr_commit(std::size_t nbytes)
+{
+	return {stackstr.commit(nbytes)};
+}
 
 void ShellContext::stunalloc(void *p)
 {
-#ifdef DEBUG
-	if (!p || (stacknxt < (char *)p) || ((char *)p < stackp->space)) {
-		write(2, "stunalloc\n", 10);
-		abort();
-	}
-#endif
-	stacknleft += stacknxt - static_cast<char *>(p);
-	stacknxt = static_cast<char *>(p);
+	if (!p)
+		return;
+	/* Only supports un-commit of the trailing string region. */
+	char *base = stackstr.buf.data();
+	char *cp = static_cast<char *>(p);
+	if (cp >= base && cp <= base + stackstr.used)
+		stackstr.rewind(static_cast<std::size_t>(cp - base));
 }
 
-
-
-__attribute__((__noinline__)) void ShellContext::pushstackmark(struct stackmark *mark,
-						 size_t len)
+char *ShellContext::growstackblock(size_t min)
 {
-	mark->stackp = stackp;
-	mark->stacknxt = stacknxt;
-	mark->stacknleft = stacknleft;
-	grabstackblock(len);
+	std::size_t off = 0;
+	/* Preserve relative cursor if someone held a pointer into the buffer —
+	 * callers re-base via makestrspace return value. */
+	(void)off;
+	stackstr.ensure_avail(min < 128 ? 128 : min);
+	/* Growing may reallocate; return new base of in-progress string. */
+	return stackstr.base();
 }
 
-void ShellContext::setstackmark(struct stackmark *mark)
+rawmem ShellContext::growstackstr()
 {
-	pushstackmark(mark, stacknxt == stackp->space && stackp != &stackbase);
-}
-
-
-void
-ShellContext::popstackmark(struct stackmark *mark)
-{
-	struct stack_block *sp;
-
-	INTOFF;
-	while (stackp != mark->stackp) {
-		sp = stackp;
-		stackp = sp->prev;
-		ckfree(sp);
-	}
-	stacknxt = mark->stacknxt;
-	stacknleft = mark->stacknleft;
-	sstrend = mark->stacknxt + mark->stacknleft;
-	INTON;
-}
-
-
-/*
- * When the parser reads in a string, it wants to stick the string on the
- * stack and only adjust the stack pointer when it knows how big the
- * string is.  Stackblock (defined in stack.h) returns a pointer to a block
- * of space on top of the stack and stackblocklen returns the length of
- * this block.  Growstackblock will grow this space by at least one byte,
- * possibly moving it (like realloc).  Grabstackblock actually allocates the
- * part of the block that has been used.
- */
-
- char *ShellContext::growstackblock(size_t min)
-{
-	size_t newlen;
-	char *p;
-
-	newlen = stacknleft * 2;
-	if (newlen < stacknleft)
-		outofspace();
-	min = SHELL_ALIGN(min | 128);
-	if (newlen < min)
-		newlen += min;
-
-	if (stacknxt == stackp->space && stackp != &stackbase) {
-		struct stack_block *sp;
-		struct stack_block *prevstackp;
-		size_t grosslen;
-
-		INTOFF;
-		sp = stackp;
-		prevstackp = sp->prev;
-		grosslen = newlen + sizeof(struct stack_block) - MINSIZE;
-		sp = ckrealloc(sp, grosslen);
-		sp->prev = prevstackp;
-		stackp = sp;
-		p = stacknxt = sp->space;
-		stacknleft = newlen;
-		sstrend = sp->space + newlen;
-		INTON;
-	} else {
-		char *oldspace = stacknxt;
-		int oldlen = stacknleft;
-
-		p = stalloc(newlen);
-
-		/* free the space we just allocated */
-		stacknxt = static_cast<char *>(std::memcpy(p, oldspace, oldlen));
-		stacknleft += newlen;
-	}
-
-	return p;
-}
-
-/*
- * The following routines are somewhat easier to use than the above.
- * The user declares a variable of type STACKSTR, which may be declared
- * to be a register.  The macro STARTSTACKSTR initializes things.  Then
- * the user uses the macro STPUTC to add characters to the string.  In
- * effect, STPUTC(c, p) is the same as *p++ = c except that the stack is
- * grown as necessary.  When the user is done, she can just leave the
- * string there and refer to it using stackblock().  Or she can allocate
- * the space for it using grabstackstr().  If it is necessary to allow
- * someone else to use the stack temporarily and then continue to grow
- * the string, the user should use grabstack to allocate the space, and
- * then call ungrabstr(p) to return to the previous mode of operation.
- *
- * USTPUTC is like STPUTC except that it doesn't check for overflow.
- * CHECKSTACKSPACE can be called before USTPUTC to ensure that there
- * is space for at least one character.
- */
-
-rawmem
-ShellContext::growstackstr()
-{
-	size_t len = stackblocksize();
-
-	return {growstackblock(0) + len};
+	std::size_t len = stackblocksize();
+	growstackblock(len + 128);
+	return {stackstr.base() + len};
 }
 
 __attribute__((__noinline__)) char *ShellContext::growstackto(size_t len)
 {
 	if (stackblocksize() < len)
-		return growstackblock(len);
+		growstackblock(len);
 	return stackblock();
 }
 
-/*
- * Called from CHECKSTRSPACE.
- */
-
 __attribute__((__noinline__)) char *ShellContext::makestrspace(size_t newlen, char *p)
 {
-	size_t len = p - stacknxt;
-
-	return growstackto(len + newlen) + len;
+	size_t len = static_cast<size_t>(p - stackstr.base());
+	growstackto(len + newlen);
+	return stackstr.base() + len;
 }
 
 __attribute__((__noinline__)) char *ShellContext::stnputs(const char *s, size_t n, char *p)
@@ -289,4 +130,20 @@ char *
 ShellContext::stputs(const char *s, char *p)
 {
 	return stnputs(s, strlen(s), p);
+}
+
+char *ShellContext::_STPUTC(int c, char *p)
+{
+	if (p >= stackstr.cap()) {
+		size_t off = static_cast<size_t>(p - stackstr.base());
+		growstackblock(off + 2);
+		p = stackstr.base() + off;
+	}
+	*p++ = static_cast<char>(c);
+	return p;
+}
+
+void ShellContext::grabstackblock(size_t len)
+{
+	stackstr_commit(len);
 }

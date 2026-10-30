@@ -60,6 +60,7 @@
 #include "exec.h"
 #include "cd.h"
 #include "parse_error.h"
+#include "nodes_free.h"
 
 #define PROFILE 0
 
@@ -91,7 +92,6 @@ ShellContext::run(int argc, char **argv)
 {
 	char *shinit;
 	volatile int state;
-	struct stackmark smark;
 	int login;
 
 #ifdef __GLIBC__
@@ -127,7 +127,7 @@ ShellContext::run(int argc, char **argv)
 			flushout(out2);
 #endif
 		}
-		popstackmark(&smark);
+		clear_stack_temps();
 		FORCEINTON;				/* enable interrupts */
 		if (s == 1)
 			goto state1;
@@ -145,7 +145,6 @@ ShellContext::run(int argc, char **argv)
 #endif
 	mypid = rootpid = getpid();
 	init();
-	setstackmark(&smark);
 	login = procargs(argv);
 	if (login) {
 		state = 1;
@@ -166,7 +165,7 @@ state2:
 			read_profile(shinit);
 		}
 	}
-	popstackmark(&smark);
+	clear_stack_temps();
 state3:
 	state = 4;
 	if (minusc)
@@ -200,7 +199,6 @@ exit:
 ShellContext::cmdloop(int top)
 {
 	union node *n;
-	struct stackmark smark;
 	int inter;
 	int status = 0;
 	int numeof = 0;
@@ -209,7 +207,6 @@ ShellContext::cmdloop(int top)
 	for (;;) {
 		int skip;
 
-		setstackmark(&smark);
 		if (jobctl)
 			showjobs(out2, SHOW_CHANGED);
 		inter = 0;
@@ -221,6 +218,7 @@ ShellContext::cmdloop(int top)
 			n = parsecmd(inter);
 			/* showtree(n); DEBUG */
 			if (n == NEOF) {
+				clear_stack_temps();
 				if (!top || numeof >= 50)
 					break;
 				if (!stoppedjobs()) {
@@ -244,10 +242,13 @@ ShellContext::cmdloop(int top)
 				i = evaltree(n, {});
 				if (n)
 					status = i;
+				if (n && n != NEOF)
+					freenode(n);
+				clear_stack_temps();
 			}
 		} catch (const dash::ParseError &e) {
 			report_parse_error(e);
-			popstackmark(&smark);
+			clear_stack_temps();
 			if (!(iflag && top))
 				return exitstatus;
 			skip = evalskip;
@@ -257,7 +258,6 @@ ShellContext::cmdloop(int top)
 			}
 			continue;
 		}
-		popstackmark(&smark);
 
 		skip = evalskip;
 		if (skip) {

@@ -190,6 +190,7 @@ endfunction()
 set(DASH_SOURCES
   src/alias.cpp
   src/arith.cpp
+  src/nodes_free.cpp
   src/cd.cpp
   src/error.cpp
   src/eval.cpp

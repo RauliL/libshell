@@ -306,10 +306,15 @@ retry:
 	if (fd == 0 && el) {
 
 		if (rl_cp == NULL) {
-			struct stackmark smark;
-			pushstackmark(&smark, stackblocksize());
+			std::size_t su = stackstr.used;
+			std::size_t hc = stackheaps.size();
+			stackstr.commit(stackblocksize());
 			rl_cp = el_gets(el, &el_len);
-			popstackmark(&smark);
+			while (stackheaps.size() > hc) {
+				ckfree(stackheaps.back());
+				stackheaps.pop_back();
+			}
+			stackstr.rewind(su);
 		}
 		if (rl_cp == NULL)
 			nr = 0;

@@ -63,6 +63,7 @@
 #include "show.h"
 #include "mystring.h"
 #include "parse_error.h"
+#include "nodes_free.h"
 #ifndef SMALL
 #include "myhistedit.h"
 #endif
@@ -177,16 +178,14 @@ int
 ShellContext::evalstring(char *s, EvalFlags flags)
 {
 	union node *n;
-	struct stackmark smark;
 	int status;
 
-	s = sstrdup(s);
+	s = savestr(s);
 	setinputstring(s);
-	setstackmark(&smark);
 
 	status = 0;
 	try {
-		for (; (n = parsecmd(0)) != NEOF; popstackmark(&smark)) {
+		for (; (n = parsecmd(0)) != NEOF; clear_stack_temps()) {
 			int i;
 
 			EvalFlags child = flags;
@@ -195,19 +194,21 @@ ShellContext::evalstring(char *s, EvalFlags flags)
 			i = evaltree(n, child);
 			if (n)
 				status = i;
+			if (n && n != NEOF)
+				freenode(n);
 
 			if (evalskip)
 				break;
 		}
-		popstackmark(&smark);
+		clear_stack_temps();
 		popfile();
-		stunalloc(s);
+		ckfree(s);
 		return status;
 	} catch (const dash::ParseError &e) {
 		report_parse_error(e);
-		popstackmark(&smark);
+		clear_stack_temps();
 		popfile();
-		stunalloc(s);
+		ckfree(s);
 		return exitstatus;
 	}
 }
@@ -224,11 +225,8 @@ ShellContext::evaltree(union node *n, EvalFlags flags)
 {
 	bool checkexit = false;
 	int (ShellContext::*evalfn)(union node *, EvalFlags);
-	struct stackmark smark;
 	unsigned isor;
 	int status = 0;
-
-	setstackmark(&smark);
 
 	if (nflag)
 		goto out;
@@ -349,8 +347,6 @@ out:
 exexit:
 		exraise(EXEND);
 	}
-
-	popstackmark(&smark);
 
 	return exitstatus;
 }

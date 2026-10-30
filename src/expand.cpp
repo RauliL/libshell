@@ -485,7 +485,6 @@ ShellContext::removerecordregions(int endoff)
  */
  char *ShellContext::expari(char *start, int flag)
 {
-	struct stackmark sm;
 	int begoff;
 	int endoff;
 	int len;
@@ -506,9 +505,17 @@ ShellContext::removerecordregions(int endoff)
 
 	removerecordregions(begoff);
 
-	pushstackmark(&sm, endoff);
-	result = arith(start);
-	popstackmark(&sm);
+	{
+		std::size_t su = stackstr.used;
+		std::size_t hc = stackheaps.size();
+		stackstr.commit(endoff);
+		result = arith(start);
+		while (stackheaps.size() > hc) {
+			ckfree(stackheaps.back());
+			stackheaps.pop_back();
+		}
+		stackstr.rewind(su);
+	}
 
 	len = cvtnum(result, flag);
 
@@ -533,16 +540,23 @@ ShellContext::expbackq(union node *cmd, int flag)
 	char *p;
 	char *dest;
 	int startloc;
-	struct stackmark smark;
 
 	if (flag & EXP_DISCARD)
 		goto out;
 
 	INTOFF;
 	startloc = expdest - (char *)stackblock();
-	pushstackmark(&smark, startloc);
-	evalbackcmd(cmd, (struct backcmd *) &in);
-	popstackmark(&smark);
+	{
+		std::size_t su = stackstr.used;
+		std::size_t hc = stackheaps.size();
+		stackstr.commit(startloc);
+		evalbackcmd(cmd, (struct backcmd *) &in);
+		while (stackheaps.size() > hc) {
+			ckfree(stackheaps.back());
+			stackheaps.pop_back();
+		}
+		stackstr.rewind(su);
+	}
 
 	p = in.buf;
 	i = in.nleft;
@@ -2150,16 +2164,20 @@ setnesc:
 int
 ShellContext::casematch(union node *pattern, char *val)
 {
-	struct stackmark smark;
 	int result;
+	std::size_t su = stackstr.used;
+	std::size_t hc = stackheaps.size();
 
-	setstackmark(&smark);
 	argbackq = pattern->narg.backquote;
 	STARTSTACKSTR(expdest);
 	argstr(pattern->narg.text, EXP_TILDE | EXP_CASE);
 	ifsfree();
 	result = patmatch(stackblock(), val);
-	popstackmark(&smark);
+	while (stackheaps.size() > hc) {
+		ckfree(stackheaps.back());
+		stackheaps.pop_back();
+	}
+	stackstr.rewind(su);
 	return result;
 }
 

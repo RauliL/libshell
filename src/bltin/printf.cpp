@@ -92,13 +92,13 @@ static void      check_conversion(const char *, const char *);
 
  int ShellContext::print_escape_str(const char *f, int *param, int *array, char *s)
 {
-	struct stackmark smark;
 	char *p, *q;
 	int done;
 	int len;
 	int total;
+	std::size_t su = stackstr.used;
+	std::size_t hc = stackheaps.size();
 
-	setstackmark(&smark);
 	done = conv_escape_str(s, &q);
 	p = stackblock();
 	len = q - p;
@@ -122,7 +122,11 @@ static void      check_conversion(const char *, const char *);
 easy:
 	out1mem(p, total);
 
-	popstackmark(&smark);
+	while (stackheaps.size() > hc) {
+		ckfree(stackheaps.back());
+		stackheaps.pop_back();
+	}
+	stackstr.rewind(su);
 	return done;
 }
 

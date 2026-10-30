@@ -297,12 +297,12 @@ int ShellContext::xasprintf(char **sp, const char *f, ...)
 void
 ShellContext::doformat(struct output *dest, const char *f, va_list ap)
 {
-	struct stackmark smark;
 	char *s;
 	int len;
 	int olen;
+	std::size_t su = stackstr.used;
+	std::size_t hc = stackheaps.size();
 
-	setstackmark(&smark);
 	s = dest->nextc;
 	olen = dest->end - dest->nextc;
 	len = xvasprintf(&s, olen, f, ap);
@@ -312,7 +312,11 @@ ShellContext::doformat(struct output *dest, const char *f, va_list ap)
 	}
 	outmem(s, len, dest);
 out:
-	popstackmark(&smark);
+	while (stackheaps.size() > hc) {
+		ckfree(stackheaps.back());
+		stackheaps.pop_back();
+	}
+	stackstr.rewind(su);
 }
 #endif
 

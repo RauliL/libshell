@@ -22,6 +22,7 @@
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <termios.h>
+#include <vector>
 
 #include "error.h"
 #include "eval.h"
@@ -31,6 +32,7 @@
 #include "options.h"
 #include "output.h"
 #include "parser.h"
+#include "stackstr.h"
 #include "system.h"
 #include "var.h"
 #ifndef SMALL
@@ -63,11 +65,8 @@ struct stdin_state {
 };
 
 struct ShellContext {
-	struct stack_block stackbase = {};
-	struct stack_block *stackp = &stackbase;
-	char *stacknxt = stackbase.space;
-	size_t stacknleft = MINSIZE;
-	char *sstrend = stackbase.space + MINSIZE;
+	StackStr stackstr;
+	std::vector<void *> stackheaps;
 
 	struct output output = {
 #ifdef USE_GLIBC_STDIO
@@ -280,19 +279,6 @@ struct ShellContext {
 	void forkreset(union node *);
 	void postexitreset();
 	void reset();
-
-	void grabstackblock(size_t len)
-	{
-		stalloc(len);
-	}
-
-	char *_STPUTC(int c, char *p)
-	{
-		if (p == sstrend)
-			p = growstackstr();
-		*p++ = c;
-		return p;
-	}
 
 	void freestdout()
 	{
