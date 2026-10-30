@@ -45,7 +45,6 @@
 #ifdef HAVE_GETPWNAM
 #include <pwd.h>
 #endif
-#include <setjmp.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1684,11 +1683,8 @@ static char *
 expmeta(ShellContext &sh, char *name, unsigned name_len, size_t expdir_len)
 {
 	const char mesc = FNMATCH_IS_ENABLED ? '\\' : CTLESC;
-	struct jmploc *volatile savehandler;
-	struct jmploc jmploc;
 	struct stat64 statb;
 	struct dirent64 *dp;
-	volatile int err;
 	char *endname;
 	char *zeroedp;
 	char *enddir;
@@ -1696,17 +1692,13 @@ expmeta(ShellContext &sh, char *name, unsigned name_len, size_t expdir_len)
 	unsigned esc;
 	char *start;
 	size_t len;
-	DIR *dirp;
+	DIR *dirp = nullptr;
 	char *pat;
-	char *cp;
+	char *cp = nullptr;
 	char *p;
 	int c;
 
-	*(DIR *volatile *)&dirp = NULL;
-	savehandler = sh.handler;
-	if (unlikely(err = setjmp(jmploc.loc)))
-		goto out;
-
+	try {
 	len = expdir_len + name_len + 1;
 	cp = growstackto(sh, len);
 	enddir = cp + expdir_len;
@@ -1739,7 +1731,7 @@ expmeta(ShellContext &sh, char *name, unsigned name_len, size_t expdir_len)
 		start = name;
 	*enddir = 0;
 
-	*(DIR *volatile *)&dirp = opendir(expdir_len ? cp : dotdir);
+	dirp = opendir(expdir_len ? cp : dotdir);
 	if (!dirp)
 		goto out_opendir;
 	esc = 0;
@@ -1795,13 +1787,15 @@ check_int:
 	}
 	*zeroedp = c;
 
-out:
-	closedir(*(DIR *volatile *)&dirp);
+	if (dirp)
+		closedir(dirp);
 out_opendir:
-	sh.handler = savehandler;
-	if (err)
-		longjmp(sh.handler->loc, 1);
 	return cp;
+	} catch (...) {
+		if (dirp)
+			closedir(dirp);
+		throw;
+	}
 }
 
 
@@ -2247,12 +2241,11 @@ varunset(ShellContext &sh, const char *end, const char *var, const char *umsg, i
 }
 
 void
-restore_handler_expandarg(ShellContext &sh, struct jmploc *savehandler, int err)
+restore_handler_expandarg(ShellContext &sh, int err)
 {
-	sh.handler = savehandler;
 	if (err) {
 		if (sh.exception != EXERROR)
-			longjmp(sh.handler->loc, 1);
+			exraise(sh, sh.exception);
 		ifsfree(sh);
 	}
 }

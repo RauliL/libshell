@@ -415,31 +415,32 @@ setinteractive(ShellContext &sh, int on)
 void
 exitshell(ShellContext &sh)
 {
-	struct jmploc loc;
 	char *p;
 
 	sh.savestatus = sh.exitstatus;
 	TRACE(("pid %d, exitshell(%d)\n", getpid(), sh.savestatus));
-	if (setjmp(loc.loc))
-		goto out;
-	sh.handler = &loc;
-	if ((p = sh.trap[0])) {
-		sh.trap[0] = NULL;
-		if (sh.ptrap)
-			goto out;
-		sh.evalskip = 0;
-		evalstring(sh, p, {});
-		sh.evalskip = SKIPFUNCDEF;
+	try {
+		if ((p = sh.trap[0])) {
+			sh.trap[0] = NULL;
+			if (!sh.ptrap) {
+				sh.evalskip = 0;
+				evalstring(sh, p, {});
+				sh.evalskip = SKIPFUNCDEF;
+			}
+		}
+	} catch (const dash::ShellError &) {
+		/* EXIT trap failed; still tear down. */
 	}
-out:
 	exitreset(sh);
 	postexitreset(sh);
 	/*
 	 * Disable job control so that whoever had the foreground before we
 	 * started can get it back.
 	 */
-	if (likely(!setjmp(loc.loc)))
+	try {
 		setjobctl(sh, 0);
+	} catch (const dash::ShellError &) {
+	}
 	flushall(sh);
 	_exit(sh.exitstatus);
 	/* NOTREACHED */

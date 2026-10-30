@@ -56,41 +56,24 @@
 #include "system.h"
 
 
-/*
- * Code to handle exceptions in C.
- */
-
-
-
-
-
-
-
-
 static void exverror(ShellContext &sh, int, const char *, va_list)
     __attribute__((__noreturn__));
 
 /*
- * Called to raise an sh.exception.  Since C doesn't include exceptions, we
- * just do a longjmp to the sh.exception sh.handler.  The type of sh.exception is
- * stored in the global variable "exception".
+ * Raise a shell unwind.  Stores the code in sh.exception and throws
+ * dash::ShellError for C++ catch handlers at eval/cmdloop boundaries.
  */
 
 void
 exraise(ShellContext &sh, int e)
 {
-#ifdef DEBUG
-	if (sh.handler == NULL)
-		abort();
-#endif
-
 	if (sh.vforked)
 		_exit(sh.exitstatus);
 
 	INTOFF;
 
 	sh.exception = e;
-	longjmp(sh.handler->loc, 1);
+	throw dash::ShellError(e);
 }
 
 

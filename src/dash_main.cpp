@@ -12,7 +12,6 @@
 #include <unistd.h>
 
 #include "shell.h"
-
 #include "main.h"
 #include "shell_context.h"
 #include "mail.h"
@@ -99,6 +98,18 @@ interactive_cmdloop(ShellContext &sh)
 				break;
 			}
 			continue;
+		} catch (const dash::ShellError &e) {
+			sh.exception = e.code();
+			clear_stack_temps(sh);
+			if (e.code() == EXERROR) {
+				skip = sh.evalskip;
+				if (skip) {
+					sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+					break;
+				}
+				continue;
+			}
+			throw;
 		}
 
 		skip = sh.evalskip;
@@ -123,16 +134,16 @@ read_profile(ShellContext &sh, const char *name)
 }
 
 /*
- * Executable entry: initialize, parse args, run login/ENV profiles when
- * appropriate, then either -c, a non-interactive cmdloop, or the interactive
- * loop.  setjmp recovers to the main loop only for an interactive root shell.
+ * Executable entry.  ShellError replaces setjmp for interactive recovery:
+ * abort the current stage and continue (profiles → ENV → main loop), or
+ * exit when non-interactive / EXEXIT / EXEND.
  */
 static int
 run(ShellContext &sh, int argc, char **argv)
 {
 	char *shinit;
-	volatile int state;
-	int login;
+	int state = 0;
+	int login = 0;
 
 #ifdef __GLIBC__
 	dash_errno = __errno_location();
@@ -142,22 +153,61 @@ run(ShellContext &sh, int argc, char **argv)
 	monitor(4, etext, profile_buf, sizeof profile_buf, 50);
 #endif
 
-	state = 0;
-	if (unlikely(setjmp(sh.main_handler.loc))) {
-		int e;
-		int s;
+#ifdef DEBUG
+	opentrace(sh);
+	trputs(sh, "Shell args:  ");  trargs(sh, argv);
+#endif
+	sh.mypid = sh.rootpid = getpid();
+	init(sh);
+	login = procargs(sh, argv);
+
+resume:
+	try {
+		if (state <= 1 && login) {
+			if (state < 1) {
+				state = 1;
+				read_profile(sh, "/etc/profile");
+			}
+			state = 2;
+			read_profile(sh, "$HOME/.profile");
+		}
+		if (state < 3) {
+			state = 3;
+			if (
+#ifndef linux
+				getuid() == geteuid() && getgid() == getegid() &&
+#endif
+				iflag
+			) {
+				if ((shinit = lookupvar(sh, "ENV")) != NULL &&
+				    *shinit != '\0') {
+					read_profile(sh, shinit);
+				}
+			}
+			clear_stack_temps(sh);
+		}
+		if (state < 4) {
+			state = 4;
+			if (sh.minusc)
+				execute(sh, sh.minusc,
+					sflag ? EvalFlags{} : EvalFlag::exit);
+		}
+		if (iflag)
+			interactive_cmdloop(sh);
+		else if (sflag || sh.minusc == NULL)
+			cmdloop(sh);
+	} catch (const dash::ShellError &e) {
+		int ecode = e.code();
 
 		exitreset(sh);
-
-		e = sh.exception;
-
-		s = state;
-		if (e == EXEND || e == EXEXIT || s == 0 || iflag == 0 || sh.shlvl)
+		sh.exception = ecode;
+		if (ecode == EXEND || ecode == EXEXIT || state == 0 ||
+		    iflag == 0 || sh.shlvl)
 			goto exit;
 
 		reset(sh);
 
-		if (e == EXINT
+		if (ecode == EXINT
 #if ATTY
 		 && (! attyset() || equal(termval(), "emacs"))
 #endif
@@ -169,54 +219,7 @@ run(ShellContext &sh, int argc, char **argv)
 		}
 		clear_stack_temps(sh);
 		FORCEINTON;
-		if (s == 1)
-			goto state1;
-		else if (s == 2)
-			goto state2;
-		else if (s == 3)
-			goto state3;
-		else
-			goto state4;
-	}
-	sh.handler = &sh.main_handler;
-#ifdef DEBUG
-	opentrace(sh);
-	trputs(sh, "Shell args:  ");  trargs(sh, argv);
-#endif
-	sh.mypid = sh.rootpid = getpid();
-	init(sh);
-	login = procargs(sh, argv);
-	if (login) {
-		state = 1;
-		read_profile(sh, "/etc/profile");
-state1:
-		state = 2;
-		read_profile(sh, "$HOME/.profile");
-	}
-state2:
-	state = 3;
-	if (
-#ifndef linux
-		getuid() == geteuid() && getgid() == getegid() &&
-#endif
-		iflag
-	) {
-		if ((shinit = lookupvar(sh, "ENV")) != NULL && *shinit != '\0') {
-			read_profile(sh, shinit);
-		}
-	}
-	clear_stack_temps(sh);
-state3:
-	state = 4;
-	if (sh.minusc)
-		execute(sh, sh.minusc, sflag ? EvalFlags{} : EvalFlag::exit);
-
-	if (sflag || sh.minusc == NULL) {
-state4:
-		if (iflag)
-			interactive_cmdloop(sh);
-		else
-			cmdloop(sh);
+		goto resume;
 	}
 exit:
 #if PROFILE

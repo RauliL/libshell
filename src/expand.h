@@ -77,7 +77,6 @@ struct mbpair {
 #define EXP_DISCARD	0x400	/* discard result of expansion */
 
 
-struct jmploc;
 union node;
 
 struct ShellContext;
@@ -89,7 +88,7 @@ void recordregion(ShellContext &sh, int, int, int);
 void removerecordregions(ShellContext &sh, int); 
 void ifsbreakup(ShellContext &sh, char *, int, struct arglist *);
 void ifsfree(ShellContext &sh);
-void restore_handler_expandarg(ShellContext &sh, struct jmploc *savehandler, int err);
+void restore_handler_expandarg(ShellContext &sh, int err);
 void changeifs(ShellContext &sh, const char *);
 
 #endif

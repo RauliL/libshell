@@ -208,9 +208,7 @@ struct ShellContext {
 	int rootpid = 0;
 	int mypid = 0;
 	int shlvl = 0;
-	struct jmploc main_handler = {};
 
-	struct jmploc *handler = nullptr;
 	int exception = 0;
 	int suppressint = 0;
 	volatile sig_atomic_t intpending = 0;

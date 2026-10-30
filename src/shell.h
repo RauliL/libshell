@@ -75,8 +75,7 @@ typedef void *pointer;
 #endif
 
 /* Byte copy of a trivially copyable object. Assignment of volatile class
- * objects is ill-formed in C++; the shell saves and restores shellparam
- * across setjmp this way. */
+ * objects is ill-formed in C++; used when saving shellparam across unwinds. */
 template<class T>
 void pod_copy(volatile T &dst, const T &src)
 {

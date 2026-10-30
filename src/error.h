@@ -36,7 +36,6 @@
  *	@(#)error.h	8.2 (Berkeley) 5/4/95
  */
 
-#include <setjmp.h>
 #include <signal.h>
 
 /*
@@ -47,26 +46,25 @@
 #define E_CREAT 02	/* creating a file */
 #define E_EXEC 04	/* executing a program */
 
-
-/*
- * We enclose jmp_buf in a structure so that we can declare pointers to
- * jump locations.  The global variable handler contains the location to
- * jump to when an exception occurs, and the global variable exception
- * contains a code identifying the exeception.  To implement nested
- * exception handlers, the user should save the value of handler on entry
- * to an inner scope, set handler to point to a jmploc structure for the
- * inner scope, and restore handler on exit from the scope.
- */
-
-struct jmploc {
-	jmp_buf loc;
-};
-
-/* exceptions */
+/* Shell unwind codes (dash::ShellError::code()). */
 #define EXINT 0		/* SIGINT received */
 #define EXERROR 1	/* a generic error */
 #define EXEND 3		/* exit the shell */
 #define EXEXIT 4	/* exit the shell via exitcmd */
+
+namespace dash {
+
+/* Thrown by exraise/sh_error instead of longjmp; caught at eval/cmdloop boundaries. */
+class ShellError {
+public:
+	explicit ShellError(int code) : code_(code) {}
+	int code() const { return code_; }
+
+private:
+	int code_;
+};
+
+} /* namespace dash */
 
 
 /*

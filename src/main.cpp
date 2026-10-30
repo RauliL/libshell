@@ -64,6 +64,8 @@ static char *find_dot_file(ShellContext &sh, char *);
 /*
  * Read and execute commands until EOF.  No prompting or other interactive
  * behaviour — used for scripts, -c companions, `.`, and sourced files.
+ * ShellError is converted to an exit status at this boundary (Result-style);
+ * EXEXIT/EXEND propagate to the driver.
  */
 int
 cmdloop(ShellContext &sh)
@@ -92,6 +94,12 @@ cmdloop(ShellContext &sh)
 			report_parse_error(sh, e);
 			clear_stack_temps(sh);
 			return sh.exitstatus;
+		} catch (const dash::ShellError &e) {
+			sh.exception = e.code();
+			clear_stack_temps(sh);
+			if (e.code() == EXERROR)
+				return sh.exitstatus;
+			throw;
 		}
 
 		skip = sh.evalskip;
@@ -179,10 +187,3 @@ exitcmd(ShellContext &sh, int argc, char **argv)
 	/* NOTREACHED */
 }
 
-#ifdef mkinit
-INCLUDE "error.h"
-
-FORKRESET {
-	sh.handler = &sh.main_handler;
-}
-#endif

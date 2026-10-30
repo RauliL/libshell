@@ -52,7 +52,7 @@ void ifsbreakup(ShellContext &sh, char *string, int maxargs, struct arglist *arg
 void ifsfree(ShellContext &sh);
 void changeifs(ShellContext &sh, const char *ifs);
 int casematch(ShellContext &sh, union node *pattern, char *val);
-void restore_handler_expandarg(ShellContext &sh, struct jmploc *savehandler, int err);
+void restore_handler_expandarg(ShellContext &sh, int err);
 void input_init(ShellContext &sh);
 int __attribute__((noinline)) pgetc(ShellContext &sh);
 int pgetc_eoa(ShellContext &sh);

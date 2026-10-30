@@ -206,6 +206,14 @@ evalstring(ShellContext &sh, char *s, EvalFlags flags)
 		popfile(sh);
 		ckfree(s);
 		return sh.exitstatus;
+	} catch (const dash::ShellError &e) {
+		sh.exception = e.code();
+		clear_stack_temps(sh);
+		popfile(sh);
+		ckfree(s);
+		if (e.code() == EXERROR)
+			return sh.exitstatus;
+		throw;
 	}
 }
 
@@ -926,15 +934,12 @@ bail:
 
 	case CMDBUILTIN:
 		if (evalbltin(sh, cmdentry.u.cmd, argc, argv, flags) &&
-		    !(sh.exception == EXERROR && spclbltin <= 0)) {
-raise:
-			longjmp(sh.handler->loc, 1);
-		}
+		    !(sh.exception == EXERROR && spclbltin <= 0))
+			exraise(sh, sh.exception);
 		break;
 
 	case CMDFUNCTION:
-		if (evalfun(sh, cmdentry.u.func, argc, argv, flags))
-			goto raise;
+		evalfun(sh, cmdentry.u.func, argc, argv, flags);
 		break;
 	}
 
@@ -956,33 +961,30 @@ out:
 int
 evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv, EvalFlags flags)
 {
-	char *volatile savecmdname;
-	struct jmploc *volatile savehandler;
-	struct jmploc jmploc;
+	char *savecmdname;
 	int status;
-	int i;
+	int i = 0;
 
 	savecmdname = sh.commandname;
-	savehandler = sh.handler;
-	if ((i = setjmp(jmploc.loc)))
-		goto cmddone;
-	sh.handler = &jmploc;
-	sh.commandname = argv[0];
-	sh.argptr = argv + 1;
-	sh.optptr = NULL;			/* initialize nextopt */
-	if (cmd == EVALCMD)
-		status = evalcmd(sh, argc, argv, flags);
-	else
-		status = cmd->builtin(sh, argc, argv);
-	flushall(sh);
-	if (outerr(sh.out1))
-		sh_warnx(sh, "%s: I/O error", sh.commandname);
-	status |= outerr(sh.out1);
-	sh.exitstatus = status;
-cmddone:
+	try {
+		sh.commandname = argv[0];
+		sh.argptr = argv + 1;
+		sh.optptr = NULL;			/* initialize nextopt */
+		if (cmd == EVALCMD)
+			status = evalcmd(sh, argc, argv, flags);
+		else
+			status = cmd->builtin(sh, argc, argv);
+		flushall(sh);
+		if (outerr(sh.out1))
+			sh_warnx(sh, "%s: I/O error", sh.commandname);
+		status |= outerr(sh.out1);
+		sh.exitstatus = status;
+	} catch (const dash::ShellError &ex) {
+		sh.exception = ex.code();
+		i = 1;
+	}
 	freestdout(sh);
 	sh.commandname = savecmdname;
-	sh.handler = savehandler;
 
 	return i;
 }
@@ -990,43 +992,38 @@ cmddone:
 int
 evalfun(ShellContext &sh, struct funcnode *func, int argc, char **argv, EvalFlags flags)
 {
-	volatile struct shparam saveparam;
-	struct jmploc *volatile savehandler;
-	struct jmploc jmploc;
-	int e;
-	int savefuncline;
-	int saveloopnest;
+	struct shparam saveparam = sh.shellparam;
+	int savefuncline = sh.funcline;
+	int saveloopnest = sh.loopnest;
+	bool failed = false;
 
-	pod_copy(saveparam, sh.shellparam);
-	savefuncline = sh.funcline;
-	saveloopnest = sh.loopnest;
-	savehandler = sh.handler;
-	if ((e = setjmp(jmploc.loc))) {
-		goto funcdone;
+	try {
+		INTOFF;
+		sh.shellparam.malloc = 0;
+		func->count++;
+		sh.funcline = func->n.ndefun.linno;
+		sh.loopnest = 0;
+		INTON;
+		sh.shellparam.nparam = argc - 1;
+		sh.shellparam.p = argv + 1;
+		sh.shellparam.optind = 1;
+		sh.shellparam.optoff = -1;
+		evaltree(sh, func->n.ndefun.body, flags & EvalFlag::tested);
+	} catch (const dash::ShellError &ex) {
+		sh.exception = ex.code();
+		failed = true;
 	}
-	INTOFF;
-	sh.handler = &jmploc;
-	sh.shellparam.malloc = 0;
-	func->count++;
-	sh.funcline = func->n.ndefun.linno;
-	sh.loopnest = 0;
-	INTON;
-	sh.shellparam.nparam = argc - 1;
-	sh.shellparam.p = argv + 1;
-	sh.shellparam.optind = 1;
-	sh.shellparam.optoff = -1;
-	evaltree(sh, func->n.ndefun.body, flags & EvalFlag::tested);
-funcdone:
 	INTOFF;
 	sh.loopnest = saveloopnest;
 	sh.funcline = savefuncline;
 	freefunc(sh, func);
 	freeparam(sh, &sh.shellparam);
-	pod_copy(sh.shellparam, saveparam);
-	sh.handler = savehandler;
+	sh.shellparam = saveparam;
 	INTON;
 	sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
-	return e;
+	if (failed)
+		exraise(sh, sh.exception);
+	return 0;
 }
 
 

@@ -80,8 +80,6 @@
 #define rootpid (sh.rootpid)
 #define mypid (sh.mypid)
 #define shlvl (sh.shlvl)
-#define main_handler (sh.main_handler)
-#define handler (sh.handler)
 #define exception (sh.exception)
 #define suppressint (sh.suppressint)
 #define intpending (sh.intpending)

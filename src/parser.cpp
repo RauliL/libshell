@@ -1789,13 +1789,11 @@ const char *
 expandstr(ShellContext &sh, const char *ps)
 {
 	struct parsefile *file_stop;
-	struct jmploc *volatile savehandler;
 	struct heredoc *saveheredoclist;
 	const char *result;
 	int saveprompt;
-	struct jmploc jmploc;
 	union node n;
-	int err;
+	int err = 0;
 
 	file_stop = sh.parsefile;
 
@@ -1808,13 +1806,7 @@ expandstr(ShellContext &sh, const char *ps)
 	sh.doprompt = 0;
 	sh.needprompt = 0;
 	result = ps;
-	savehandler = sh.handler;
-	err = 0;
 	try {
-		if (unlikely(err = setjmp(jmploc.loc)))
-			goto out;
-		sh.handler = &jmploc;
-
 		readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, FAKEEOFMARK, 0);
 
 		n.narg.type = NARG;
@@ -1826,10 +1818,12 @@ expandstr(ShellContext &sh, const char *ps)
 		result = stackblock();
 	} catch (const dash::ParseError &) {
 		err = 1;
+	} catch (const dash::ShellError &ex) {
+		sh.exception = ex.code();
+		err = 1;
 	}
 
-out:
-	restore_handler_expandarg(sh, savehandler, err);
+	restore_handler_expandarg(sh, err);
 
 	sh.doprompt = saveprompt;
 	unwindfiles(sh, file_stop);

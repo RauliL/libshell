@@ -494,17 +494,17 @@ savefd(ShellContext &sh, int from, int ofd)
 int
 redirectsafe(ShellContext &sh, union node *redir, int flags)
 {
-	int err;
+	int err = 0;
 	volatile int saveint;
-	struct jmploc *volatile savehandler = sh.handler;
-	struct jmploc jmploc;
 
 	SAVEINT(saveint);
-	if (!(err = setjmp(jmploc.loc) * 2)) {
-		sh.handler = &jmploc;
+	try {
 		redirect(sh, redir, flags);
+	} catch (const dash::ShellError &ex) {
+		sh.exception = ex.code();
+		err = 2;
 	}
-	restore_handler_expandarg(sh, savehandler, err);
+	restore_handler_expandarg(sh, err);
 	RESTOREINT(saveint);
 	return err;
 }
