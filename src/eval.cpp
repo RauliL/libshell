@@ -41,6 +41,8 @@
  * Evaluate a command.
  */
 
+#include <string>
+
 #include "init.h"
 #include "main.h"
 #include "shell.h"
@@ -175,9 +177,9 @@ evalstring(ShellContext &sh, char *s, EvalFlags flags)
 {
 	union node *n;
 	int status;
+	std::string copy(s);
 
-	s = savestr(sh, s);
-	setinputstring(sh, s);
+	setinputstring(sh, copy.data());
 
 	status = 0;
 	try {
@@ -198,19 +200,16 @@ evalstring(ShellContext &sh, char *s, EvalFlags flags)
 		}
 		clear_stack_temps(sh);
 		popfile(sh);
-		ckfree(s);
 		return status;
 	} catch (const dash::ParseError &e) {
 		report_parse_error(sh, e);
 		clear_stack_temps(sh);
 		popfile(sh);
-		ckfree(s);
 		return sh.exitstatus;
 	} catch (const dash::ShellError &e) {
 		sh.exception = e.code();
 		clear_stack_temps(sh);
 		popfile(sh);
-		ckfree(s);
 		if (e.code() == EXERROR)
 			return sh.exitstatus;
 		throw;

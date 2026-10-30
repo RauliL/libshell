@@ -36,8 +36,10 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 #include <unistd.h>
 #include <limits.h>
+#include <optional>
 #ifdef __CYGWIN__
 #include <sys/cygwin.h>
 #endif
@@ -66,12 +68,9 @@
 #define CD_PRINT 2
 
 static int docd(ShellContext &sh, const char *, int);
-static const char * updatepwd(ShellContext &sh, const char *);
-static char * getpwd(ShellContext &sh);
+static std::optional<std::string> updatepwd(ShellContext &sh, const char *);
+static std::string getpwd(ShellContext &sh);
 static int cdopt(ShellContext &sh);
-
-		/* current working directory */
-		/* physical working directory */
 
 static int
 cdopt(ShellContext &sh)
@@ -152,7 +151,7 @@ err:
 	/* NOTREACHED */
 out:
 	if (flags & CD_PRINT)
-		out1fmt(sh, snlfmt, sh.curdir);
+		out1fmt(sh, snlfmt, sh.curdir.c_str());
 	return 0;
 }
 
@@ -165,16 +164,17 @@ out:
 static int
 docd(ShellContext &sh, const char *dest, int flags)
 {
-	const char *dir = 0;
+	std::optional<std::string> logical;
+	const char *dir = nullptr;
 	int err;
 
 	TRACE(("docd(\"%s\", %d) called\n", dest, flags));
 
 	INTOFF;
 	if (!(flags & CD_PHYSICAL)) {
-		dir = updatepwd(sh, dest);
-		if (dir)
-			dest = dir;
+		logical = updatepwd(sh, dest);
+		if (logical)
+			dest = dir = logical->c_str();
 	}
 	err = chdir(dest);
 	if (err)
@@ -192,13 +192,13 @@ out:
  * cd command.
  */
 
-static const char *
+static std::optional<std::string>
 updatepwd(ShellContext &sh, const char *dir)
 {
-	char *updated;
-	char *p;
-	char *cdcomppath;
-	const char *lim;
+	std::string path;
+	std::string components;
+	std::size_t lim = 1;
+	char *tokctx = nullptr;
 
 #ifdef __CYGWIN__
 	/* On cygwin, thanks to drive letters, some absolute paths do
@@ -211,53 +211,49 @@ updatepwd(ShellContext &sh, const char *dir)
 	dir = pathbuf;
 #endif
 
-	cdcomppath = sstrdup(sh, dir);
-	STARTSTACKSTR(updated);
 	if (*dir != '/') {
-		if (sh.curdir == nullstr)
-			return nullptr;
-		updated = stputs(sh, sh.curdir, updated);
+		if (sh.curdir.empty())
+			return std::nullopt;
+		path = sh.curdir;
 	}
-	updated = makestrspace(sh, std::strlen(dir) + 2, updated);
-	lim = stackblock() + 1;
+
+	components.assign(dir);
 	if (*dir != '/') {
-		if (updated[-1] != '/')
-			USTPUTC('/', updated);
-		if (updated > lim && *lim == '/')
-			lim++;
+		if (path.empty() || path.back() != '/')
+			path.push_back('/');
+		if (path.size() > 1 && path[1] == '/')
+			lim = 2;
 	} else {
-		USTPUTC('/', updated);
-		cdcomppath++;
+		path.assign(1, '/');
 		if (dir[1] == '/' && dir[2] != '/') {
-			USTPUTC('/', updated);
-			cdcomppath++;
-			lim++;
+			path.push_back('/');
+			lim = 2;
 		}
 	}
-	p = strtok(cdcomppath, "/");
-	while (p) {
-		switch(*p) {
+
+	char *comp = strtok_r(components.data(), "/", &tokctx);
+	while (comp) {
+		switch (*comp) {
 		case '.':
-			if (p[1] == '.' && p[2] == '\0') {
-				while (updated > lim) {
-					STUNPUTC(updated);
-					if (updated[-1] == '/')
+			if (comp[1] == '.' && comp[2] == '\0') {
+				while (path.size() > lim) {
+					path.pop_back();
+					if (!path.empty() && path.back() == '/')
 						break;
 				}
 				break;
-			} else if (p[1] == '\0')
+			} else if (comp[1] == '\0')
 				break;
 			/* fall through */
 		default:
-			updated = stputs(sh, p, updated);
-			USTPUTC('/', updated);
+			path.append(comp);
+			path.push_back('/');
 		}
-		p = strtok(nullptr, "/");
+		comp = strtok_r(nullptr, "/", &tokctx);
 	}
-	if (updated > lim)
-		STUNPUTC(updated);
-	*updated = 0;
-	return stackblock();
+	if (path.size() > lim && !path.empty() && path.back() == '/')
+		path.pop_back();
+	return path;
 }
 
 
@@ -265,37 +261,39 @@ updatepwd(ShellContext &sh, const char *dir)
  * Find out what the current directory is. If we already know the current
  * directory, this routine returns immediately.
  */
-static inline
- char *
+static std::string
 getpwd(ShellContext &sh)
 {
 #ifdef __GLIBC__
 	char *dir = getcwd(0, 0);
 
-	if (dir)
-		return dir;
+	if (dir) {
+		std::string s(dir);
+		free(dir);
+		return s;
+	}
 #else
 	char buf[PATH_MAX];
 
 	if (getcwd(buf, sizeof(buf)))
-		return savestr(sh, buf);
+		return buf;
 #endif
 
 	sh_warnx(sh, "getcwd() failed: %s", strerror(errno));
-	return nullstr;
+	return {};
 }
 
 int
 pwdcmd(ShellContext &sh, int argc, char **argv)
 {
 	int flags;
-	const char *dir = sh.curdir;
+	const char *dir = sh.curdir.c_str();
 
 	flags = cdopt(sh);
 	if (flags) {
-		if (sh.physdir == nullstr)
+		if (sh.physdir.empty())
 			setpwd(sh, dir, 0);
-		dir = sh.physdir;
+		dir = sh.physdir.c_str();
 	}
 	out1fmt(sh, snlfmt, dir);
 	return 0;
@@ -304,30 +302,20 @@ pwdcmd(ShellContext &sh, int argc, char **argv)
 void
 setpwd(ShellContext &sh, const char *val, int setold)
 {
-	char *oldcur, *dir;
+	if (setold)
+		setvar(sh, "OLDPWD", sh.curdir.c_str(), VEXPORT);
 
-	oldcur = dir = sh.curdir;
-
-	if (setold) {
-		setvar(sh, "OLDPWD", oldcur, VEXPORT);
-	}
 	INTOFF;
-	if (sh.physdir != nullstr) {
-		if (sh.physdir != oldcur)
-			free(sh.physdir);
-		sh.physdir = nullstr;
+	sh.physdir.clear();
+	if (!val) {
+		sh.curdir = getpwd(sh);
+		sh.physdir = sh.curdir;
+	} else if (val == sh.curdir.c_str()) {
+		/* Refresh physical path; keep logical curdir. */
+		sh.physdir = getpwd(sh);
+	} else {
+		sh.curdir = val;
 	}
-	if (oldcur == val || !val) {
-		char *s = getpwd(sh);
-		sh.physdir = s;
-		if (!val)
-			dir = s;
-	} else
-		dir = savestr(sh, val);
-	if (oldcur != dir && oldcur != nullstr) {
-		free(oldcur);
-	}
-	sh.curdir = dir;
 	INTON;
-	setvar(sh, "PWD", dir, VEXPORT);
+	setvar(sh, "PWD", sh.curdir.c_str(), VEXPORT);
 }

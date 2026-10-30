@@ -118,7 +118,7 @@ static int dowait(ShellContext &sh, int, struct job *);
 STATIC int onsigchild(void);
 #endif
 static int waitproc(ShellContext &sh, int, int *);
-static char * commandtext(ShellContext &sh, union node *);
+static char *commandtext(ShellContext &sh, union node *);
 static void cmdtxt(ShellContext &sh, union node *);
 static void cmdlist(ShellContext &sh, union node *, int);
 static void cmdputs(ShellContext &sh, const char *);
@@ -1272,13 +1272,11 @@ out:
 static char *
 commandtext(ShellContext &sh, union node *n)
 {
-	char *name;
-
 	STARTSTACKSTR(sh.cmdnextc);
 	cmdtxt(sh, n);
-	name = stackblock();
-	TRACE(("commandtext: name %p, end %p\n", name, sh.cmdnextc));
-	return savestr(sh, name);
+	TRACE(("commandtext: name %p, end %p\n", stackblock(), sh.cmdnextc));
+	/* Dup into a durable C string; jobtab is still POD/realloc-backed. */
+	return savestr(sh, stackblock());
 }
 
 static void

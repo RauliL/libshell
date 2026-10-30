@@ -1741,9 +1741,9 @@ try_parse_string(ShellContext &sh, char *s)
 {
 	union node *n;
 	char save_nflag = nflag;
+	std::string copy(s);
 
-	s = savestr(sh, s);
-	setinputstring(sh, s);
+	setinputstring(sh, copy.data());
 	nflag = 1;
 
 	try {
@@ -1753,14 +1753,12 @@ try_parse_string(ShellContext &sh, char *s)
 		}
 		clear_stack_temps(sh);
 		popfile(sh);
-		ckfree(s);
 		nflag = save_nflag;
 		return dash::Result<void>::Ok();
 	} catch (const dash::ParseError &e) {
 		sh.errlinno = e.lineno();
 		clear_stack_temps(sh);
 		popfile(sh);
-		ckfree(s);
 		nflag = save_nflag;
 		return dash::Result<void>::Err(e.what());
 	}

@@ -19,6 +19,7 @@
 #include <cwchar>
 #include <inttypes.h>
 #include <limits.h>
+#include <string>
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <termios.h>
@@ -222,8 +223,8 @@ struct ShellContext {
 	struct alias *atab[39] = {};
 	struct redirtab *redirlist = nullptr;
 	unsigned closed_redirs = 0;
-	char *curdir = nullstr;
-	char *physdir = nullstr;
+	std::string curdir;	/* empty when unknown */
+	std::string physdir;	/* empty when unknown */
 
 	time_t mailtime[10] = {};
 	int changed = 0;
