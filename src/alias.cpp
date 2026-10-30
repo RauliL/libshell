@@ -32,7 +32,9 @@
  * SUCH DAMAGE.
  */
 
-#include <stdlib.h>
+#include <cstring>
+#include <string>
+
 #include "shell.h"
 #include "shell_context.h"
 #include "input.h"
@@ -41,18 +43,15 @@
 #include "memalloc.h"
 #include "mystring.h"
 #include "alias.h"
-#include "options.h"	/* XXX for argptr (should remove?) */
+#include "options.h"
 #include "syntax.h"
 #include "var.h"
 
 #define ATABSIZE 39
 
-
-
 static void setalias(ShellContext &sh, const char *, const char *);
 static struct alias * freealias(ShellContext &sh, struct alias *);
 static struct alias ** __lookupalias(ShellContext &sh, const char *);
-
 
 static void
 setalias(ShellContext &sh, const char *name, const char *val)
@@ -66,23 +65,21 @@ setalias(ShellContext &sh, const char *name, const char *val)
 			sh_error(sh, "Invalid alias name: %s", name);
 	} while (*++p != '=');
 
+	namelen = static_cast<size_t>(val - name - 1); /* bytes before '=' */
+
 	app = __lookupalias(sh, name);
 	ap = *app;
 	INTOFF;
 	if (ap) {
-		if (!(ap->flag & ALIASINUSE))
-			ckfree(ap->name);
 		ap->flag &= ~ALIASDEAD;
 	} else {
-		/* not found */
-		ap = ckmalloc(sh, sizeof (struct alias));
+		ap = new alias;
 		ap->flag = 0;
-		ap->next = 0;
+		ap->next = nullptr;
 		*app = ap;
 	}
-	namelen = val - name;
-	ap->name = savestr(sh, name);
-	ap->val = ap->name + namelen;
+	ap->name.assign(name, namelen);
+	ap->val = val;
 	INTON;
 }
 
@@ -132,9 +129,6 @@ lookupalias(ShellContext &sh, const char *name, int check)
 	return (ap);
 }
 
-/*
- * TODO - sort sh.output
- */
 int
 aliascmd(ShellContext &sh, int argc, char **argv)
 {
@@ -152,7 +146,6 @@ aliascmd(ShellContext &sh, int argc, char **argv)
 		return (0);
 	}
 	while ((n = *++argv) != NULL) {
-		/* n + 1: funny ksh stuff (from 44lite) */
 		if (!*n || !(v = strchr(n + 1, '='))) {
 			if ((ap = *__lookupalias(sh, n)) == NULL) {
 				outfmt(sh, sh.out2, "%s: %s not found\n", "alias", n);
@@ -199,15 +192,17 @@ freealias(ShellContext &sh, struct alias *ap)
 	}
 
 	next = ap->next;
-	ckfree(ap->name);
-	ckfree(ap);
+	delete ap;
 	return next;
 }
 
 void __attribute__((noinline))
 printalias(ShellContext &sh, const struct alias *ap)
 {
-	out1fmt(sh, snlfmt, single_quote(sh, ap->name));
+	std::string def = ap->name;
+	def.push_back('=');
+	def += ap->val;
+	out1fmt(sh, snlfmt, single_quote(sh, def.c_str()));
 }
 
 static struct alias **
@@ -218,7 +213,7 @@ __lookupalias(ShellContext &sh, const char *name)
 	app = &sh.atab[hashval(name) % ATABSIZE];
 
 	for (; *app; app = &(*app)->next) {
-		if (varequal(name, (*app)->name)) {
+		if (varequal(name, (*app)->name.c_str())) {
 			break;
 		}
 	}

@@ -960,13 +960,12 @@ out:
 int
 evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv, EvalFlags flags)
 {
-	char *savecmdname;
+	std::string savecmdname = std::move(sh.commandname);
 	int status;
 	int i = 0;
 
-	savecmdname = sh.commandname;
 	try {
-		sh.commandname = argv[0];
+		sh.commandname = argv[0] ? argv[0] : "";
 		sh.argptr = argv + 1;
 		sh.optptr = NULL;			/* initialize nextopt */
 		if (cmd == EVALCMD)
@@ -975,7 +974,7 @@ evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv,
 			status = cmd->builtin(sh, argc, argv);
 		flushall(sh);
 		if (outerr(sh.out1))
-			sh_warnx(sh, "%s: I/O error", sh.commandname);
+			sh_warnx(sh, "%s: I/O error", sh.commandname.c_str());
 		status |= outerr(sh.out1);
 		sh.exitstatus = status;
 	} catch (const dash::ShellError &ex) {
@@ -983,7 +982,7 @@ evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv,
 		i = 1;
 	}
 	freestdout(sh);
-	sh.commandname = savecmdname;
+	sh.commandname = std::move(savecmdname);
 
 	return i;
 }
@@ -991,20 +990,20 @@ evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv,
 int
 evalfun(ShellContext &sh, struct funcnode *func, int argc, char **argv, EvalFlags flags)
 {
-	struct shparam saveparam = sh.shellparam;
+	struct shparam saveparam = std::move(sh.shellparam);
 	int savefuncline = sh.funcline;
 	int saveloopnest = sh.loopnest;
 	bool failed = false;
 
 	try {
 		INTOFF;
-		sh.shellparam.malloc = 0;
 		func->count++;
 		sh.funcline = func->n.ndefun.linno;
 		sh.loopnest = 0;
 		INTON;
-		sh.shellparam.nparam = argc - 1;
-		sh.shellparam.p = argv + 1;
+		sh.shellparam.p.clear();
+		for (int i = 1; i < argc; i++)
+			sh.shellparam.p.emplace_back(argv[i]);
 		sh.shellparam.optind = 1;
 		sh.shellparam.optoff = -1;
 		evaltree(sh, func->n.ndefun.body, flags & EvalFlag::tested);
@@ -1016,8 +1015,7 @@ evalfun(ShellContext &sh, struct funcnode *func, int argc, char **argv, EvalFlag
 	sh.loopnest = saveloopnest;
 	sh.funcline = savefuncline;
 	freefunc(sh, func);
-	freeparam(sh, &sh.shellparam);
-	sh.shellparam = saveparam;
+	sh.shellparam = std::move(saveparam);
 	INTON;
 	sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
 	if (failed)

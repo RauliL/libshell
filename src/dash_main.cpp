@@ -189,12 +189,12 @@ resume:
 		if (state < 4) {
 			state = 4;
 			if (sh.minusc)
-				execute(sh, sh.minusc,
+				execute(sh, sh.minusc->data(),
 					sflag ? EvalFlags{} : EvalFlag::exit);
 		}
 		if (iflag)
 			interactive_cmdloop(sh);
-		else if (sflag || sh.minusc == NULL)
+		else if (sflag || !sh.minusc)
 			cmdloop(sh);
 	} catch (const dash::ShellError &e) {
 		int ecode = e.code();

@@ -36,20 +36,22 @@
  *	@(#)alias.h	8.2 (Berkeley) 5/4/95
  */
 
+#include <string>
+
 #define ALIASINUSE	1
 #define ALIASDEAD	2
 
 struct alias {
 	struct alias *next;
-	char *name;
-	char *val;
+	std::string name;	/* name only */
+	std::string val;	/* value only */
 	int flag;
 };
 
-struct alias *lookupalias(const char *, int);
-int aliascmd(int, char **);
-int unaliascmd(int, char **);
-void rmaliases(void);
-int unalias(const char *);
-void printalias(const struct alias *);
+struct ShellContext;
+struct alias *lookupalias(ShellContext &sh, const char *, int);
+int aliascmd(ShellContext &sh, int, char **);
+int unaliascmd(ShellContext &sh, int, char **);
+int unalias(ShellContext &sh, const char *);
+void printalias(ShellContext &sh, const struct alias *);
 #endif

@@ -108,12 +108,12 @@ exvwarning2(ShellContext &sh, const char *msg, va_list ap)
 	const char *fmt;
 
 	errs = sh.out2;
-	name = sh.arg0 ? sh.arg0 : "sh";
-	if (!sh.commandname)
+	name = sh.arg0.empty() ? "sh" : sh.arg0.c_str();
+	if (sh.commandname.empty())
 		fmt = "%s: %d: ";
 	else
 		fmt = "%s: %d: %s: ";
-	outfmt(sh, errs, fmt, name, sh.errlinno, sh.commandname);
+	outfmt(sh, errs, fmt, name, sh.errlinno, sh.commandname.c_str());
 	doformat(sh, errs, msg, ap);
 #if FLUSHERR
 	outc(sh, '\n', errs);

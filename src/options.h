@@ -36,12 +36,13 @@
  *	@(#)options.h	8.2 (Berkeley) 5/4/95
  */
 
+#include <string>
+#include <vector>
+
 struct shparam {
-	int nparam;		/* # of positional parameters (without $0) */
-	unsigned char malloc;	/* if parameter list dynamically allocated */
-	char **p;		/* parameter list */
-	int optind;		/* next parameter to be processed by getopts */
-	int optoff;		/* used by getopts */
+	std::vector<std::string> p;	/* positional parameters (without $0) */
+	int optind = 1;		/* next parameter to be processed by getopts */
+	int optoff = -1;	/* used by getopts */
 };
 
 
@@ -74,7 +75,7 @@ struct ShellContext;
 int procargs(ShellContext &sh, char **);
 void optschanged(ShellContext &sh);
 void setparam(ShellContext &sh, char **);
-void freeparam(ShellContext &sh, volatile struct shparam *);
+void freeparam(ShellContext &sh, struct shparam *);
 int shiftcmd(ShellContext &sh, int, char **);
 int setcmd(ShellContext &sh, int, char **);
 int getoptscmd(ShellContext &sh, int, char **);

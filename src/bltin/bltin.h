@@ -71,7 +71,7 @@
 #define	warnx(...) sh_warnx(sh, __VA_ARGS__)
 #define exit(status) exitshell(sh)
 #define setprogname(s)
-#define getprogname() (sh.commandname)
+#define getprogname() (sh.commandname.c_str())
 #define setlocate(l,s) 0
 
 #define getenv(p) bltinlookup(sh, (p))

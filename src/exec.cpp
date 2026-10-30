@@ -804,7 +804,7 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 	/* Then look at the aliases */
 	if ((ap = lookupalias(sh, command, 0)) != NULL) {
 		if (verbose) {
-			outfmt(sh, out, " is an alias for %s", ap->val);
+			outfmt(sh, out, " is an alias for %s", ap->val.c_str());
 		} else {
 			outstr(sh, "alias ", out);
 			printalias(sh, ap);

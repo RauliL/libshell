@@ -903,7 +903,7 @@ record:
 
 really_record:
 	if (quoted) {
-		quoted = *var == '@' && sh.shellparam.nparam;
+		quoted = *var == '@' && !sh.shellparam.p.empty();
 		if (!quoted)
 			return p;
 	}
@@ -1051,11 +1051,11 @@ varvalue(ShellContext &sh, char *name, int varflags, unsigned flags)
 	ssize_t len = 0;
 	size_t start;
 	int discard;
-	char **ap;
 	int num;
 	char *p;
 	int i;
 
+	(void)0;
 	discard = (subtype == VSPLUS || subtype == VSLENGTH) |
 		  (flags & EXP_DISCARD);
 
@@ -1079,7 +1079,7 @@ varvalue(ShellContext &sh, char *name, int varflags, unsigned flags)
 		num = sh.exitstatus;
 		goto numvar;
 	case '#':
-		num = sh.shellparam.nparam;
+		num = static_cast<int>(sh.shellparam.p.size());
 		goto numvar;
 	case '!':
 		num = sh.backgndpid;
@@ -1123,17 +1123,17 @@ numvar:
 			seps = sh.ncifs;
 		seplen = ((seplen - 1) & (sh.ifsmb0len - 1)) + 1;
 param:
-		if (!(ap = sh.shellparam.p))
+		if (sh.shellparam.p.empty())
 			return -1;
-		if (!(p = *ap))
-			break;
-		for (;;) {
-			len += strtodest(sh, p, flags);
-
-			if (!(p = *++ap))
-				break;
-
-			len += memtodest(sh, seps, seplen, flags | EXP_KEEPNUL);
+		{
+			bool first = true;
+			for (const auto &param : sh.shellparam.p) {
+				if (!first)
+					len += memtodest(sh, seps, seplen,
+							 flags | EXP_KEEPNUL);
+				first = false;
+				len += strtodest(sh, param.c_str(), flags);
+			}
 		}
 		break;
 	case '0':
@@ -1147,9 +1147,11 @@ param:
 	case '8':
 	case '9':
 		num = atoi(name);
-		if (num < 0 || num > sh.shellparam.nparam)
+		if (num < 0 ||
+		    static_cast<size_t>(num) > sh.shellparam.p.size())
 			return -1;
-		p = num ? sh.shellparam.p[num - 1] : sh.arg0;
+		p = const_cast<char *>(num ? sh.shellparam.p[num - 1].c_str()
+					   : sh.arg0.c_str());
 		goto value;
 	default:
 		p = lookupvar(sh, name);

@@ -36,6 +36,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
+#include <utility>
 
 #include "builtins.h"
 #include "shell.h"
@@ -55,33 +57,11 @@
 #include "trap.h"
 #include "mystring.h"
 
-/*
- * Sigmode records the current value of the signal handlers for the various
- * modes.  A value of zero means that the current sh.handler is not known.
- * S_HARD_IGN indicates that the signal was ignored on entry to the shell,
- */
-
 #define S_DFL 1			/* default signal handling (SIG_DFL) */
 #define S_CATCH 2		/* signal is caught */
 #define S_IGN 3			/* signal is ignored (SIG_IGN) */
 #define S_HARD_IGN 4		/* signal is ignored permenantly */
 #define S_RESET 5		/* temporary - to reset a hard ignored sig */
-
-
-/* sh.trap sh.handler commands */
-
-/* traps have not been fully cleared */
-
-/* number of non-null traps */
-
-/* current value of signal */
-
-/* indicates specified signal received */
-
-/* last pending signal */
-
-/* received SIGCHLD */
-
 
 extern const char *const signal_names[];
 
@@ -108,14 +88,10 @@ FORKRESET {
 }
 #endif
 
-/*
- * The sh.trap builtin.
- */
-
 int
 trapcmd(ShellContext &sh, int argc, char **argv)
 {
-	char *action;
+	const char *action;
 	char **ap;
 	int signo;
 
@@ -123,9 +99,9 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 	ap = sh.argptr;
 	if (!*ap) {
 		for (signo = 0 ; signo < NSIG ; signo++) {
-			if (sh.trap[signo] != NULL) {
+			if (sh.trap[signo]) {
 				out1fmt(sh, "trap -- %s %s\n",
-					single_quote(sh, sh.trap[signo]),
+					single_quote(sh, sh.trap[signo]->c_str()),
 					signal_names[signo]
 				);
 			}
@@ -135,7 +111,7 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 	if (sh.ptrap)
 		clear_traps(sh, NULL);
 	if (!ap[1] || decode_signum(sh, *ap) >= 0)
-		action = NULL;
+		action = nullptr;
 	else
 		action = *ap++;
 	while (*ap) {
@@ -144,21 +120,19 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 			return 1;
 		}
 		INTOFF;
+		if (sh.trap[signo] && !sh.trap[signo]->empty())
+			sh.trapcnt--;
 		if (action) {
 			if (action[0] == '-' && action[1] == '\0')
-				action = NULL;
+				sh.trap[signo].reset();
 			else {
 				if (*action)
 					sh.trapcnt++;
-				action = savestr(sh, action);
+				sh.trap[signo] = std::string(action);
 			}
+		} else {
+			sh.trap[signo].reset();
 		}
-		if (sh.trap[signo]) {
-			if (*sh.trap[signo])
-				sh.trapcnt--;
-			ckfree(sh.trap[signo]);
-		}
-		sh.trap[signo] = action;
 		if (signo != 0)
 			setsignal(sh, signo);
 		INTON;
@@ -167,46 +141,28 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 	return 0;
 }
 
-
-
-/*
- * Clear traps on a fork.
- */
-
 void
 clear_traps(ShellContext &sh, union node *n)
 {
 	int simplecmd;
-	char **tp;
 
 	simplecmd = issimplecmd(sh, n, TRAPCMD->name);
 
 	INTOFF;
-	for (tp = sh.trap ; tp < &sh.trap[NSIG] ; tp++) {
-		if (*tp && **tp) {	/* sh.trap not NULL or SIG_IGN */
-			char *otp = *tp;
-
-			*tp = NULL;
-			if (tp != &sh.trap[0])
-				setsignal(sh, tp - sh.trap);
-
+	for (int i = 0; i < NSIG; i++) {
+		if (sh.trap[i] && !sh.trap[i]->empty()) {
+			auto otp = std::move(sh.trap[i]);
+			sh.trap[i].reset();
+			if (i != 0)
+				setsignal(sh, i);
 			if (simplecmd)
-				*tp = otp;
-			else
-				ckfree(*tp);
+				sh.trap[i] = std::move(otp);
 		}
 	}
 	sh.trapcnt = 0;
 	sh.ptrap = simplecmd;
 	INTON;
 }
-
-
-
-/*
- * Set the signal sh.handler for the specified signal.  The routine figures
- * out what it should be set to.
- */
 
 void
 setsignal(ShellContext &sh, int signo)
@@ -218,9 +174,9 @@ setsignal(ShellContext &sh, int signo)
 
 	lvforked = sh.vforked;
 
-	if ((t = sh.trap[signo]) == NULL)
+	if (!sh.trap[signo])
 		action = S_DFL;
-	else if (*t != '\0')
+	else if (!sh.trap[signo]->empty())
 		action = S_CATCH;
 	else
 		action = S_IGN;
@@ -256,25 +212,17 @@ setsignal(ShellContext &sh, int signo)
 	t = &sh.sigmode[signo - 1];
 	tsig = *t;
 	if (tsig == 0) {
-		/*
-		 * current setting unknown
-		 */
 		if (sigaction(signo, 0, &act) == -1) {
-			/*
-			 * Pretend it worked; maybe we should give a warning
-			 * here, but other shells don't. We don't alter
-			 * sh.sigmode, so that we retry every time.
-			 */
 			return;
 		}
 		if (act.sa_handler == SIG_IGN) {
 			if (mflag && (signo == SIGTSTP ||
 			     signo == SIGTTIN || signo == SIGTTOU)) {
-				tsig = S_IGN;	/* don't hard ignore these */
+				tsig = S_IGN;
 			} else
 				tsig = S_HARD_IGN;
 		} else {
-			tsig = S_RESET;	/* force to be set */
+			tsig = S_RESET;
 		}
 	}
 	if (tsig == S_HARD_IGN || tsig == action)
@@ -296,10 +244,6 @@ setsignal(ShellContext &sh, int signo)
 	sigaction(signo, &act, 0);
 }
 
-/*
- * Ignore a signal.
- */
-
 void
 ignoresig(ShellContext &sh, int signo)
 {
@@ -309,12 +253,6 @@ ignoresig(ShellContext &sh, int signo)
 	if (!sh.vforked)
 		sh.sigmode[signo - 1] = S_IGN;
 }
-
-
-
-/*
- * Signal sh.handler.
- */
 
 void
 onsig(ShellContext &sh, int signo)
@@ -338,17 +276,9 @@ onsig(ShellContext &sh, int signo)
 	}
 }
 
-
-
-/*
- * Called to execute a sh.trap.  Perhaps we should avoid entering new sh.trap
- * handlers while we are executing a sh.trap sh.handler.
- */
-
 void
 dotrap(ShellContext &sh)
 {
-	char *p;
 	char *q;
 	int i;
 	int status, last_status;
@@ -376,23 +306,15 @@ dotrap(ShellContext &sh)
 
 		*q = 0;
 
-		p = sh.trap[i + 1];
-		if (!p)
+		if (!sh.trap[i + 1])
 			continue;
-		evalstring(sh, p, {});
+		evalstring(sh, sh.trap[i + 1]->data(), {});
 		if (sh.evalskip != SKIPFUNC)
 			sh.exitstatus = status;
 	}
 
 	sh.savestatus = last_status;
 }
-
-
-
-/*
- * Controls whether the shell is interactive or not.
- */
-
 
 void
 setinteractive(ShellContext &sh, int on)
@@ -406,25 +328,18 @@ setinteractive(ShellContext &sh, int on)
 	setsignal(sh, SIGTERM);
 }
 
-
-
-/*
- * Called to exit the shell.
- */
-
 void
 exitshell(ShellContext &sh)
 {
-	char *p;
-
 	sh.savestatus = sh.exitstatus;
 	TRACE(("pid %d, exitshell(%d)\n", getpid(), sh.savestatus));
 	try {
-		if ((p = sh.trap[0])) {
-			sh.trap[0] = NULL;
+		if (sh.trap[0]) {
+			std::string exittrap = std::move(*sh.trap[0]);
+			sh.trap[0].reset();
 			if (!sh.ptrap) {
 				sh.evalskip = 0;
-				evalstring(sh, p, {});
+				evalstring(sh, exittrap.data(), {});
 				sh.evalskip = SKIPFUNCDEF;
 			}
 		}
@@ -433,10 +348,6 @@ exitshell(ShellContext &sh)
 	}
 	exitreset(sh);
 	postexitreset(sh);
-	/*
-	 * Disable job control so that whoever had the foreground before we
-	 * started can get it back.
-	 */
 	try {
 		setjobctl(sh, 0);
 	} catch (const dash::ShellError &) {

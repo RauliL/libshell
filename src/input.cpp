@@ -196,7 +196,7 @@ freestrings(ShellContext &sh, struct strpush *sp)
 		if (sp->ap) {
 			sp->ap->flag &= ~ALIASINUSE;
 			if (sp->ap->flag & ALIASDEAD) {
-				unalias(sh, sp->ap->name);
+				unalias(sh, sp->ap->name.c_str());
 			}
 		}
 
@@ -422,7 +422,7 @@ pushstring(ShellContext &sh, char *s, void *ap)
 	sp->ap = (struct alias *)ap;
 	if (ap) {
 		((struct alias *)ap)->flag |= ALIASINUSE;
-		sp->string = ((struct alias *)ap)->name;
+		sp->string = s; /* start of alias value being scanned */
 	}
 	sh.parsefile->nextc = s;
 	sh.parsefile->nleft = len;
@@ -442,9 +442,7 @@ popstring(ShellContext &sh)
 		    sh.parsefile->nextc[-1] == '\t') {
 			sh.checkkwd |= CHKALIAS;
 		}
-		if (sp->string != sp->ap->name) {
-			ckfree(sp->string);
-		}
+		/* Alias values are owned by the alias; do not free here. */
 	}
 	sh.parsefile->nextc = sp->prevstring;
 	sh.parsefile->nleft = sp->prevnleft;

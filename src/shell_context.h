@@ -19,6 +19,7 @@
 #include <cwchar>
 #include <inttypes.h>
 #include <limits.h>
+#include <optional>
 #include <string>
 #include <sys/resource.h>
 #include <sys/types.h>
@@ -104,7 +105,7 @@ struct ShellContext {
 	int whichprompt = 0;
 	int stdin_istty = -1;
 
-	char *trap[NSIG] = {};
+	std::optional<std::string> trap[NSIG] = {};
 	int ptrap = 0;
 	int trapcnt = 0;
 	char sigmode[NSIG - 1] = {};
@@ -191,19 +192,19 @@ struct ShellContext {
 	int skipcount = 0;
 	int loopnest = 0;
 	int funcline = 0;
-	char *commandname = nullptr;
+	std::string commandname;
 	int exitstatus = 0;
 	int back_exitstatus = 0;
 	int savestatus = -1;
 	int inps4 = 0;
 	int tpip[2] = { -1, -1 };
 
-	char *arg0 = nullptr;
+	std::string arg0;
 	struct shparam shellparam = {};
 	char **argptr = nullptr;
 	char *optionarg = nullptr;
 	char *optptr = nullptr;
-	char *minusc = nullptr;
+	std::optional<std::string> minusc;	/* nullopt = no -c */
 	char optlist[NOPTS] = {};
 
 	int rootpid = 0;

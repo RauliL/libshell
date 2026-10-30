@@ -35,6 +35,8 @@
 #include <signal.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string>
+#include <vector>
 
 #include "shell.h"
 #include "shell_context.h"
@@ -123,7 +125,8 @@ procargs(ShellContext &sh, char **xargv)
 	int login;
 
 	login = xargv[0] && xargv[0][0] == '-';
-	sh.arg0 = xargv[0];
+	if (xargv[0])
+		sh.arg0 = xargv[0];
 	if (xargv[0])
 		xargv++;
 	for (i = 0; i < NOPTS; i++)
@@ -151,7 +154,7 @@ procargs(ShellContext &sh, char **xargv)
 #endif
 	/* POSIX 1003.2: first arg after -c cmd is $0, remainder $1... */
 	if (sh.minusc) {
-		sh.minusc = *xargv++;
+		*sh.minusc = *xargv++;
 		if (*xargv)
 			goto setarg0;
 	} else if (!sflag) {
@@ -160,14 +163,11 @@ setarg0:
 		sh.arg0 = *xargv++;
 	}
 
-	sh.shellparam.p = xargv;
+	sh.shellparam.p.clear();
 	sh.shellparam.optind = 1;
 	sh.shellparam.optoff = -1;
-	/* assert(sh.shellparam.malloc == 0 && sh.shellparam.nparam == 0); */
-	while (*xargv) {
-		sh.shellparam.nparam++;
-		xargv++;
-	}
+	while (*xargv)
+		sh.shellparam.p.emplace_back(*xargv++);
 	optschanged(sh);
 
 	return login;
@@ -198,7 +198,7 @@ options(ShellContext &sh, int cmdline)
 	int login = 0;
 
 	if (cmdline)
-		sh.minusc = NULL;
+		sh.minusc.reset();
 	while ((p = *sh.argptr) != NULL) {
 		sh.argptr++;
 		if ((c = *p++) == '-') {
@@ -222,7 +222,7 @@ options(ShellContext &sh, int cmdline)
 		}
 		while ((c = *p++) != '\0') {
 			if (c == 'c' && cmdline) {
-				sh.minusc = p;	/* command is after shell args*/
+				sh.minusc = std::string(); /* command is after shell args */
 			} else if (c == 'l' && cmdline) {
 				login = 1;
 			} else if (c == 'o') {
@@ -297,20 +297,12 @@ setoption(ShellContext &sh, int flag, int val)
 void
 setparam(ShellContext &sh, char **argv)
 {
-	char **newparam;
-	char **ap;
-	int nparam;
+	std::vector<std::string> newparam;
 
-	for (nparam = 0 ; argv[nparam] ; nparam++);
-	ap = newparam = ckmalloc(sh, (nparam + 1) * sizeof *ap);
-	while (*argv) {
-		*ap++ = savestr(sh, *argv++);
-	}
-	*ap = NULL;
+	while (*argv)
+		newparam.emplace_back(*argv++);
 	freeparam(sh, &sh.shellparam);
-	sh.shellparam.malloc = 1;
-	sh.shellparam.nparam = nparam;
-	sh.shellparam.p = newparam;
+	sh.shellparam.p = std::move(newparam);
 	sh.shellparam.optind = 1;
 	sh.shellparam.optoff = -1;
 }
@@ -321,15 +313,9 @@ setparam(ShellContext &sh, char **argv)
  */
 
 void
-freeparam(ShellContext &sh, volatile struct shparam *param)
+freeparam(ShellContext &sh, struct shparam *param)
 {
-	char **ap;
-
-	if (param->malloc) {
-		for (ap = param->p ; *ap ; ap++)
-			ckfree(*ap);
-		ckfree(param->p);
-	}
+	param->p.clear();
 }
 
 
@@ -342,21 +328,15 @@ int
 shiftcmd(ShellContext &sh, int argc, char **argv)
 {
 	int n;
-	char **ap1, **ap2;
 
 	n = 1;
 	if (argc > 1)
 		n = number(sh, argv[1]);
-	if (n > sh.shellparam.nparam)
+	if (static_cast<size_t>(n) > sh.shellparam.p.size())
 		sh_error(sh, "can't shift that many");
 	INTOFF;
-	sh.shellparam.nparam -= n;
-	for (ap1 = sh.shellparam.p ; --n >= 0 ; ap1++) {
-		if (sh.shellparam.malloc)
-			ckfree(*ap1);
-	}
-	ap2 = sh.shellparam.p;
-	while ((*ap2++ = *ap1++) != NULL);
+	sh.shellparam.p.erase(sh.shellparam.p.begin(),
+			      sh.shellparam.p.begin() + n);
 	sh.shellparam.optind = 1;
 	sh.shellparam.optoff = -1;
 	INTON;
@@ -407,11 +387,16 @@ getoptscmd(ShellContext &sh, int argc, char **argv)
 	nextopt(sh, nullstr);
 	argc -= sh.argptr - argv - 1;
 	argv = sh.argptr - 1;
+	std::vector<char *> shell_ptrs;
 	if (argc < 3)
 		sh_error(sh, "Usage: getopts optstring var [arg...]");
 	else if (argc == 3) {
-		optbase = sh.shellparam.p;
-		if ((unsigned)sh.shellparam.optind > sh.shellparam.nparam + 1) {
+		shell_ptrs.reserve(sh.shellparam.p.size() + 1);
+		for (auto &s : sh.shellparam.p)
+			shell_ptrs.push_back(s.data());
+		shell_ptrs.push_back(nullptr);
+		optbase = shell_ptrs.data();
+		if ((unsigned)sh.shellparam.optind > sh.shellparam.p.size() + 1) {
 			sh.shellparam.optind = 1;
 			sh.shellparam.optoff = -1;
 		}

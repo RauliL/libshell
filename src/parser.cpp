@@ -755,8 +755,8 @@ top:
 	if (kwd & CHKALIAS) {
 		struct alias *ap;
 		if ((ap = lookupalias(sh, sh.wordtext, 1)) != NULL) {
-			if (*ap->val) {
-				pushstring(sh, ap->val, ap);
+			if (!ap->val.empty()) {
+				pushstring(sh, ap->val.data(), ap);
 			}
 			goto top;
 		}
