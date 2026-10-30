@@ -44,15 +44,17 @@ struct ShellContext;
 #define rootshell (!sh.shlvl)
 
 #ifdef __GLIBC__
-/* glibc sucks — redirect errno through a process-wide pointer set in run(). */
+/* glibc sucks — redirect errno through a process-wide pointer set by the driver. */
 extern int *dash_errno;
 #undef errno
 #define errno (*dash_errno)
 #endif
 
+int cmdloop(ShellContext &sh);
 void readcmdfile(ShellContext &sh, char *);
 int dotcmd(ShellContext &sh, int, char **);
 int exitcmd(ShellContext &sh, int, char **);
 #endif
+
 
 

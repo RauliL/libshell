@@ -36,6 +36,7 @@
  *	@(#)mail.h	8.2 (Berkeley) 5/4/95
  */
 
-void chkmail(void);
-void changemail(const char *);
+struct ShellContext;
+void chkmail(ShellContext &sh);
+void changemail(ShellContext &sh, const char *);
 #endif
