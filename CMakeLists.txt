@@ -320,7 +320,6 @@ if(ENABLE_STATIC)
 endif()
 
 install(TARGETS dash RUNTIME DESTINATION bin)
-install(FILES src/dash.1 DESTINATION share/man/man1)
 
 include(CTest)
 if(BUILD_TESTING)
