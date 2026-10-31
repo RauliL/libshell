@@ -54,6 +54,6 @@ dash::ShellResult<void> dotrap(ShellContext &sh);
 void setinteractive(ShellContext &sh, int);
 void exitshell(ShellContext &sh) __attribute__((__noreturn__));
 int decode_signal(ShellContext &sh, const char *, int);
-void sigblockall(sigset_t *oldmask);
+void sigblockall(ShellContext &sh, sigset_t *oldmask);
 
 #endif

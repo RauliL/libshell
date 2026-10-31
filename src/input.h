@@ -97,6 +97,7 @@ struct parsefile {
 #define plinno (sh.parsefile->linno) /* requires no #define parsefile */
 
 struct ShellContext;
+void input_init(ShellContext &sh);
 int pgetc(ShellContext &sh);
 int pgetc_eoa(ShellContext &sh);
 void pungetc(ShellContext &sh);

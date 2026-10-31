@@ -134,7 +134,7 @@ static void synerror(ShellContext &sh, const char *) __attribute__((__noreturn__
 static void setprompt(ShellContext &sh, int);
 
 
-int
+bool
 isassignment(ShellContext &sh, const char *p)
 {
 	const char *q = endofname(sh, p);
@@ -143,18 +143,23 @@ isassignment(ShellContext &sh, const char *p)
 	return *q == '=';
 }
 
-int
+bool
 issimplecmd(ShellContext &sh, union node *n, const char *name)
 {
 	return n && n->type == NCMD && n->ncmd.args &&
 	       equal(n->ncmd.args->narg.text.c_str(), name);
 }
 
-static inline int
-realeofmark(ShellContext &sh, const std::string *eofmark)
+static inline bool
+realeofmark(const std::string *eofmark)
 {
-	(void)sh;
 	return eofmark && eofmark != FAKEEOFMARK;
+}
+
+static void
+grabstackblock(ShellContext &sh, std::size_t len)
+{
+	stackstr_commit(sh, len);
 }
 
 
@@ -1259,7 +1264,7 @@ endword:
  */
 
 checkend: {
-	if (realeofmark(sh, eofmark)) {
+	if (realeofmark(eofmark)) {
 		int markloc;
 		const char *ep;
 		char *p;

@@ -86,7 +86,7 @@
 
 
 
-void evaltreenr(ShellContext &, union node *, EvalFlags)
+static void evaltreenr(ShellContext &, union node *, EvalFlags)
 	__attribute__((__noreturn__));
 static dash::ShellResult<int> evalloop(ShellContext &sh, union node *, EvalFlags);
 static dash::ShellResult<int> evalfor(ShellContext &sh, union node *, EvalFlags);
@@ -359,10 +359,10 @@ exexit:
 }
 
 
-void
+static void
 evaltreenr(ShellContext &sh, union node *n, EvalFlags flags)
 {
-	(void)evaltree(sh, n, flags);
+	evaltree(sh, n, flags);
 	exitshell(sh);
 }
 

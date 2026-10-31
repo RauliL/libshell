@@ -36,13 +36,14 @@
 #include <stdarg.h>
 
 #ifdef DEBUG
+struct ShellContext;
 union node;
-void showtree(union node *);
+void showtree(ShellContext &, union node *);
 void trace(const char *, ...);
 void tracev(const char *, va_list);
-void trargs(char **);
+void trargs(ShellContext &, char **);
 void trputc(int);
-void trputs(const char *);
-void opentrace(void);
+void trputs(ShellContext &, const char *);
+void opentrace(ShellContext &);
 #endif
 #endif

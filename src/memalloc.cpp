@@ -136,9 +136,3 @@ _STPUTC(ShellContext &sh, int c, char *p)
 	*p++ = static_cast<char>(c);
 	return p;
 }
-
-void
-grabstackblock(ShellContext &sh, size_t len)
-{
-	stackstr_commit(sh, len);
-}

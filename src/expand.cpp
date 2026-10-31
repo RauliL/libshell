@@ -64,6 +64,7 @@
  * backquotes, shell variables, and file metacharacters.
  */
 
+#include "arith.h"
 #include "error.h"
 #include "eval.h"
 #include "expand.h"

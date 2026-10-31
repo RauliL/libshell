@@ -39,6 +39,8 @@
 #include <inttypes.h>
 #include <sys/types.h>
 
+#include "result.h"
+
 #ifndef JOBS
 #define JOBS 1
 #endif
@@ -89,6 +91,7 @@ struct job {
 	struct job *prev_job;	/* previous job */
 };
 
+struct ShellContext;
 union node;
 
 extern pid_t backgndpid;	/* pid of last background process */
@@ -100,21 +103,21 @@ extern int jobctl;		/* true if doing job control */
 #endif
 extern int vforked;		/* Set if we are in the vforked child */
 
-void setjobctl(int);
+dash::ShellResult<void> setjobctl(ShellContext &, int);
 int killcmd(int, char **);
 int fgcmd(int, char **);
 int bgcmd(int, char **);
 int jobscmd(int, char **);
 struct output;
-void showjobs(struct output *, int);
+void showjobs(ShellContext &, struct output *, int);
 int waitcmd(int, char **);
-struct job *makejob(int);
-int forkshell(struct job *, union node *, int);
-struct job *vforkexec(union node *n, char **argv, const char *path, int idx);
-int waitforjob(struct job *);
-int stoppedjobs(void);
+struct job *makejob(ShellContext &, int);
+dash::ShellResult<int> forkshell(ShellContext &, struct job *, union node *, int);
+dash::ShellResult<struct job *> vforkexec(ShellContext &sh, union node *n, char **argv, const char *path, int idx);
+dash::ShellResult<int> waitforjob(ShellContext &, struct job *);
+int stoppedjobs(ShellContext &);
 
 #if ! JOBS
-#define setjobctl(on) ((void)(on))	/* do nothing */
+#define setjobctl(sh, on) ((void)(on))	/* do nothing */
 #endif
 #endif

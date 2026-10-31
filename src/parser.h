@@ -89,16 +89,16 @@ namespace dash { class ParseError; }
 
 struct ShellContext;
 
-int isassignment(const char *p);
-int issimplecmd(union node *n, const char *name);
+bool isassignment(ShellContext &sh, const char *p);
+bool issimplecmd(ShellContext &sh, union node *n, const char *name);
 union node *parsecmd(ShellContext &sh, int);
 void fixredir(ShellContext &sh, union node *, const char *, int);
-const char *getprompt(ShellContext &sh, void *);
-const char *const *findkwd(const char *);
+const char *getprompt(ShellContext &, void *);
+const char *const *findkwd(ShellContext &, const char *);
 char *endofname(ShellContext &sh, const char *p);
 const char *expandstr(ShellContext &sh, const char *);
 unsigned getmbc(ShellContext &sh, int c, char *out, int mode);
-void report_parse_error(const dash::ParseError &e);
+void report_parse_error(ShellContext &sh, const dash::ParseError &e);
 dash::Result<void> try_parse_string(ShellContext &sh, char *s);
 
 #endif

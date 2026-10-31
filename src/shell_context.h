@@ -254,8 +254,6 @@ struct ShellContext {
 	}
 };
 
-#include "shell_context_methods.inc"
-
 inline void freestdout(ShellContext &sh)
 {
 	sh.output.nextc = sh.output.buf;
@@ -278,11 +276,6 @@ inline void outc(ShellContext &sh, int ch, struct output *file)
 	}
 }
 #endif
-
-inline int padvance(ShellContext &sh, const char **path, const char *name)
-{
-	return padvance_magic(sh, path, name, 1);
-}
 
 inline int have_traps(ShellContext &sh)
 {
