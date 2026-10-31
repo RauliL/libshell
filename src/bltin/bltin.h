@@ -47,7 +47,6 @@
 #include "../memalloc.h"
 #include "../output.h"
 #include "../error.h"
-#ifndef USE_GLIBC_STDIO
 #undef stdout
 #undef stderr
 #undef putc
@@ -64,7 +63,6 @@
 #define fflush(f) flushout(sh, f)
 #define fileno(f) ((f)->fd)
 #define ferror outerr
-#endif
 #define INITARGS(argv)
 #define	error(...) sh_error(sh, __VA_ARGS__)
 #define	warn(...) sh_warnx(sh, __VA_ARGS__)

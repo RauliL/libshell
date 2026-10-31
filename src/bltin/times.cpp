@@ -6,11 +6,7 @@
 #include <sys/times.h>
 #include <unistd.h>
 #include "system.h"
-#ifdef USE_GLIBC_STDIO
-#include <stdio.h>
-#else
 #include "bltin.h"
-#endif
 
 dash::ShellResult<int>
 timescmd(ShellContext &sh, int argc, char *argv[])

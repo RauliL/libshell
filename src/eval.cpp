@@ -259,9 +259,7 @@ evaltree(ShellContext &sh, union node *n, EvalFlags flags)
 	default:
 #ifdef DEBUG
 		out1fmt("Node type = %d\n", n->type);
-#ifndef USE_GLIBC_STDIO
 		flushout(sh, sh.out1);
-#endif
 		break;
 #endif
 	case NNOT:

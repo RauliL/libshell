@@ -52,9 +52,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
-#ifdef USE_GLIBC_STDIO
-#include <fcntl.h>
-#endif
 #include <limits.h>
 
 #include "shell.h"
@@ -79,20 +76,10 @@ static int xvsnprintf(ShellContext &sh, char *, size_t, const char *, va_list);
 INCLUDE "output.h"
 INCLUDE "memalloc.h"
 
-INIT {
-#ifdef USE_GLIBC_STDIO
-	initstreams(sh);
-#endif
-}
-
 RESET {
 #ifdef notyet
 	sh.out1 = &sh.output;
 	sh.out2 = &sh.errout;
-#ifdef USE_GLIBC_STDIO
-	if (memout.stream != NULL)
-		__closememout(sh);
-#endif
 	if (memout.buf != NULL) {
 		ckfree(memout.buf);
 		memout.buf = NULL;
@@ -106,11 +93,6 @@ RESET {
 void
 outmem(ShellContext &sh, const char *p, size_t len, struct output *dest)
 {
-#ifdef USE_GLIBC_STDIO
-	INTOFF;
-	fwrite(p, 1, len, dest->stream);
-	INTON_DEFER;
-#else
 	size_t bufsize;
 	size_t offset;
 	size_t nleft;
@@ -165,27 +147,17 @@ err:
 #endif
 		dest->flags |= OUTPUT_ERR;
 	}
-#endif
 }
 
 
 void
 outstr(ShellContext &sh, const char *p, struct output *file)
 {
-#ifdef USE_GLIBC_STDIO
-	INTOFF;
-	fputs(p, file->stream);
-	INTON_DEFER;
-#else
 	size_t len;
 
 	len = strlen(p);
 	outmem(sh, p, len, file);
-#endif
 }
-
-
-#ifndef USE_GLIBC_STDIO
 
 
 void
@@ -194,7 +166,6 @@ outcslow(ShellContext &sh, int c, struct output *dest)
 	char buf = c;
 	outmem(sh, &buf, 1, dest);
 }
-#endif
 
 
 void
@@ -210,11 +181,6 @@ flushall(ShellContext &sh)
 void
 flushout(ShellContext &sh, struct output *dest)
 {
-#ifdef USE_GLIBC_STDIO
-	INTOFF;
-	fflush(dest->stream);
-	INTON_DEFER;
-#else
 	size_t len;
 
 	len = dest->nextc - dest->buf;
@@ -223,7 +189,6 @@ flushout(ShellContext &sh, struct output *dest)
 	dest->nextc = dest->buf;
 	if ((xwrite(sh, dest->fd, dest->buf, len)))
 		dest->flags |= OUTPUT_ERR;
-#endif
 }
 
 
@@ -298,7 +263,6 @@ xasprintf(ShellContext &sh, std::string &out, const char *f, ...)
 }
 
 
-#ifndef USE_GLIBC_STDIO
 void
 doformat(ShellContext &sh, struct output *dest, const char *f, va_list ap)
 {
@@ -324,7 +288,6 @@ doformat(ShellContext &sh, struct output *dest, const char *f, va_list ap)
 	}
 	outmem(sh, s, len, dest);
 }
-#endif
 
 
 
@@ -354,37 +317,6 @@ xwrite(ShellContext &sh, int fd, const void *p, size_t n)
 	}
 	return 0;
 }
-
-
-#ifdef notyet
-#ifdef USE_GLIBC_STDIO
-void
-initstreams(ShellContext &sh)
-{
-	sh.output.stream = stdout;
-	sh.errout.stream = stderr;
-}
-
-
-void
-openmemout(ShellContext &sh)
-{
-	INTOFF;
-	memout.stream = open_memstream(&memout.buf, &memout.bufsize);
-	INTON_DEFER;
-}
-
-
-int
-__closememout(ShellContext &sh)
-{
-	int error;
-	error = fclose(memout.stream);
-	memout.stream = NULL;
-	return error;
-}
-#endif
-#endif
 
 
 static int

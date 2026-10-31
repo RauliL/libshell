@@ -72,21 +72,9 @@ struct ShellContext {
 	StackStr stackstr;
 
 	struct output output = {
-#ifdef USE_GLIBC_STDIO
-		nullptr,
-#endif
-		nullptr, nullptr, nullptr,
-#ifdef USE_GLIBC_STDIO
-		0,
-#else
-		BUFSIZ,
-#endif
-		1, 0
+		nullptr, nullptr, nullptr, BUFSIZ, 1, 0
 	};
 	struct output errout = {
-#ifdef USE_GLIBC_STDIO
-		nullptr,
-#endif
 		nullptr, nullptr, nullptr, 0, 2, 0
 	};
 	struct output preverrout = {};
