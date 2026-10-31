@@ -71,24 +71,6 @@
 static int xvsnprintf(ShellContext &sh, char *, size_t, const char *, va_list);
 
 
-#ifdef mkinit
-
-INCLUDE "output.h"
-INCLUDE "memalloc.h"
-
-RESET {
-#ifdef notyet
-	sh.out1 = &sh.output;
-	sh.out2 = &sh.errout;
-	if (memout.buf != NULL) {
-		ckfree(memout.buf);
-		memout.buf = NULL;
-	}
-#endif
-}
-
-#endif
-
 
 void
 outmem(ShellContext &sh, const char *p, size_t len, struct output *dest)
@@ -108,25 +90,7 @@ buffered:
 	if (!bufsize) {
 		;
 	} else if (dest->buf == NULL) {
-#ifdef notyet
-		if (dest->fd == MEM_OUT && len > bufsize) {
-			bufsize = len;
-		}
-#endif
 		offset = 0;
-#ifdef notyet
-		goto alloc;
-	} else if (dest->fd == MEM_OUT) {
-		offset = bufsize;
-		if (bufsize >= len) {
-			bufsize <<= 1;
-		} else {
-			bufsize += len;
-		}
-		if (bufsize < offset)
-			goto err;
-alloc:
-#endif
 		INTOFF;
 		dest->buf = ckrealloc(sh, dest->buf, bufsize);
 		dest->bufsize = bufsize;
@@ -142,9 +106,6 @@ alloc:
 		goto buffered;
 
 	if ((xwrite(sh, dest->fd, p, len))) {
-#ifdef notyet
-err:
-#endif
 		dest->flags |= OUTPUT_ERR;
 	}
 }

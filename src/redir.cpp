@@ -85,11 +85,7 @@ struct redirtab {
 
 
 static dash::ShellResult<int> openredirect(ShellContext &sh, union node *);
-#ifdef notyet
-static dash::ShellResult<void> dupredirect(ShellContext &sh, union node *, int, char[10]);
-#else
 static dash::ShellResult<void> dupredirect(ShellContext &sh, union node *, int);
-#endif
 static dash::ShellResult<int> openhere(ShellContext &sh, union node *);
 
 
@@ -125,13 +121,6 @@ redirect(ShellContext &sh, union node *redir, int flags)
 	int fd;
 	int newfd;
 	int *p;
-#if notyet
-	char memory[10];	/* file descriptors to write to memory */
-
-	for (i = 10 ; --i >= 0 ; )
-		memory[i] = 0;
-	memory[1] = flags & REDIR_BACKQ;
-#endif
 	if (!redir)
 		return {};
 	sv = NULL;
@@ -170,19 +159,9 @@ redirect(ShellContext &sh, union node *redir, int flags)
 		if (fd == newfd)
 			continue;
 
-#ifdef notyet
-		TRY_SHV(dupredirect(sh, n, newfd, memory));
-#else
 		TRY_SHV(dupredirect(sh, n, newfd));
-#endif
 	} while ((n = n->nfile.next));
 	INTON;
-#ifdef notyet
-	if (memory[1])
-		sh.out1 = &memout;
-	if (memory[2])
-		sh.out2 = &memout;
-#endif
 	if (flags & REDIR_SAVEFD2 && sv->renamed[2] >= 0)
 		sh.preverrout.fd = sv->renamed[2];
 	return {};
@@ -306,26 +285,14 @@ sh_dup2(ShellContext &sh, int ofd, int nfd, int cfd)
 	return nfd;
 }
 
-#ifdef notyet
-static dash::ShellResult<void> dupredirect(ShellContext &sh, union node *redir, int f, char memory[10])
-#else
 static dash::ShellResult<void> dupredirect(ShellContext &sh, union node *redir, int f)
-#endif
 {
 	int fd = redir->nfile.fd;
 
-#ifdef notyet
-	memory[fd] = 0;
-#endif
 	if (redir->nfile.type == NTOFD || redir->nfile.type == NFROMFD) {
 		/* if not ">&-" */
 		if (f >= 0) {
-#ifdef notyet
-			if (memory[f])
-				memory[fd] = 1;
-			else
-#endif
-				TRY_SHV(sh_dup2(sh, f, fd, -1));
+			TRY_SHV(sh_dup2(sh, f, fd, -1));
 			return {};
 		}
 		close(fd);

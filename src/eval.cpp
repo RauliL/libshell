@@ -94,11 +94,7 @@ static dash::ShellResult<int> evalcase(ShellContext &sh, union node *, EvalFlags
 static dash::ShellResult<int> evalsubshell(ShellContext &sh, union node *, EvalFlags);
 static dash::ShellResult<void> expredir(ShellContext &sh, union node *);
 static dash::ShellResult<int> evalpipe(ShellContext &sh, union node *, EvalFlags);
-#ifdef notyet
-static dash::ShellResult<int> evalcommand(ShellContext &sh, union node *, int, struct backcmd *);
-#else
 static dash::ShellResult<int> evalcommand(ShellContext &sh, union node *, EvalFlags);
-#endif
 static dash::ShellResult<int> evalbltin(ShellContext &sh, const struct builtincmd *, int, char **, EvalFlags);
 static dash::ShellResult<int> evalfun(ShellContext &sh, struct funcnode *, int, char **, EvalFlags);
 static dash::ShellResult<void> prehash(ShellContext &sh, union node *);
@@ -748,11 +744,7 @@ parse_command_args(ShellContext &sh, ArgList *alist, union node **argpp,
  */
 
 dash::ShellResult<int>
-#ifdef notyet
-evalcommand(ShellContext &sh, union node *cmd, int flags, struct backcmd *backcmd)
-#else
 evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
-#endif
 {
 	struct localvar_list *localvar_stop;
 	struct parsefile *file_stop;
@@ -764,9 +756,6 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 	int argc;
 	size_t arg0 = 0;
 	size_t xtrace_end = 0;
-#ifdef notyet
-	int pip[2];
-#endif
 	struct cmdentry cmdentry;
 	Job *jp;
 	char *lastarg;
