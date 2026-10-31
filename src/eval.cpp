@@ -164,7 +164,7 @@ evalcmd(ShellContext &sh, int argc, char **argv, EvalFlags flags)
                         STPUTC('\0', concat);
                         p = grabstackstr(concat);
                 }
-                return evalstring(sh, p, flags & EvalFlag::tested);
+                return sh.eval(p, flags & EvalFlag::tested);
         }
         return 0;
 }
@@ -181,15 +181,15 @@ parser_eof(const ShellContext &sh)
  */
 
 dash::ShellResult<int>
-evalstring(ShellContext &sh, char *s, EvalFlags flags)
+ShellContext::eval(const std::string &script, EvalFlags flags)
 {
+	ShellContext &sh = *this;
 	union node *n;
-	int status;
-	std::string copy(s);
+	int status = 0;
+	std::string copy = script;
 
 	setinputstring(sh, copy.data());
 
-	status = 0;
 	try {
 		for (; (n = parsecmd(sh, 0)) != NEOF; clear_stack_temps(sh)) {
 			int i;
@@ -227,7 +227,6 @@ evalstring(ShellContext &sh, char *s, EvalFlags flags)
 		return sh.exitstatus;
 	}
 }
-
 
 
 /*

@@ -212,6 +212,19 @@ struct ShellContext {
 		if (signaled == this)
 			signaled = nullptr;
 	}
+
+	/*
+	 * Parse and execute a shell script from a string. One-shot entry
+	 * point for embedding and for -c / eval / traps.
+	 */
+	dash::ShellResult<int> eval(const std::string &script,
+				    EvalFlags flags = {});
+
+	/*
+	 * Interactive parse/eval loop over the current input (prompting,
+	 * ignoreeof). Used by the dash executable's main loop.
+	 */
+	dash::ShellResult<int> run_interactive();
 };
 
 inline char *bltinlookup(ShellContext &sh, const char *name)

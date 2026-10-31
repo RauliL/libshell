@@ -300,7 +300,7 @@ dotrap(ShellContext &sh)
 
 		if (!sh.trap[i + 1])
 			continue;
-		auto r = evalstring(sh, sh.trap[i + 1]->data(), {});
+		auto r = sh.eval(*sh.trap[i + 1]);
 		if (!r) {
 			sh.savestatus = last_status;
 			return tl::unexpected(r.error());
@@ -324,7 +324,7 @@ exitshell(ShellContext &sh)
 		if (!sh.ptrap) {
 			sh.evalskip = 0;
 			/* EXIT trap failure must not skip teardown. */
-			evalstring(sh, exittrap.data(), {});
+			sh.eval(exittrap);
 			sh.evalskip = SKIPFUNCDEF;
 		}
 	}

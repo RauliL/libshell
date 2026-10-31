@@ -38,88 +38,9 @@ short profile_buf[16384];
 extern int etext();
 #endif
 
+dash::ShellResult<int> run_interactive(ShellContext &sh);
+
 static dash::ShellResult<void> read_profile(ShellContext &sh, const char *name);
-static dash::ShellResult<int> interactive_cmdloop(ShellContext &sh);
-
-/*
- * Top-level interactive parse/eval loop: prompting, ignoreeof, and
- * recovering from parse errors at the prompt.
- */
-static dash::ShellResult<int>
-interactive_cmdloop(ShellContext &sh)
-{
-	union node *n;
-	int status = 0;
-	int numeof = 0;
-
-	TRACE(("interactive_cmdloop() called\n"));
-	for (;;) {
-		int skip;
-
-		if (sh.jobctl)
-			showjobs(sh, sh.out2, SHOW_CHANGED);
-		try {
-			n = parsecmd(sh, 1);
-			if (n == NEOF) {
-				clear_stack_temps(sh);
-				if (numeof >= 50)
-					break;
-				if (!stoppedjobs(sh)) {
-					if (!Iflag) {
-						out2c('\n');
-#ifdef FLUSHERR
-						flushout(sh, sh.out2);
-#endif
-						break;
-					}
-					out2str("\nUse \"exit\" to leave shell.\n");
-				}
-				numeof++;
-			} else {
-				sh.job_warning = (sh.job_warning == 2) ? 1 : 0;
-				numeof = 0;
-				auto r = evaltree(sh, n, {});
-				if (!r) {
-					sh.exception = r.error().code;
-					if (n && n != NEOF)
-						freenode(n);
-					clear_stack_temps(sh);
-					if (r.error().code == EXERROR) {
-						skip = sh.evalskip;
-						if (skip) {
-							sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
-							break;
-						}
-						continue;
-					}
-					return r;
-				}
-				if (n)
-					status = *r;
-				if (n && n != NEOF)
-					freenode(n);
-				clear_stack_temps(sh);
-			}
-		} catch (const dash::ParseError &e) {
-			report_parse_error(sh, e);
-			clear_stack_temps(sh);
-			skip = sh.evalskip;
-			if (skip) {
-				sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
-				break;
-			}
-			continue;
-		}
-
-		skip = sh.evalskip;
-		if (skip) {
-			sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
-			break;
-		}
-	}
-
-	return status;
-}
 
 static dash::ShellResult<void>
 read_profile(ShellContext &sh, const char *name)
@@ -212,12 +133,12 @@ resume:
 	if (!failed && state < 4) {
 		state = 4;
 		if (sh.minusc)
-			take(evalstring(sh, sh.minusc->data(),
-				sflag ? EvalFlags{} : EvalFlag::exit));
+			take(sh.eval(*sh.minusc,
+				     sflag ? EvalFlags{} : EvalFlag::exit));
 	}
 	if (!failed) {
 		if (iflag)
-			take(interactive_cmdloop(sh));
+			take(run_interactive(sh));
 		else if (sflag || !sh.minusc)
 			take(cmdloop(sh));
 	}

@@ -59,8 +59,89 @@ int *dash_errno;
 #include "exec.h"
 #include "parse_error.h"
 #include "nodes_free.h"
+#include "show.h"
 
 static dash::ShellResult<std::string> find_dot_file(ShellContext &sh, char *);
+
+/*
+ * Top-level interactive parse/eval loop: prompting, ignoreeof, and
+ * recovering from parse errors at the prompt.
+ */
+dash::ShellResult<int>
+run_interactive(ShellContext &sh)
+{
+	union node *n;
+	int status = 0;
+	int numeof = 0;
+
+	TRACE(("run_interactive() called\n"));
+	for (;;) {
+		int skip;
+
+		if (sh.jobctl)
+			showjobs(sh, sh.out2, SHOW_CHANGED);
+		try {
+			n = parsecmd(sh, 1);
+			if (n == NEOF) {
+				clear_stack_temps(sh);
+				if (numeof >= 50)
+					break;
+				if (!stoppedjobs(sh)) {
+					if (!Iflag) {
+						out2c('\n');
+#ifdef FLUSHERR
+						flushout(sh, sh.out2);
+#endif
+						break;
+					}
+					out2str("\nUse \"exit\" to leave shell.\n");
+				}
+				numeof++;
+			} else {
+				sh.job_warning = (sh.job_warning == 2) ? 1 : 0;
+				numeof = 0;
+				auto r = evaltree(sh, n, {});
+				if (!r) {
+					sh.exception = r.error().code;
+					if (n && n != NEOF)
+						freenode(n);
+					clear_stack_temps(sh);
+					if (r.error().code == EXERROR) {
+						skip = sh.evalskip;
+						if (skip) {
+							sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+							break;
+						}
+						continue;
+					}
+					return r;
+				}
+				if (n)
+					status = *r;
+				if (n && n != NEOF)
+					freenode(n);
+				clear_stack_temps(sh);
+			}
+		} catch (const dash::ParseError &e) {
+			report_parse_error(sh, e);
+			clear_stack_temps(sh);
+			skip = sh.evalskip;
+			if (skip) {
+				sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+				break;
+			}
+			continue;
+		}
+
+		skip = sh.evalskip;
+		if (skip) {
+			sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+			break;
+		}
+	}
+
+	return status;
+}
 
 /*
  * Read and execute commands until EOF.  No prompting or other interactive
