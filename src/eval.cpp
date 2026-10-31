@@ -507,7 +507,7 @@ have_traps(const ShellContext& sh)
 static dash::ShellResult<int>
 evalsubshell(ShellContext &sh, union node *n, EvalFlags flags)
 {
-	struct job *jp;
+	Job *jp;
 	int backgnd = (n->type == NBACKGND);
 	int status;
 
@@ -585,7 +585,7 @@ expredir(ShellContext &sh, union node *n)
 static dash::ShellResult<int>
 evalpipe(ShellContext &sh, union node *n, EvalFlags flags)
 {
-	struct job *jp;
+	Job *jp;
 	int pipelen;
 	int prevfd;
 	int pip[2];
@@ -650,7 +650,7 @@ evalpipe(ShellContext &sh, union node *n, EvalFlags flags)
 dash::ShellResult<void>
 evalbackcmd(ShellContext &sh, union node *n, struct backcmd *result)
 {
-	struct job *jp;
+	Job *jp;
 	int pip[2];
 	int pid;
 
@@ -769,7 +769,7 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 	int pip[2];
 #endif
 	struct cmdentry cmdentry;
-	struct job *jp;
+	Job *jp;
 	char *lastarg;
 	const char *path;
 	int spclbltin;

@@ -4,7 +4,7 @@
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  * Copyright (c) 1997-2005
- *	Herbert Xu <herbert@gondor.apana.org.au>.  All rights reserved.
+ *	Herbert Xu <herbert@gondor.apana.org.au>. All rights reserved.
  *
  * This code is derived from software contributed to Berkeley by
  * Kenneth Almquist.
@@ -36,8 +36,11 @@
  *	@(#)jobs.h	8.2 (Berkeley) 5/4/95
  */
 
-#include <inttypes.h>
+#include <cstddef>
+#include <cstdint>
+#include <string>
 #include <sys/types.h>
+#include <vector>
 
 #include "result.h"
 
@@ -55,66 +58,58 @@
 #define	SHOW_PID	0x04	/* include process pid */
 #define	SHOW_CHANGED	0x08	/* only jobs whose state has changed */
 
-
-/*
- * A job structure contains information about a job.  A job is either a
- * single process or a set of processes contained in a pipeline.  In the
- * latter case, pidlist will be non-NULL, and will point to a -1 terminated
- * array of pids.
- */
-
-struct procstat {
-	pid_t	pid;		/* process id */
- 	int	status;		/* last process status from wait() */
- 	char	*cmd;		/* text of command being run */
-};
-
-struct job {
-	struct procstat ps0;	/* status of process */
-	struct procstat *ps;	/* status or processes when more than one */
-#if JOBS
-	int stopstatus;		/* status of a stopped job */
-#endif
-	uint32_t
-		nprocs: 16,	/* number of processes */
-		state: 8,
-#define	JOBRUNNING	0	/* at least one proc running */
-#define	JOBSTOPPED	1	/* all procs are stopped */
-#define	JOBDONE		2	/* all procs are completed */
-#if JOBS
-		sigint: 1,	/* job was killed by SIGINT */
-		jobctl: 1,	/* job running under job control */
-#endif
-		waited: 1,	/* true if this entry has been waited for */
-		used: 1,	/* true if this entry is in used */
-		changed: 1;	/* true if status has changed */
-	struct job *prev_job;	/* previous job */
-};
-
 struct ShellContext;
+struct output;
 union node;
 
-extern pid_t backgndpid;	/* pid of last background process */
-extern int job_warning;		/* user was warned about stopped jobs */
+/*
+ * A job is either a single process or a pipeline.  Process status lives in
+ * procs; job numbers (%N) are slot + 1 in ShellContext::jobs.
+ */
+struct ProcStat {
+	pid_t pid = -1;
+	int status = -1;	/* last wait() status; -1 = still running */
+	std::string cmd;
+};
+
+struct Job {
+	enum class State : std::uint8_t {
+		Running = 0,	/* at least one proc running */
+		Stopped = 1,	/* all procs are stopped */
+		Done = 2,	/* all procs are completed */
+	};
+
+	std::size_t slot = 0;		/* index in ShellContext::jobs */
+	std::vector<ProcStat> procs;
 #if JOBS
-extern int jobctl;		/* true if doing job control */
-#else
-#define jobctl 0
+	int stopstatus = 0;		/* status of a stopped job */
+	bool sigint = false;		/* job was killed by SIGINT */
+	bool jobctl = false;		/* job running under job control */
 #endif
-extern int vforked;		/* Set if we are in the vforked child */
+	State state = State::Running;
+	bool waited = false;		/* true if this entry has been waited for */
+	bool changed = false;		/* true if status has changed */
+
+	int number() const { return static_cast<int>(slot + 1); }
+	pid_t pgid() const { return procs.empty() ? -1 : procs.front().pid; }
+
+	ProcStat &add_process(pid_t pid, std::string cmd = {});
+	void clear_stopped();
+	int calc_status(bool pipefail_on);
+	void show_pipe(ShellContext &sh, struct output *out) const;
+};
 
 dash::ShellResult<void> setjobctl(ShellContext &, int);
-int killcmd(int, char **);
-int fgcmd(int, char **);
-int bgcmd(int, char **);
-int jobscmd(int, char **);
-struct output;
+dash::ShellResult<int> killcmd(ShellContext &, int, char **);
+dash::ShellResult<int> fgcmd(ShellContext &, int, char **);
+dash::ShellResult<int> bgcmd(ShellContext &, int, char **);
+dash::ShellResult<int> jobscmd(ShellContext &, int, char **);
 void showjobs(ShellContext &, struct output *, int);
-int waitcmd(int, char **);
-struct job *makejob(ShellContext &, int);
-dash::ShellResult<int> forkshell(ShellContext &, struct job *, union node *, int);
-dash::ShellResult<struct job *> vforkexec(ShellContext &sh, union node *n, char **argv, const char *path, int idx);
-dash::ShellResult<int> waitforjob(ShellContext &, struct job *);
+dash::ShellResult<int> waitcmd(ShellContext &, int, char **);
+Job *makejob(ShellContext &, int);
+dash::ShellResult<int> forkshell(ShellContext &, Job *, union node *, int);
+dash::ShellResult<Job *> vforkexec(ShellContext &, union node *, char **, const char *, int);
+dash::ShellResult<int> waitforjob(ShellContext &, Job *);
 int stoppedjobs(ShellContext &);
 
 #if ! JOBS

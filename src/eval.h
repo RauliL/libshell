@@ -38,10 +38,12 @@
 
 #include <string>
 
+struct Job;
+
 struct backcmd {		/* result of evalbackcmd */
 	int fd = -1;		/* file descriptor to read from */
 	std::string buf;	/* buffer */
-	struct job *jp = nullptr; /* job structure for command */
+	Job *jp = nullptr;	/* job structure for command */
 };
 
 #include <bitset>

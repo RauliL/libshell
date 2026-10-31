@@ -380,7 +380,7 @@ openhere(ShellContext &sh, union node *redir)
 		goto out;
 	}
 
-	if (TRY_SH(forkshell(sh, (struct job *)NULL, (union node *)NULL, FORK_NOJOB)) == 0) {
+	if (TRY_SH(forkshell(sh, nullptr, nullptr, FORK_NOJOB)) == 0) {
 		close(pip[0]);
 		signal(SIGINT, SIG_IGN);
 		signal(SIGQUIT, SIG_IGN);

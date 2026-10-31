@@ -18,6 +18,7 @@
 #include <cwchar>
 #include <inttypes.h>
 #include <limits.h>
+#include <memory>
 #include <optional>
 #include <string>
 #include <sys/resource.h>
@@ -29,6 +30,7 @@
 #include "eval.h"
 #include "expand.h"
 #include "input.h"
+#include "jobs.h"
 #include "memalloc.h"
 #include "options.h"
 #include "output.h"
@@ -39,7 +41,6 @@
 
 union node;
 struct funcnode;
-struct job;
 struct backcmd;
 struct alias;
 struct redirtab;
@@ -97,14 +98,13 @@ struct ShellContext {
 	volatile sig_atomic_t pending_sig = 0;
 	volatile sig_atomic_t gotsigchld = 0;
 
-	struct job *jobtab = nullptr;
-	unsigned njobs = 0;
+	std::vector<std::unique_ptr<Job>> jobs;
+	std::vector<Job *> job_order;	/* job-control order (stopped first) */
 	pid_t backgndpid = 0;
 #if JOBS
 	int initialpgrp = 0;
 	int ttyfd = -1;
 #endif
-	struct job *curjob = nullptr;
 	int vforked = 0;
 	int jobctl = 0;
 	int job_warning = 0;
