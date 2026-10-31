@@ -1763,7 +1763,7 @@ setprompt(ShellContext &sh, int which)
 	sh.needprompt = 0;
 	sh.whichprompt = which;
 
-	if (!sh.parsefile->nleft) {
+	if (!sh.input.current->nleft) {
 		std::size_t su = sh.stackstr.used;
 		sh.stackstr.commit(stackblocksize());
 		out2str(getprompt(sh, NULL));
@@ -1781,7 +1781,7 @@ expandstr(ShellContext &sh, const char *ps)
 	struct narg n{};
 	int err = 0;
 
-	file_stop = sh.parsefile;
+	file_stop = sh.input.current;
 
 	/* XXX Fix (char *) cast. */
 	setinputstring(sh, (char *)ps);

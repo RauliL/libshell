@@ -786,7 +786,7 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 
 	/* First expand the arguments. */
 	TRACE(("evalcommand(0x%lx, %d) called\n", (long)cmd, flags));
-	file_stop = sh.parsefile;
+	file_stop = sh.input.current;
 	sh.back_exitstatus = 0;
 
 	cmdentry.cmdtype = CMDBUILTIN;

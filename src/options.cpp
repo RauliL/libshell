@@ -135,7 +135,7 @@ procargs(ShellContext &sh, char **xargv)
 	}
 	if (iflag == 2 && sflag == 1) {
 		input_init(sh);
-		if (sh.stdin_istty && isatty(2))
+		if (sh.input.stdin_istty && isatty(2))
 			iflag = 1;
 	}
 	if (mflag == 2)

@@ -37,7 +37,8 @@
  */
 
 #include <limits.h>
-#include <stdbool.h>
+#include <sys/types.h>
+#include <termios.h>
 
 #include "error.h"
 
@@ -69,10 +70,8 @@ struct strpush {
 };
 
 /*
- * The parsefile structure pointed to by the global variable parsefile
- * contains information about the current file being read.
+ * One level of the input file stack (script, sourced file, or string).
  */
-
 struct parsefile {
 	struct parsefile *prev;	/* preceding file on stack */
 	int linno;		/* current line */
@@ -91,12 +90,64 @@ struct parsefile {
 	int unget;
 };
 
+struct stdin_state {
+	off_t seekable = 0;
+	int pip[2] = {};
+	int pending = 0;
+	tcflag_t bufferable = 0;
+};
+
+/*
+ * Nested input sources for one shell: base stdin, sourced files, eval
+ * strings, and alias string pushes. Owned by ShellContext; parse and
+ * input helpers take InputStack & rather than reaching through context
+ * fields.
+ */
+struct InputStack {
+	parsefile base{};
+	char basebuf[IBUFSIZ]{};
+	parsefile *top = &base;
+	parsefile *current = &base;
+	stdin_state stdin{};
+	int stdin_istty = -1;
+
+	InputStack()
+	{
+		base.nextc = base.buf = basebuf;
+		base.linno = 1;
+	}
+
+	InputStack(const InputStack &) = delete;
+	InputStack &operator=(const InputStack &) = delete;
+
+	parsefile &cur() { return *current; }
+	const parsefile &cur() const { return *current; }
+	int &linno() { return current->linno; }
+};
+
 /*
  * The input line number. Requires ShellContext &sh in scope.
  */
-#define plinno (sh.parsefile->linno) /* requires no #define parsefile */
+#define plinno (sh.input.linno())
 
 struct ShellContext;
+void input_init(ShellContext &sh, InputStack &in);
+int pgetc(ShellContext &sh, InputStack &in);
+int pgetc_eoa(ShellContext &sh, InputStack &in);
+void pungetc(ShellContext &sh, InputStack &in);
+void pungetn(InputStack &in, int);
+void pushstring(ShellContext &sh, InputStack &in, char *, void *);
+dash::ShellResult<int> setinputfile(ShellContext &sh, InputStack &in,
+				    const char *, int);
+void setinputstring(ShellContext &sh, InputStack &in, char *);
+void pushstdin(ShellContext &sh, InputStack &in);
+void popfile(ShellContext &sh, InputStack &in);
+void unwindfiles(ShellContext &sh, InputStack &in, parsefile *stop);
+void popallfiles(ShellContext &sh, InputStack &in);
+void flush_input(ShellContext &sh, InputStack &in);
+void reset_input(ShellContext &sh, InputStack &in);
+
+/* Overloads that use the shell's own input stack. */
 void input_init(ShellContext &sh);
 int pgetc(ShellContext &sh);
 int pgetc_eoa(ShellContext &sh);
@@ -107,7 +158,7 @@ dash::ShellResult<int> setinputfile(ShellContext &sh, const char *, int);
 void setinputstring(ShellContext &sh, char *);
 void pushstdin(ShellContext &sh);
 void popfile(ShellContext &sh);
-void unwindfiles(ShellContext &sh, struct parsefile *);
+void unwindfiles(ShellContext &sh, parsefile *);
 void popallfiles(ShellContext &sh);
 void flush_input(ShellContext &sh);
 void reset_input(ShellContext &sh);

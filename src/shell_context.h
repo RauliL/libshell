@@ -55,13 +55,6 @@ struct cmdentry;
 enum token : int;
 enum limtype : int;
 
-struct stdin_state {
-	off_t seekable;
-	int pip[2];
-	int pending;
-	tcflag_t bufferable;
-};
-
 struct ShellContext;
 
 void changeifs(ShellContext &sh, const char *val);
@@ -82,13 +75,8 @@ struct ShellContext {
 	struct output *out1 = &output;
 	struct output *out2 = &errout;
 
-	struct parsefile basepf = {};
-	char basebuf[IBUFSIZ] = {};
-	struct parsefile *toppf = &basepf;
-	struct parsefile *parsefile = &basepf;
-	struct stdin_state stdin_state = {};
+	InputStack input;
 	int whichprompt = 0;
-	int stdin_istty = -1;
 
 	std::optional<std::string> trap[NSIG] = {};
 	int ptrap = 0;
@@ -217,8 +205,6 @@ struct ShellContext {
 	ShellContext()
 	{
 		signaled = this;
-		basepf.nextc = basepf.buf = basebuf;
-		basepf.linno = 1;
 	}
 
 	~ShellContext()
