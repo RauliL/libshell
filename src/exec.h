@@ -72,8 +72,7 @@ extern const char *pathopt;	/* set by padvance */
 
 struct stat64;
 
-void shellexec(ShellContext &, char **, const char *, int)
-    __attribute__((__noreturn__));
+void shellexec(ShellContext &, char **, const char *, int);
 int padvance_magic(ShellContext &sh, const char **path, const char *name, int magic);
 int hashcmd(int, char **);
 dash::ShellResult<void> find_command(ShellContext &, char *, struct cmdentry *, int, const char *);

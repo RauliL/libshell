@@ -103,8 +103,9 @@ static dash::ShellResult<int> describe_command(ShellContext &sh, struct output *
 
 
 /*
- * Exec a program.  Never returns.  If you change this routine, you may
- * have to change the find_command routine as well.
+ * Exec a program.  On failure, raises EXEND via exerror (caller must
+ * not rely on return).  If you change this routine, you may have to
+ * change the find_command routine as well.
  */
 
 void
