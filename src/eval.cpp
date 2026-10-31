@@ -169,6 +169,12 @@ evalcmd(ShellContext &sh, int argc, char **argv, EvalFlags flags)
         return 0;
 }
 
+static inline bool
+parser_eof(const ShellContext &sh)
+{
+	return sh.tokpushback && sh.lasttoken == TEOF;
+}
+
 
 /*
  * Execute a command or commands contained in a string.
@@ -488,6 +494,12 @@ out:
 	return status;
 }
 
+
+static inline bool
+have_traps(const ShellContext& sh)
+{
+	return sh.trapcnt != 0;
+}
 
 
 /*
@@ -959,6 +971,13 @@ out:
 		TRY_SHV(setvar(sh, "_", lastarg, 0));
 
 	return status;
+}
+
+static void
+freestdout(ShellContext &sh)
+{
+	sh.output.nextc = sh.output.buf;
+	sh.output.flags = 0;
 }
 
 static dash::ShellResult<int>

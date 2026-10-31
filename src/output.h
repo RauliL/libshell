@@ -83,6 +83,23 @@ int __closememout(ShellContext &sh);
 #endif
 #endif
 
+#ifdef USE_GLIBC_STDIO
+inline void outc(ShellContext &, int ch, struct output *file)
+{
+	putc(ch, file->stream);
+}
+#else
+inline void outc(ShellContext &sh, int ch, struct output *file)
+{
+	if (file->nextc == file->end)
+		outcslow(sh, ch, file);
+	else {
+		*file->nextc = ch;
+		file->nextc++;
+	}
+}
+#endif
+
 #define OUTPUT_ERR 01		/* error occurred on output */
 
 #ifdef USE_GLIBC_STDIO

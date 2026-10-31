@@ -240,34 +240,6 @@ struct ShellContext {
 	}
 };
 
-inline void freestdout(ShellContext &sh)
-{
-	sh.output.nextc = sh.output.buf;
-	sh.output.flags = 0;
-}
-
-#ifdef USE_GLIBC_STDIO
-inline void outc(ShellContext &, int ch, struct output *file)
-{
-	putc(ch, file->stream);
-}
-#else
-inline void outc(ShellContext &sh, int ch, struct output *file)
-{
-	if (file->nextc == file->end)
-		outcslow(sh, ch, file);
-	else {
-		*file->nextc = ch;
-		file->nextc++;
-	}
-}
-#endif
-
-inline int have_traps(ShellContext &sh)
-{
-	return sh.trapcnt;
-}
-
 inline char *bltinlookup(ShellContext &sh, const char *name)
 {
 	return lookupvar(sh, name);
@@ -276,11 +248,6 @@ inline char *bltinlookup(ShellContext &sh, const char *name)
 inline int goodname(ShellContext &sh, const char *p)
 {
 	return !*endofname(sh, p);
-}
-
-inline int parser_eof(ShellContext &sh)
-{
-	return sh.tokpushback && sh.lasttoken == TEOF;
 }
 
 inline dash::ShellResult<int> execute(ShellContext &sh, char *command, EvalFlags flags)
