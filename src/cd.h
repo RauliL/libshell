@@ -32,9 +32,13 @@
  *
  */
 
+#include <optional>
+#include <string_view>
+
 #include "error.h"
 struct ShellContext;
 dash::ShellResult<int> cdcmd(ShellContext &sh, int, char **);
 dash::ShellResult<int> pwdcmd(ShellContext &sh, int, char **);
-dash::ShellResult<void> setpwd(ShellContext &sh, const char *, int);
+dash::ShellResult<void> setpwd(ShellContext &sh, std::optional<std::string_view> val,
+			       int setold, bool refresh_phys = false);
 #endif

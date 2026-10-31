@@ -37,6 +37,7 @@
  */
 
 #include <cstddef>
+#include <string_view>
 #include "token.h"
 #include "result.h"
 
@@ -89,16 +90,17 @@ namespace dash { class ParseError; }
 
 struct ShellContext;
 
-bool isassignment(ShellContext &sh, const char *p);
-bool issimplecmd(ShellContext &sh, union node *n, const char *name);
+bool isassignment(ShellContext &sh, std::string_view p);
+bool issimplecmd(ShellContext &sh, union node *n, std::string_view name);
 union node *parsecmd(ShellContext &sh, int);
 void fixredir(ShellContext &sh, union node *, const char *, int);
 const char *getprompt(ShellContext &, void *);
 const char *const *findkwd(ShellContext &, const char *);
-char *endofname(const char *p);
+/* Length of a leading legal variable name; 0 if none. */
+std::size_t endofname(std::string_view name);
 const char *expandstr(ShellContext &sh, const char *);
 unsigned getmbc(ShellContext &sh, int c, char *out, int mode);
 void report_parse_error(ShellContext &sh, const dash::ParseError &e);
-dash::Result<void> try_parse_string(ShellContext &sh, char *s);
+dash::Result<void> try_parse_string(ShellContext &sh, std::string_view s);
 
 #endif

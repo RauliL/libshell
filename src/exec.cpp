@@ -580,13 +580,14 @@ hashcd(ShellContext &sh)
  */
 
 void
-changepath(ShellContext &sh, const char *newval)
+changepath(ShellContext &sh, std::string_view newval)
 {
+	std::string path(newval);
 	const char *scan;
 	int idx;
 	int bltin;
 
-	scan = newval;
+	scan = path.c_str();
 	idx = 0;
 	bltin = -1;
 	for (;;) {
@@ -757,11 +758,12 @@ defun(ShellContext &sh, union node *func)
  */
 
 void
-unsetfunc(ShellContext &sh, const char *name)
+unsetfunc(ShellContext &sh, std::string_view name)
 {
 	struct tblentry *cmdp;
+	std::string key(name);
 
-	if ((cmdp = cmdlookup(sh, name, 0)) != NULL &&
+	if ((cmdp = cmdlookup(sh, key.c_str(), 0)) != NULL &&
 	    cmdp->cmdtype == CMDFUNCTION)
 		delete_cmd_entry(sh);
 }

@@ -71,7 +71,7 @@ static void signal_entry(int signo)
 		onsig(*ShellContext::signaled, signo);
 }
 
-static int decode_signum(ShellContext &sh, const char *);
+static int decode_signum(ShellContext &sh, std::string_view);
 MKINIT dash::ShellResult<void> clear_traps(ShellContext &sh, union node *);
 
 #ifdef mkinit
@@ -337,12 +337,14 @@ exitshell(ShellContext &sh)
 }
 
 static int
-decode_signum(ShellContext &sh, const char *string)
+decode_signum(ShellContext &sh, std::string_view string)
 {
 	int signo = -1;
 
-	if (is_number(sh, string)) {
-		signo = atoi(string);
+	if (is_number(string)) {
+		std::string tmp(string);
+
+		signo = std::atoi(tmp.c_str());
 		if (signo >= NSIG)
 			signo = -1;
 	}
@@ -351,7 +353,7 @@ decode_signum(ShellContext &sh, const char *string)
 }
 
 int
-decode_signal(ShellContext &sh, const char *string, int minsig)
+decode_signal(ShellContext &sh, std::string_view string, int minsig)
 {
 	int signo;
 
@@ -359,8 +361,9 @@ decode_signal(ShellContext &sh, const char *string, int minsig)
 	if (signo >= 0)
 		return signo;
 
+	std::string tmp(string);
 	for (signo = minsig; signo < NSIG; signo++) {
-		if (!strcasecmp(string, signal_names[signo])) {
+		if (!strcasecmp(tmp.c_str(), signal_names[signo])) {
 			return signo;
 		}
 	}

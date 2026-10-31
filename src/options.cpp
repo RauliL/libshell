@@ -355,8 +355,9 @@ setcmd(ShellContext &sh, int argc, char **argv)
 
 
 void
-getoptsreset(ShellContext &sh, const char *value)
+getoptsreset(ShellContext &sh, std::string_view value)
 {
+	(void)value;
 	sh.shellparam.optind = 1;
 	sh.shellparam.optoff = -1;
 }
@@ -498,10 +499,9 @@ out:
  */
 
 dash::ShellResult<int>
-nextopt(ShellContext &sh, const char *optstring)
+nextopt(ShellContext &sh, std::string_view optstring)
 {
 	char *p;
-	const char *q;
 	char c;
 
 	if ((p = sh.optptr) == NULL || *p == '\0') {
@@ -513,13 +513,18 @@ nextopt(ShellContext &sh, const char *optstring)
 			return '\0';
 	}
 	c = *p++;
-	for (q = optstring ; *q != c ; ) {
-		if (*q == '\0')
+	std::size_t i = 0;
+	for (;;) {
+		if (i >= optstring.size())
 			return sh_error(sh, "Illegal option -%c", c);
-		if (*++q == ':')
-			q++;
+		if (optstring[i] == c)
+			break;
+		if (i + 1 < optstring.size() && optstring[i + 1] == ':')
+			i += 2;
+		else
+			++i;
 	}
-	if (*++q == ':') {
+	if (i + 1 < optstring.size() && optstring[i + 1] == ':') {
 		if (*p == '\0' && (p = *sh.argptr++) == NULL)
 			return sh_error(sh, "No arg for -%c option", c);
 		sh.optionarg = p;

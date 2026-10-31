@@ -36,6 +36,8 @@
  *	@(#)exec.h	8.3 (Berkeley) 6/8/95
  */
 
+#include <string_view>
+
 /* values of cmdtype */
 #define CMDUNKNOWN	-1	/* no entry in table for command */
 #define CMDNORMAL	0	/* command is an executable program */
@@ -78,12 +80,12 @@ int hashcmd(int, char **);
 dash::ShellResult<void> find_command(ShellContext &, char *, struct cmdentry *, int, const char *);
 struct builtincmd *find_builtin(ShellContext &, const char *);
 void hashcd(ShellContext &);
-void changepath(const char *);
+void changepath(ShellContext &, std::string_view);
 #ifdef notdef
 void getcmdentry(char *, struct cmdentry *);
 #endif
 void defun(ShellContext &, union node *);
-void unsetfunc(ShellContext &, const char *);
+void unsetfunc(ShellContext &, std::string_view);
 int typecmd(int, char **);
 int commandcmd(int, char **);
 

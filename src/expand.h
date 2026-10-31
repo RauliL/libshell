@@ -38,6 +38,7 @@
 
 #include <inttypes.h>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using ArgList = std::vector<std::string>;
@@ -83,6 +84,6 @@ dash::ShellResult<void> removerecordregions(ShellContext &sh, int);
 void ifsbreakup(ShellContext &sh, char *, int, ArgList *);
 void ifsfree(ShellContext &sh);
 dash::ShellResult<void> restore_handler_expandarg(ShellContext &sh, int err);
-void changeifs(ShellContext &sh, const char *);
+void changeifs(ShellContext &sh, std::string_view);
 
 #endif

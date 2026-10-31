@@ -37,6 +37,7 @@
  */
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include "error.h"
 
@@ -77,6 +78,6 @@ void freeparam(ShellContext &sh, struct shparam *);
 dash::ShellResult<int> shiftcmd(ShellContext &sh, int, char **);
 dash::ShellResult<int> setcmd(ShellContext &sh, int, char **);
 dash::ShellResult<int> getoptscmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> nextopt(ShellContext &sh, const char *);
-void getoptsreset(ShellContext &sh, const char *);
+dash::ShellResult<int> nextopt(ShellContext &sh, std::string_view);
+void getoptsreset(ShellContext &sh, std::string_view);
 #endif

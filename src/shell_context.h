@@ -57,10 +57,10 @@ enum limtype : int;
 
 struct ShellContext;
 
-void changeifs(ShellContext &sh, const char *val);
-void changepath(ShellContext &sh, const char *val);
-void getoptsreset(ShellContext &sh, const char *val);
-void changelocale(ShellContext &sh, const char *val);
+void changeifs(ShellContext &sh, std::string_view val);
+void changepath(ShellContext &sh, std::string_view val);
+void getoptsreset(ShellContext &sh, std::string_view val);
+void changelocale(ShellContext &sh, std::string_view val);
 
 struct ShellContext {
 	StackStr stackstr;
@@ -227,7 +227,7 @@ struct ShellContext {
 	dash::ShellResult<int> run_interactive();
 };
 
-inline char *bltinlookup(ShellContext &sh, const char *name)
+inline char *bltinlookup(ShellContext &sh, std::string_view name)
 {
 	return lookupvar(sh, name);
 }

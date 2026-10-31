@@ -70,11 +70,11 @@ void scopyn(const char *, char *, int);
 
 struct ShellContext;
 char *prefix(const char *, const char *);
-tl::unexpected<dash::ShellErr> badnum(ShellContext &sh, const char *s);
-dash::ShellResult<intmax_t> atomax(ShellContext &sh, const char *, int);
-dash::ShellResult<intmax_t> atomax10(ShellContext &sh, const char *);
-dash::ShellResult<int> number(ShellContext &sh, const char *);
-int is_number(ShellContext &sh, const char *);
+tl::unexpected<dash::ShellErr> badnum(ShellContext &sh, std::string_view s);
+dash::ShellResult<intmax_t> atomax(ShellContext &sh, std::string_view, int);
+dash::ShellResult<intmax_t> atomax10(ShellContext &sh, std::string_view);
+dash::ShellResult<int> number(ShellContext &sh, std::string_view);
+bool is_number(std::string_view);
 char *single_quote(ShellContext &sh, const char *);
 int pstrcmp(const void *, const void *);
 const char *const *findstring(const char *, const char *const *, size_t);

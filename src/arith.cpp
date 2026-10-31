@@ -597,7 +597,7 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 				if (noeval)
 					return 0;
 				{
-					auto v = lookupvarint(sh_, node.name.c_str());
+					auto v = lookupvarint(sh_, node.name);
 					if (!v)
 						return tl::unexpected(
 							std::string("variable lookup failed"));
@@ -666,7 +666,7 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 
 				intmax_t result = *rhs;
 				if (node.op != Op::Assign) {
-					auto cur = lookupvarint(sh_, node.name.c_str());
+					auto cur = lookupvarint(sh_, node.name);
 					if (!cur)
 						return tl::unexpected(
 							std::string("variable lookup failed"));
@@ -695,18 +695,19 @@ Result<intmax_t> Evaluator::eval(const ExprPtr &expr)
 } /* namespace dash */
 
 dash::ShellResult<intmax_t>
-arith(ShellContext &sh, const char *s)
+arith(ShellContext &sh, std::string_view s)
 {
-	auto ast = dash::arith::parse(s ? s : "");
+	std::string expr(s);
+	auto ast = dash::arith::parse(expr);
 	if (!ast)
 		return sh_error(sh, "arithmetic expression: %s: \"%s\"",
-				ast.error().c_str(), s);
+				ast.error().c_str(), expr.c_str());
 
 	dash::arith::Evaluator evaluator(*&sh);
 	auto result = evaluator.eval(*ast);
 	if (!result)
 		return sh_error(sh, "arithmetic expression: %s: \"%s\"",
-				result.error().c_str(), s);
+				result.error().c_str(), expr.c_str());
 
 	return *result;
 }

@@ -51,7 +51,7 @@
 
 static dash::ShellResult<void> setalias(ShellContext &sh, const char *, const char *);
 static struct alias * freealias(ShellContext &sh, struct alias *);
-static struct alias ** __lookupalias(ShellContext &sh, const char *);
+static struct alias ** __lookupalias(ShellContext &sh, std::string_view);
 
 static dash::ShellResult<void>
 setalias(ShellContext &sh, const char *name, const char *val)
@@ -85,7 +85,7 @@ setalias(ShellContext &sh, const char *name, const char *val)
 }
 
 dash::ShellResult<int>
-unalias(ShellContext &sh, const char *name)
+unalias(ShellContext &sh, std::string_view name)
 {
 	struct alias **app;
 
@@ -122,7 +122,7 @@ rmaliases(ShellContext &sh)
 }
 
 struct alias *
-lookupalias(ShellContext &sh, const char *name, int check)
+lookupalias(ShellContext &sh, std::string_view name, int check)
 {
 	struct alias *ap = *__lookupalias(sh, name);
 
@@ -208,14 +208,14 @@ printalias(ShellContext &sh, const struct alias *ap)
 }
 
 static struct alias **
-__lookupalias(ShellContext &sh, const char *name)
+__lookupalias(ShellContext &sh, std::string_view name)
 {
 	struct alias **app;
 
 	app = &sh.atab[hashval(name) % ATABSIZE];
 
 	for (; *app; app = &(*app)->next) {
-		if (varequal(name, (*app)->name.c_str())) {
+		if (varequal(name, (*app)->name)) {
 			break;
 		}
 	}

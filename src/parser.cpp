@@ -135,19 +135,21 @@ static void setprompt(ShellContext &sh, int);
 
 
 bool
-isassignment(ShellContext &sh, const char *p)
+isassignment(ShellContext &sh, std::string_view p)
 {
-	const char *q = endofname(p);
-	if (p == q)
-		return 0;
-	return *q == '=';
+	(void)sh;
+	auto n = endofname(p);
+	if (n == 0)
+		return false;
+	return n < p.size() && p[n] == '=';
 }
 
 bool
-issimplecmd(ShellContext &sh, union node *n, const char *name)
+issimplecmd(ShellContext &sh, union node *n, std::string_view name)
 {
+	(void)sh;
 	return n && n->type == NCMD && n->ncmd.args &&
-	       equal(n->ncmd.args->narg.text.c_str(), name);
+	       n->ncmd.args->narg.text == name;
 }
 
 static inline bool
@@ -383,7 +385,8 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? sh.wordtext.c_st
 		break;
 	}
 	case TFOR:
-		if (readtoken(sh) != TWORD || sh.quoteflag || !!*endofname(sh.wordtext.c_str()))
+		if (readtoken(sh) != TWORD || sh.quoteflag ||
+		    endofname(sh.wordtext) != sh.wordtext.size())
 			synerror(sh, "Bad for loop variable");
 		n1 = new_node<nfor>();
 		n1->type = NFOR;
@@ -550,7 +553,7 @@ simplecmd(ShellContext &sh)
 			n->type = NARG;
 			n->narg.text = sh.wordtext;
 			n->narg.backquote = std::move(sh.backquotelist);
-			if (savecheckkwd && isassignment(sh, sh.wordtext.c_str())) {
+			if (savecheckkwd && isassignment(sh, sh.wordtext)) {
 				*vpp = n;
 				vpp = &n->narg.next;
 			} else {
@@ -576,7 +579,7 @@ simplecmd(ShellContext &sh)
 				if (readtoken(sh) != TRP)
 					synexpect(sh, TRP);
 				if (
-					!!*endofname(fname.c_str()) || (
+					endofname(fname) != fname.size() || (
 						(bcmd = find_builtin(sh, fname.c_str())) &&
 						bcmd->flags & BUILTIN_SPECIAL
 					)
@@ -758,7 +761,7 @@ top:
 
 	if (kwd & CHKALIAS) {
 		struct alias *ap;
-		if ((ap = lookupalias(sh, sh.wordtext.c_str(), 1)) != NULL) {
+		if ((ap = lookupalias(sh, sh.wordtext, 1)) != NULL) {
 			if (!ap->val.empty()) {
 				pushstring(sh, ap->val.data(), ap);
 			}
@@ -1677,18 +1680,15 @@ INCLUDE "parser.h"
  * more letters, underscores, and digits).
  */
 
-char *
-endofname(const char *name)
+std::size_t
+endofname(std::string_view name)
 {
-	auto p = const_cast<char *>(name);
-
-	if (! is_name(*p))
-		return p;
-	while (*++p) {
-		if (! is_in_name(*p))
-			break;
-	}
-	return p;
+	if (name.empty() || !is_name(name[0]))
+		return 0;
+	std::size_t i = 1;
+	while (i < name.size() && is_in_name(name[i]))
+		++i;
+	return i;
 }
 
 
@@ -1730,7 +1730,7 @@ report_parse_error(ShellContext &sh, const dash::ParseError &e)
 }
 
 dash::Result<void>
-try_parse_string(ShellContext &sh, char *s)
+try_parse_string(ShellContext &sh, std::string_view s)
 {
 	union node *n;
 	char save_nflag = nflag;

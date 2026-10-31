@@ -199,7 +199,7 @@ freestrings(ShellContext &sh, InputStack &in, struct strpush *sp)
 		if (sp->ap) {
 			sp->ap->flag &= ~ALIASINUSE;
 			if (sp->ap->flag & ALIASDEAD) {
-				unalias(sh, sp->ap->name.c_str());
+				unalias(sh, sp->ap->name);
 			}
 		}
 
@@ -462,12 +462,13 @@ popstring(ShellContext &sh, InputStack &in)
  */
 
 dash::ShellResult<int>
-setinputfile(ShellContext &sh, InputStack &in, const char *fname, int flags)
+setinputfile(ShellContext &sh, InputStack &in, std::string_view fname, int flags)
 {
 	int fd;
+	std::string path(fname);
 
 	INTOFF;
-	fd = TRY_SH(sh_open(sh, fname, O_RDONLY, flags & INPUT_NOFILE_OK));
+	fd = TRY_SH(sh_open(sh, path.c_str(), O_RDONLY, flags & INPUT_NOFILE_OK));
 	if (fd < 0)
 		goto out;
 	if (fd < 10)
@@ -648,7 +649,7 @@ pushstring(ShellContext &sh, char *s, void *ap)
 }
 
 dash::ShellResult<int>
-setinputfile(ShellContext &sh, const char *fname, int flags)
+setinputfile(ShellContext &sh, std::string_view fname, int flags)
 {
 	return setinputfile(sh, sh.input, fname, flags);
 }

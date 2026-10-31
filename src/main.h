@@ -37,6 +37,7 @@
  */
 
 #include <errno.h>
+#include <string_view>
 
 #include "result.h"
 
@@ -53,7 +54,7 @@ extern int *dash_errno;
 #endif
 
 dash::ShellResult<int> cmdloop(ShellContext &sh);
-dash::ShellResult<void> readcmdfile(ShellContext &sh, char *);
+dash::ShellResult<void> readcmdfile(ShellContext &sh, std::string_view);
 dash::ShellResult<int> dotcmd(ShellContext &sh, int, char **);
 dash::ShellResult<int> exitcmd(ShellContext &sh, int, char **);
 #endif

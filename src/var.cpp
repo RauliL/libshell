@@ -83,19 +83,23 @@ const char defpathvar[] =
 
 
 void
-changelocale(ShellContext &, const char *val)
+changelocale(ShellContext &, std::string_view val)
 {
-	const auto eq = std::strchr(val, '=');
+	auto eq = val.find('=');
 
-	if (eq) {
-		std::string name(val, static_cast<std::size_t>(eq - val));
+	if (eq != std::string_view::npos) {
+		std::string name(val.substr(0, eq));
+		std::string_view value = val.substr(eq + 1);
 
-		if (eq[1] == '\0')
+		if (value.empty())
 			unsetenv(name.c_str());
-		else
-			setenv(name.c_str(), eq + 1, 1);
+		else {
+			std::string value_str(value);
+			setenv(name.c_str(), value_str.c_str(), 1);
+		}
 	} else {
-		unsetenv(val);
+		std::string name(val);
+		unsetenv(name.c_str());
 	}
 	setlocale(LC_ALL, nullstr);
 }
@@ -105,9 +109,9 @@ changelocale(ShellContext &, const char *val)
 
 
 
-static struct var ** hashvar(ShellContext &sh, const char *);
+static struct var ** hashvar(ShellContext &sh, std::string_view);
 STATIC int vpcmp(const void *, const void *);
-static struct var ** findvar(ShellContext &sh, const char *);
+static struct var ** findvar(ShellContext &sh, std::string_view);
 
 /*
  * Initialize the varable symbol tables and import the environment
@@ -128,8 +132,9 @@ INIT {
 
 	initvar(sh);
 	for (envp = environ ; *envp ; envp++) {
-		p = endofname(*envp);
-		if (p != *envp && *p == '=') {
+		std::string_view ev(*envp);
+		auto n = endofname(ev);
+		if (n > 0 && n < ev.size() && ev[n] == '=') {
 			setvareq(sh, *envp, VarFlag::exported);
 		}
 	}
@@ -145,7 +150,7 @@ INIT {
 		if (*p != '/' || stat64(p, &st1) || stat64(dotdir, &st2) ||
 		    st1.st_dev != st2.st_dev || st1.st_ino != st2.st_ino)
 			p = 0;
-	setpwd(sh, p, 0);
+	setpwd(sh, p ? std::optional<std::string_view>(p) : std::nullopt, 0);
 }
 
 RESET {
@@ -153,24 +158,24 @@ RESET {
 }
 #endif
 
-static inline const char *
-varnull(const std::string &s)
+static std::string_view
+varvalue(std::string_view s)
 {
-	/* Unset variables end with an extra NUL (name\0\0) or name=. */
-	return strchrnul(s.c_str(), '=') + 1;
+	auto pos = s.find('=');
+	if (pos == std::string_view::npos)
+		return {};
+	return s.substr(pos + 1);
 }
 
 static void
 varfunc(ShellContext &sh, struct var *vp)
 {
-	const char *s;
-
 	if (!vp->func)
 		return;
 
-	s = vp->text.c_str();
+	std::string_view s = vp->text;
 	if (!vp->flags.test(VarFlag::full))
-		s = varnull(vp->text);
+		s = varvalue(vp->text);
 	vp->func(sh, s);
 }
 
@@ -209,12 +214,11 @@ dash::ShellResult<struct var *>
 setvar(ShellContext &sh, const std::string &name, std::optional<std::string> val,
        VarFlags flags)
 {
-	const char *q = endofname(name.c_str());
-	const char *eq = strchrnul(q, '=');
-	size_t namelen = static_cast<size_t>(eq - name.c_str());
-	if (!namelen || eq != q)
+	size_t namelen = endofname(name);
+	if (!namelen || (namelen < name.size() && name[namelen] != '='))
 		return sh_error(sh, "%.*s: bad variable name",
-				static_cast<int>(namelen), name.c_str());
+				static_cast<int>(namelen ? namelen : name.size()),
+				name.c_str());
 
 	if (!val)
 		flags |= VarFlag::unset;
@@ -316,7 +320,7 @@ out:
  */
 
 char *
-lookupvar(ShellContext &sh, const char *name)
+lookupvar(ShellContext &sh, std::string_view name)
 {
 	struct var *v;
 
@@ -334,7 +338,7 @@ lookupvar(ShellContext &sh, const char *name)
 }
 
 dash::ShellResult<intmax_t>
-lookupvarint(ShellContext &sh, const char *name)
+lookupvarint(ShellContext &sh, std::string_view name)
 {
 	return atomax(sh, lookupvar(sh, name) ?: nullstr, 0);
 }
@@ -375,16 +379,17 @@ listvars(ShellContext &sh, VarFlags on, VarFlags off)
  */
 
 dash::ShellResult<int>
-showvars(ShellContext &sh, const char *prefix, VarFlags on, VarFlags off)
+showvars(ShellContext &sh, std::string_view prefix, VarFlags on, VarFlags off)
 {
 	const char *sep;
 	std::vector<char *> list = listvars(sh, on, off);
 	char **ep = list.data();
 	char **epend = list.data() + list.size() - 1;
+	std::string prefix_str(prefix);
 
 	qsort(ep, static_cast<size_t>(epend - ep), sizeof(char *), vpcmp);
 
-	sep = *prefix ? spcstr : prefix;
+	sep = prefix.empty() ? "" : spcstr;
 
 	for (; ep < epend; ep++) {
 		const char *p;
@@ -395,7 +400,8 @@ showvars(ShellContext &sh, const char *prefix, VarFlags on, VarFlags off)
 		if (*p)
 			q = single_quote(sh, ++p);
 
-		out1fmt(sh, "%s%s%.*s%s\n", prefix, sep, (int)(p - *ep), *ep, q);
+		out1fmt(sh, "%s%s%.*s%s\n", prefix_str.c_str(), sep,
+			(int)(p - *ep), *ep, q);
 	}
 
 	return 0;
@@ -468,34 +474,34 @@ localcmd(ShellContext &sh, int argc, char **argv)
  */
 
 dash::ShellResult<void>
-mklocal(ShellContext &sh, char *name, VarFlags flags)
+mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
 {
 	struct localvar *lvp;
 	struct var *vp;
 
 	INTOFF;
 	lvp = new localvar;
-	if (name[0] == '-' && name[1] == '\0') {
+	if (name == "-") {
 		lvp->text.assign(sh.optlist, sizeof(sh.optlist));
 		vp = NULL;
 	} else {
-		char *eq;
+		auto eq = name.find('=');
 
 		vp = *findvar(sh, name);
-		eq = strchr(name, '=');
 		if (vp == NULL) {
-			if (eq)
-				vp = TRY_SH(setvareq(sh, name, VarFlag::str_fixed | flags));
+			if (eq != std::string_view::npos)
+				vp = TRY_SH(setvareq(sh, std::string(name),
+						     VarFlag::str_fixed | flags));
 			else
-				vp = TRY_SH(setvar(sh, name, std::nullopt,
+				vp = TRY_SH(setvar(sh, std::string(name), std::nullopt,
 						   VarFlag::str_fixed | flags));
 			lvp->flags = VarFlag::unset;
 		} else {
 			lvp->text = vp->text;
 			lvp->flags = vp->flags;
 			vp->flags |= VarFlag::str_fixed;
-			if (eq)
-				TRY_SHV(setvareq(sh, name, flags));
+			if (eq != std::string_view::npos)
+				TRY_SHV(setvareq(sh, std::string(name), flags));
 		}
 	}
 	lvp->vp = vp;
@@ -629,7 +635,7 @@ unsetvar(ShellContext &sh, const std::string &s)
  */
 
 static struct var **
-hashvar(ShellContext &sh, const char *p)
+hashvar(ShellContext &sh, std::string_view p)
 {
 	return &sh.vartab[hashval(p) % VTABSIZE];
 }
@@ -637,26 +643,33 @@ hashvar(ShellContext &sh, const char *p)
 
 
 /*
- * Compares two strings up to the first = or '\0'.  The first
- * string must be terminated by '='; the second may be terminated by
- * either '=' or '\0'.
+ * Compares two strings up to the first = or end.  Either side may use
+ * '=' as the name terminator.
  */
 
 int
-varcmp(const char *p, const char *q)
+varcmp(std::string_view p, std::string_view q)
 {
-	int c = *p, d = *q;
+	auto at = [](std::string_view s, std::size_t i, bool map_eq) {
+		if (i >= s.size())
+			return 0;
+		int c = static_cast<unsigned char>(s[i]);
+		if (map_eq && c == '=')
+			return 0;
+		return c;
+	};
+
+	std::size_t i = 0;
+	std::size_t j = 0;
+	int c = at(p, 0, false);
+	int d = at(q, 0, false);
 	while (c == d) {
 		if (!c)
-			break;
-		p++;
-		q++;
-		c = *p;
-		d = *q;
-		if (c == '=')
-			c = '\0';
-		if (d == '=')
-			d = '\0';
+			return 0;
+		++i;
+		++j;
+		c = at(p, i, true);
+		d = at(q, j, true);
 	}
 	return c - d;
 }
@@ -668,12 +681,12 @@ vpcmp(const void *a, const void *b)
 }
 
 static struct var **
-findvar(ShellContext &sh, const char *name)
+findvar(ShellContext &sh, std::string_view name)
 {
 	struct var **vpp;
 
 	for (vpp = hashvar(sh, name); *vpp; vpp = &(*vpp)->next) {
-		if (varequal((*vpp)->text.c_str(), name)) {
+		if (varequal((*vpp)->text, name)) {
 			break;
 		}
 	}

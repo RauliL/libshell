@@ -1409,7 +1409,7 @@ out:
 }
 
 void
-changeifs(ShellContext &sh, const char *ifs)
+changeifs(ShellContext &sh, std::string_view ifs_in)
 {
 	mbstate_t mbs = {};
 	std::wstring nwcifs;
@@ -1417,6 +1417,7 @@ changeifs(ShellContext &sh, const char *ifs)
 	size_t len = 0;
 	const char *p;
 	size_t ml;
+	const char *ifs = ifs_in.data();
 
 	if (!ifsset())
 		ifs = defifs;

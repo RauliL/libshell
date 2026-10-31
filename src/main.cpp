@@ -202,7 +202,7 @@ cmdloop(ShellContext &sh)
  * Read a file containing shell functions / commands.
  */
 dash::ShellResult<void>
-readcmdfile(ShellContext &sh, char *name)
+readcmdfile(ShellContext &sh, std::string_view name)
 {
 	TRY_SHV(setinputfile(sh, name, INPUT_PUSH_FILE));
 	auto r = cmdloop(sh);

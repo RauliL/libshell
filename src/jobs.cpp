@@ -719,8 +719,8 @@ check:
 		}
 	}
 
-	if (is_number(sh, p)) {
-		num = atoi(p);
+	if (is_number(p)) {
+		num = std::atoi(p);
 		if (num > 0 && num <= sh.jobs.size()) {
 			jp = sh.jobs[num - 1].get();
 			if (jp)

@@ -183,7 +183,10 @@ docd(ShellContext &sh, const char *dest, int flags)
 	err = chdir(dest);
 	if (err)
 		goto out;
-	TRY_SHV(setpwd(sh, dir, 1));
+	TRY_SHV(setpwd(sh,
+			 dir ? std::optional<std::string_view>(dir)
+			     : std::nullopt,
+			 1));
 	hashcd(sh);
 out:
 	INTON;
@@ -296,7 +299,7 @@ pwdcmd(ShellContext &sh, int argc, char **argv)
 	flags = TRY_SH(cdopt(sh));
 	if (flags) {
 		if (sh.physdir.empty())
-			TRY_SHV(setpwd(sh, dir, 0));
+			TRY_SHV(setpwd(sh, std::nullopt, 0, true));
 		dir = sh.physdir.c_str();
 	}
 	out1fmt(sh, snlfmt, dir);
@@ -304,21 +307,23 @@ pwdcmd(ShellContext &sh, int argc, char **argv)
 }
 
 dash::ShellResult<void>
-setpwd(ShellContext &sh, const char *val, int setold)
+setpwd(ShellContext &sh, std::optional<std::string_view> val, int setold,
+       bool refresh_phys)
 {
 	if (setold)
 		TRY_SHV(setvar(sh, "OLDPWD", sh.curdir, VarFlag::exported));
 
 	INTOFF;
-	sh.physdir.clear();
-	if (!val) {
-		sh.curdir = getpwd(sh);
-		sh.physdir = sh.curdir;
-	} else if (val == sh.curdir.c_str()) {
-		/* Refresh physical path; keep logical curdir. */
+	if (refresh_phys) {
 		sh.physdir = getpwd(sh);
 	} else {
-		sh.curdir = val;
+		sh.physdir.clear();
+		if (!val) {
+			sh.curdir = getpwd(sh);
+			sh.physdir = sh.curdir;
+		} else {
+			sh.curdir = *val;
+		}
 	}
 	INTON;
 	TRY_SHV(setvar(sh, "PWD", sh.curdir, VarFlag::exported));

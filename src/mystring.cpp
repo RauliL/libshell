@@ -117,28 +117,30 @@ prefix(const char *string, const char *pfx)
 }
 
 tl::unexpected<dash::ShellErr>
-badnum(ShellContext &sh, const char *s)
+badnum(ShellContext &sh, std::string_view s)
 {
-	return sh_error(sh, illnum, s);
+	std::string tmp(s);
+	return sh_error(sh, illnum, tmp.c_str());
 }
 
 /*
  * Convert a string into an integer of type intmax_t.  Alow trailing spaces.
  */
 dash::ShellResult<intmax_t>
-atomax(ShellContext &sh, const char *s, int base)
+atomax(ShellContext &sh, std::string_view s, int base)
 {
+	std::string tmp(s);
 	char *p;
 	intmax_t r;
 
 	errno = 0;
-	r = std::strtoimax(s, &p, base);
+	r = std::strtoimax(tmp.c_str(), &p, base);
 
 	/*
 	 * Disallow completely blank strings in non-arithmetic (base != 0)
 	 * contexts.
 	 */
-	if (p == s && base)
+	if (p == tmp.c_str() && base)
 		return badnum(sh, s);
 
 	while (std::isspace(static_cast<unsigned char>(*p)))
@@ -151,7 +153,7 @@ atomax(ShellContext &sh, const char *s, int base)
 }
 
 dash::ShellResult<intmax_t>
-atomax10(ShellContext &sh, const char *s)
+atomax10(ShellContext &sh, std::string_view s)
 {
 	return atomax(sh, s, 10);
 }
@@ -162,7 +164,7 @@ atomax10(ShellContext &sh, const char *s)
  */
 
 dash::ShellResult<int>
-number(ShellContext &sh, const char *s)
+number(ShellContext &sh, std::string_view s)
 {
 	intmax_t n = TRY_SH(atomax10(sh, s));
 
@@ -178,12 +180,11 @@ number(ShellContext &sh, const char *s)
  * Check for a valid number.  This should be elsewhere.
  */
 
-int
-is_number(ShellContext &sh, const char *p)
+bool
+is_number(std::string_view text)
 {
-	std::string_view text(p);
 	if (text.empty())
-		return 0;
+		return false;
 	return std::all_of(text.begin(), text.end(), [](char c) {
 		return is_digit(static_cast<unsigned char>(c));
 	});

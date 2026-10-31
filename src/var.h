@@ -43,6 +43,7 @@
 #include <inttypes.h>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -175,7 +176,7 @@ struct var {
 	struct var *next;		/* next entry in hash list */
 	VarFlags flags;
 	std::string text;		/* name=value (owned; empty value when unset) */
-	void (*func)(ShellContext &, const char *);
+	void (*func)(ShellContext &, std::string_view);
 					/* function to be called when  */
 					/* the variable gets set/unset */
 };
@@ -231,40 +232,42 @@ dash::ShellResult<intmax_t> setvarint(ShellContext &sh, const std::string &,
 				      intmax_t, VarFlags flags = {});
 dash::ShellResult<struct var *> setvareq(ShellContext &sh, std::string s,
 					 VarFlags flags = {});
-char *lookupvar(ShellContext &sh, const char *);
-dash::ShellResult<intmax_t> lookupvarint(ShellContext &sh, const char *);
+char *lookupvar(ShellContext &sh, std::string_view name);
+dash::ShellResult<intmax_t> lookupvarint(ShellContext &sh, std::string_view name);
 std::vector<char *> listvars(ShellContext &sh, VarFlags on, VarFlags off);
 inline std::vector<char *> environment(ShellContext &sh)
 {
 	return listvars(sh, VarFlag::exported, VarFlag::unset);
 }
-dash::ShellResult<int> showvars(ShellContext &sh, const char *, VarFlags on,
-				VarFlags off);
+dash::ShellResult<int> showvars(ShellContext &sh, std::string_view prefix,
+				VarFlags on, VarFlags off);
 dash::ShellResult<int> exportcmd(ShellContext &sh, int, char **);
 dash::ShellResult<int> localcmd(ShellContext &sh, int, char **);
-dash::ShellResult<void> mklocal(ShellContext &sh, char *name, VarFlags flags = {});
+dash::ShellResult<void> mklocal(ShellContext &sh, std::string_view name,
+				VarFlags flags = {});
 dash::ShellResult<struct localvar_list *> pushlocalvars(ShellContext &sh, int push);
 dash::ShellResult<void> unwindlocalvars(ShellContext &sh, struct localvar_list *stop);
 dash::ShellResult<int> unsetcmd(ShellContext &sh, int, char **);
 dash::ShellResult<void> unsetvar(ShellContext &sh, const std::string &);
-int varcmp(const char *, const char *);
+int varcmp(std::string_view, std::string_view);
 
-static inline unsigned int hashval(const char *p)
+static inline unsigned int hashval(std::string_view p)
 {
-	unsigned int hashval;
+	if (p.empty())
+		return 0;
 
-	hashval = ((unsigned char) *p) << 4;
-	while (*p) {
-		hashval += (unsigned char) *p++;
-		if (*p == '=')
+	unsigned int h = static_cast<unsigned char>(p[0]) << 4;
+	for (std::size_t i = 0;; ++i) {
+		h += static_cast<unsigned char>(p[i]);
+		if (i + 1 >= p.size() || p[i + 1] == '=')
 			break;
 	}
-
-	return hashval;
+	return h;
 }
 
 
-static inline int varequal(const char *a, const char *b) {
+static inline int varequal(std::string_view a, std::string_view b)
+{
 	return !varcmp(a, b);
 }
 

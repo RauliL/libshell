@@ -826,7 +826,7 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 		for (; argp; argp = argp->narg.next)
 			TRY_SHV(expandarg(sh, argp, &args,
 				  pseudovarflag &&
-				  isassignment(sh, argp->narg.text.c_str()) ?
+				  isassignment(sh, argp->narg.text) ?
 				  EXP_VARTILDE : EXP_FULL | EXP_TILDE));
 
 		argc = static_cast<int>(args.size() - arg0);
@@ -872,7 +872,7 @@ bail:
 		TRY_SHV(expandarg(sh, argp, &vars, EXP_VARTILDE));
 		for (size_t i = before; i < vars.size(); i++) {
 			if (vlocal)
-				TRY_SHV(mklocal(sh, vars[i].data(), VarFlag::exported));
+				TRY_SHV(mklocal(sh, vars[i], VarFlag::exported));
 			else
 				TRY_SHV(setvareq(sh, vars[i], vflags));
 		}
@@ -1062,7 +1062,8 @@ prehash(ShellContext &sh, union node *n)
 	struct cmdentry entry;
 
 	if (n->type == NCMD && n->ncmd.args)
-		if (!*endofname(n->ncmd.args->narg.text.c_str()))
+		if (endofname(n->ncmd.args->narg.text) ==
+		    n->ncmd.args->narg.text.size())
 			TRY_SHV(find_command(sh, n->ncmd.args->narg.text.data(), &entry, 0,
 				     pathval()));
 	return {};

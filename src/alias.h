@@ -37,6 +37,7 @@
  */
 
 #include <string>
+#include <string_view>
 #include "error.h"
 
 #define ALIASINUSE	1
@@ -50,9 +51,9 @@ struct alias {
 };
 
 struct ShellContext;
-struct alias *lookupalias(ShellContext &sh, const char *, int);
+struct alias *lookupalias(ShellContext &sh, std::string_view, int);
 dash::ShellResult<int> aliascmd(ShellContext &sh, int, char **);
 dash::ShellResult<int> unaliascmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> unalias(ShellContext &sh, const char *);
+dash::ShellResult<int> unalias(ShellContext &sh, std::string_view);
 void printalias(ShellContext &sh, const struct alias *);
 #endif
