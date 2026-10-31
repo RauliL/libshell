@@ -212,7 +212,7 @@ resume:
 	if (!failed && state < 4) {
 		state = 4;
 		if (sh.minusc)
-			take(execute(sh, sh.minusc->data(),
+			take(evalstring(sh, sh.minusc->data(),
 				sflag ? EvalFlags{} : EvalFlag::exit));
 	}
 	if (!failed) {

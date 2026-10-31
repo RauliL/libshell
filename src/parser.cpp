@@ -137,7 +137,7 @@ static void setprompt(ShellContext &sh, int);
 bool
 isassignment(ShellContext &sh, const char *p)
 {
-	const char *q = endofname(sh, p);
+	const char *q = endofname(p);
 	if (p == q)
 		return 0;
 	return *q == '=';
@@ -383,7 +383,7 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? sh.wordtext.c_st
 		break;
 	}
 	case TFOR:
-		if (readtoken(sh) != TWORD || sh.quoteflag || ! goodname(sh, sh.wordtext.c_str()))
+		if (readtoken(sh) != TWORD || sh.quoteflag || !!*endofname(sh.wordtext.c_str()))
 			synerror(sh, "Bad for loop variable");
 		n1 = new_node<nfor>();
 		n1->type = NFOR;
@@ -576,7 +576,7 @@ simplecmd(ShellContext &sh)
 				if (readtoken(sh) != TRP)
 					synexpect(sh, TRP);
 				if (
-					!goodname(sh, fname.c_str()) || (
+					!!*endofname(fname.c_str()) || (
 						(bcmd = find_builtin(sh, fname.c_str())) &&
 						bcmd->flags & BUILTIN_SPECIAL
 					)
@@ -1678,11 +1678,10 @@ INCLUDE "parser.h"
  */
 
 char *
-endofname(ShellContext &sh, const char *name)
+endofname(const char *name)
 {
-	char *p;
+	auto p = const_cast<char *>(name);
 
-	p = (char *) name;
 	if (! is_name(*p))
 		return p;
 	while (*++p) {

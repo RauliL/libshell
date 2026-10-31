@@ -95,7 +95,7 @@ union node *parsecmd(ShellContext &sh, int);
 void fixredir(ShellContext &sh, union node *, const char *, int);
 const char *getprompt(ShellContext &, void *);
 const char *const *findkwd(ShellContext &, const char *);
-char *endofname(ShellContext &sh, const char *p);
+char *endofname(const char *p);
 const char *expandstr(ShellContext &sh, const char *);
 unsigned getmbc(ShellContext &sh, int c, char *out, int mode);
 void report_parse_error(ShellContext &sh, const dash::ParseError &e);

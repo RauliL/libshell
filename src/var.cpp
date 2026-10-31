@@ -127,7 +127,7 @@ INIT {
 
 	initvar(sh);
 	for (envp = environ ; *envp ; envp++) {
-		p = endofname(sh, *envp);
+		p = endofname(*envp);
 		if (p != *envp && *p == '=') {
 			setvareq(sh, *envp, VEXPORT|VTEXTFIXED);
 		}
@@ -214,7 +214,7 @@ setvar(ShellContext &sh, const char *name, const char *val, int flags)
 	size_t vallen;
 	struct var *vp;
 
-	q = endofname(sh, name);
+	q = endofname(name);
 	p = strchrnul(q, '=');
 	namelen = p - name;
 	if (!namelen || p != q)

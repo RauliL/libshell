@@ -1074,7 +1074,7 @@ prehash(ShellContext &sh, union node *n)
 	struct cmdentry entry;
 
 	if (n->type == NCMD && n->ncmd.args)
-		if (goodname(sh, n->ncmd.args->narg.text.c_str()))
+		if (!*endofname(n->ncmd.args->narg.text.c_str()))
 			TRY_SHV(find_command(sh, n->ncmd.args->narg.text.data(), &entry, 0,
 				     pathval()));
 	return {};

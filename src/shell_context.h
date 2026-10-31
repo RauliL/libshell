@@ -233,14 +233,4 @@ inline char *bltinlookup(ShellContext &sh, const char *name)
 	return lookupvar(sh, name);
 }
 
-inline int goodname(ShellContext &sh, const char *p)
-{
-	return !*endofname(sh, p);
-}
-
-inline dash::ShellResult<int> execute(ShellContext &sh, char *command, EvalFlags flags)
-{
-	return evalstring(sh, command, flags);
-}
-
 #endif
