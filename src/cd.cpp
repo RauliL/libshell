@@ -308,7 +308,7 @@ dash::ShellResult<void>
 setpwd(ShellContext &sh, const char *val, int setold)
 {
 	if (setold)
-		TRY_SHV(setvar(sh, "OLDPWD", sh.curdir.c_str(), VEXPORT));
+		TRY_SHV(setvar(sh, "OLDPWD", sh.curdir, VarFlag::exported));
 
 	INTOFF;
 	sh.physdir.clear();
@@ -322,6 +322,6 @@ setpwd(ShellContext &sh, const char *val, int setold)
 		sh.curdir = val;
 	}
 	INTON;
-	TRY_SHV(setvar(sh, "PWD", sh.curdir.c_str(), VEXPORT));
+	TRY_SHV(setvar(sh, "PWD", sh.curdir, VarFlag::exported));
 	return {};
 }

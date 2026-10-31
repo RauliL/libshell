@@ -90,7 +90,7 @@ readcmd_handle_line(ShellContext &sh, char *s, int ac, char **ap)
 		if (i >= fields.size()) {
 			/* nullify remaining arguments */
 			do {
-				TRY_SHV(setvar(sh, *ap, nullstr, 0));
+				TRY_SHV(setvar(sh, *ap, nullstr));
 			} while (*++ap);
 
 			return {};
@@ -98,7 +98,7 @@ readcmd_handle_line(ShellContext &sh, char *s, int ac, char **ap)
 
 		/* set variable to field */
 		rmescapes(fields[i].data());
-		TRY_SHV(setvar(sh, *ap, fields[i].c_str(), 0));
+		TRY_SHV(setvar(sh, *ap, fields[i]));
 		i++;
 	} while (*++ap);
 	return {};

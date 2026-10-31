@@ -342,7 +342,7 @@ dash::ShellResult<int>
 setcmd(ShellContext &sh, int argc, char **argv)
 {
 	if (argc == 1)
-		return showvars(sh, nullstr, 0, VUNSET);
+		return showvars(sh, nullstr, {}, VarFlag::unset);
 	INTOFF;
 	TRY_SHV(options(sh, 0));
 	optschanged(sh);
@@ -439,7 +439,7 @@ atend:
 			if (optstr[0] == ':') {
 				s[0] = c;
 				s[1] = '\0';
-				TRY_SHV(setvar(sh, "OPTARG", s, 0));
+				TRY_SHV(setvar(sh, "OPTARG", s));
 			} else {
 				outfmt(sh, &sh.errout, "Illegal option -%c\n", c);
 				unsetvar(sh, "OPTARG");
@@ -456,7 +456,7 @@ atend:
 			if (optstr[0] == ':') {
 				s[0] = c;
 				s[1] = '\0';
-				TRY_SHV(setvar(sh, "OPTARG", s, 0));
+				TRY_SHV(setvar(sh, "OPTARG", s));
 				c = ':';
 			} else {
 				outfmt(sh, &sh.errout, "No arg for -%c option\n", c);
@@ -468,17 +468,17 @@ atend:
 
 		if (p == *optnext)
 			optnext++;
-		TRY_SHV(setvar(sh, "OPTARG", p, 0));
+		TRY_SHV(setvar(sh, "OPTARG", p));
 		p = NULL;
 	} else
-		TRY_SHV(setvar(sh, "OPTARG", nullstr, 0));
+		TRY_SHV(setvar(sh, "OPTARG", nullstr));
 
 out:
 	ind = optnext - optfirst + 1;
-	TRY_SHV(setvarint(sh, "OPTIND", ind, VNOFUNC));
+	TRY_SHV(setvarint(sh, "OPTIND", ind, VarFlag::nofunc));
 	s[0] = c;
 	s[1] = '\0';
-	TRY_SHV(setvar(sh, optvar, s, 0));
+	TRY_SHV(setvar(sh, optvar, s));
 
 	sh.shellparam.optoff = p ? p - *(optnext - 1) : -1;
 	sh.shellparam.optind = ind;

@@ -705,7 +705,7 @@ subevalvar(ShellContext &sh, char *start, char *str, int strloc, int startloc,
 
 	switch (subtype) {
 	case VSASSIGN:
-		TRY_SHV(setvar(sh, str, startp, 0));
+		TRY_SHV(setvar(sh, str, startp));
 
 		loc = startp;
 		goto out;

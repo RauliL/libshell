@@ -129,15 +129,15 @@ INIT {
 	for (envp = environ ; *envp ; envp++) {
 		p = endofname(*envp);
 		if (p != *envp && *p == '=') {
-			setvareq(sh, *envp, VEXPORT|VTEXTFIXED);
+			setvareq(sh, *envp, VarFlag::exported);
 		}
 	}
 
-	setvareq(sh, sh.defifsvar, VTEXTFIXED);
-	setvareq(sh, sh.defoptindvar, VTEXTFIXED);
+	setvareq(sh, sh.defifsvar);
+	setvareq(sh, sh.defoptindvar);
 
 	fmtstr(sh, sh.ppidbuf + 5, sizeof(sh.ppidbuf) - 5, "%ld", (long) getppid());
-	setvareq(sh, sh.ppidbuf, VTEXTFIXED);
+	setvareq(sh, sh.ppidbuf);
 
 	p = lookupvar(sh, "PWD");
 	if (p)
@@ -152,10 +152,9 @@ RESET {
 }
 #endif
 
-static const char *
-varnull(ShellContext &sh, const std::string &s)
+static inline const char *
+varnull(const std::string &s)
 {
-	(void)sh;
 	/* Unset variables end with an extra NUL (name\0\0) or name=. */
 	return strchrnul(s.c_str(), '=') + 1;
 }
@@ -169,8 +168,8 @@ varfunc(ShellContext &sh, struct var *vp)
 		return;
 
 	s = vp->text.c_str();
-	if (!(vp->flags & VFULL))
-		s = varnull(sh, vp->text);
+	if (!vp->flags.test(VarFlag::full))
+		s = varnull(vp->text);
 	vp->func(sh, s);
 }
 
@@ -202,37 +201,33 @@ initvar(ShellContext &sh)
 
 /*
  * Set the value of a variable.  The flags argument is ored with the
- * flags of the variable.  If val is NULL, the variable is unset.
+ * flags of the variable.  If val is nullopt, the variable is unset.
  */
 
 dash::ShellResult<struct var *>
-setvar(ShellContext &sh, const char *name, const char *val, int flags)
+setvar(ShellContext &sh, const std::string &name, std::optional<std::string> val,
+       VarFlags flags)
 {
-	char *p, *q;
-	size_t namelen;
-	char *nameeq;
-	size_t vallen;
-	struct var *vp;
+	const char *q = endofname(name.c_str());
+	const char *eq = strchrnul(q, '=');
+	size_t namelen = static_cast<size_t>(eq - name.c_str());
+	if (!namelen || eq != q)
+		return sh_error(sh, "%.*s: bad variable name",
+				static_cast<int>(namelen), name.c_str());
 
-	q = endofname(name);
-	p = strchrnul(q, '=');
-	namelen = p - name;
-	if (!namelen || p != q)
-		return sh_error(sh, "%.*s: bad variable name", namelen, name);
-	vallen = 0;
-	if (val == NULL) {
-		flags |= VUNSET;
-	} else {
-		vallen = strlen(val);
-	}
-	INTOFF;
-	/* Always store name=value (empty value when unset) so std::string can own it. */
-	p = static_cast<char *>(mempcpy(nameeq = ckmalloc(sh, namelen + vallen + 2), name, namelen));
-	*p++ = '=';
+	if (!val)
+		flags |= VarFlag::unset;
+
+	/* Always store name=value (empty value when unset). */
+	std::string nameeq;
+	nameeq.reserve(namelen + 1 + (val ? val->size() : 0));
+	nameeq.assign(name, 0, namelen);
+	nameeq.push_back('=');
 	if (val)
-		p = static_cast<char *>(mempcpy(p, val, vallen));
-	*p = '\0';
-	vp = TRY_SH(setvareq(sh, nameeq, flags | VNOSAVE));
+		nameeq += *val;
+
+	INTOFF;
+	struct var *vp = TRY_SH(setvareq(sh, std::move(nameeq), flags));
 	INTON;
 
 	return vp;
@@ -244,7 +239,7 @@ setvar(ShellContext &sh, const char *name, const char *val, int flags)
  */
 
 dash::ShellResult<intmax_t>
-setvarint(ShellContext &sh, const char *name, intmax_t val, int flags)
+setvarint(ShellContext &sh, const std::string &name, intmax_t val, VarFlags flags)
 {
 	int len = max_int_length(sizeof(val));
 	char buf[len];
@@ -258,62 +253,57 @@ setvarint(ShellContext &sh, const char *name, intmax_t val, int flags)
 
 /*
  * Same as setvar except that the variable and value are passed in
- * the first argument as name=value.  Since the first argument will
- * be actually stored in the table, it should not be a string that
- * will go away.
+ * the first argument as name=value.
  * Called with interrupts off.
  */
 
 dash::ShellResult<struct var *>
-setvareq(ShellContext &sh, char *s, int flags)
+setvareq(ShellContext &sh, std::string s, VarFlags flags)
 {
-	struct var *vp, **vpp;
-	int nosave = flags & VNOSAVE;
+	static const VarFlags special =
+		VarFlag::exported | VarFlag::readonly | VarFlag::str_fixed |
+		VarFlag::unset;
 
-	flags |= (VEXPORT & (((unsigned) (1 - aflag)) - 1));
-	flags &= ~(VTEXTFIXED|VSTACK|VNOSAVE);
-	vpp = findvar(sh, s);
+	struct var *vp, **vpp;
+
+	if (aflag)
+		flags |= VarFlag::exported;
+	vpp = findvar(sh, s.c_str());
 	vp = *vpp;
 	if (vp) {
-		unsigned bits;
+		VarFlags keep;
 
-		if (vp->flags & VREADONLY) {
+		if (vp->flags.test(VarFlag::readonly)) {
 			const char *n = vp->text.c_str();
-			if (nosave)
-				ckfree(s);
 			return sh_error(sh, "%.*s: is read only", strchrnul(n, '=') - n,
 				 n);
 		}
 
-		if ((flags & (VEXPORT|VREADONLY|VSTRFIXED|VUNSET)) != VUNSET)
-			bits = ~VUNSET;
-		else if ((vp->flags & VSTRFIXED))
-			bits = VSTRFIXED;
+		if ((flags & special) != VarFlag::unset)
+			keep = ~VarFlag::unset;
+		else if (vp->flags.test(VarFlag::str_fixed))
+			keep = VarFlag::str_fixed;
 		else {
 			*vpp = vp->next;
 			delete vp;
-out_free:
-			if (nosave)
-				ckfree(s);
+			vp = nullptr;
 			goto out;
 		}
 
-		flags |= vp->flags & bits;
+		flags |= vp->flags & keep;
 	} else {
-		if ((flags & (VEXPORT|VREADONLY|VSTRFIXED|VUNSET)) == VUNSET)
-			goto out_free;
+		if ((flags & special) == VarFlag::unset)
+			goto out;
 		/* not found */
 		vp = new var;
 		vp->next = *vpp;
 		vp->func = NULL;
 		*vpp = vp;
 	}
-	vp->text = s;
-	if (nosave)
-		ckfree(s);
+	vp->text = std::move(s);
 	vp->flags = flags;
 
-	if (!(flags & VNOFUNC))
+	if (!flags.test(VarFlag::nofunc))
 		varfunc(sh, vp);
 
 out:
@@ -329,7 +319,7 @@ lookupvar(ShellContext &sh, const char *name)
 {
 	struct var *v;
 
-	if ((v = *findvar(sh, name)) && !(v->flags & VUNSET)) {
+	if ((v = *findvar(sh, name)) && !v->flags.test(VarFlag::unset)) {
 #ifdef WITH_LINENO
 		if (v == &vlineno) {
 			fmtstr(sh, sh.linenovar + 7, sizeof(sh.linenovar) - 7,
@@ -355,11 +345,11 @@ lookupvarint(ShellContext &sh, const char *name)
  */
 
 std::vector<char *>
-listvars(ShellContext &sh, int on, int off)
+listvars(ShellContext &sh, VarFlags on, VarFlags off)
 {
 	struct var **vpp;
 	struct var *vp;
-	int mask;
+	VarFlags mask;
 	std::vector<char *> list;
 
 	vpp = sh.vartab;
@@ -384,7 +374,7 @@ listvars(ShellContext &sh, int on, int off)
  */
 
 dash::ShellResult<int>
-showvars(ShellContext &sh, const char *prefix, int on, int off)
+showvars(ShellContext &sh, const char *prefix, VarFlags on, VarFlags off)
 {
 	const char *sep;
 	std::vector<char *> list = listvars(sh, on, off);
@@ -423,7 +413,7 @@ exportcmd(ShellContext &sh, int argc, char **argv)
 	char *name;
 	const char *p;
 	char **aptr;
-	int flag = argv[0][0] == 'r'? VREADONLY : VEXPORT;
+	VarFlags flag = argv[0][0] == 'r' ? VarFlag::readonly : VarFlag::exported;
 	int notp;
 
 	notp = TRY_SH(nextopt(sh, "p")) - 'p';
@@ -437,10 +427,13 @@ exportcmd(ShellContext &sh, int argc, char **argv)
 					continue;
 				}
 			}
-			TRY_SHV(setvar(sh, name, p, flag));
+			TRY_SHV(setvar(sh, name,
+				       p ? std::optional<std::string>(p)
+					 : std::nullopt,
+				       flag));
 		} while ((name = *++aptr) != NULL);
 	} else {
-		TRY_SHV(showvars(sh, argv[0], flag, 0));
+		TRY_SHV(showvars(sh, argv[0], flag, {}));
 	}
 	return 0;
 }
@@ -460,7 +453,7 @@ localcmd(ShellContext &sh, int argc, char **argv)
 
 	argv = sh.argptr;
 	while ((name = *argv++) != NULL) {
-		TRY_SHV(mklocal(sh, name, 0));
+		TRY_SHV(mklocal(sh, name));
 	}
 	return 0;
 }
@@ -474,7 +467,7 @@ localcmd(ShellContext &sh, int argc, char **argv)
  */
 
 dash::ShellResult<void>
-mklocal(ShellContext &sh, char *name, int flags)
+mklocal(ShellContext &sh, char *name, VarFlags flags)
 {
 	struct localvar *lvp;
 	struct var *vp;
@@ -491,14 +484,15 @@ mklocal(ShellContext &sh, char *name, int flags)
 		eq = strchr(name, '=');
 		if (vp == NULL) {
 			if (eq)
-				vp = TRY_SH(setvareq(sh, name, VSTRFIXED | flags));
+				vp = TRY_SH(setvareq(sh, name, VarFlag::str_fixed | flags));
 			else
-				vp = TRY_SH(setvar(sh, name, NULL, VSTRFIXED | flags));
-			lvp->flags = VUNSET;
+				vp = TRY_SH(setvar(sh, name, std::nullopt,
+						   VarFlag::str_fixed | flags));
+			lvp->flags = VarFlag::unset;
 		} else {
 			lvp->text = vp->text;
 			lvp->flags = vp->flags;
-			vp->flags |= VSTRFIXED;
+			vp->flags |= VarFlag::str_fixed;
 			if (eq)
 				TRY_SHV(setvareq(sh, name, flags));
 		}
@@ -537,13 +531,13 @@ poplocalvars(ShellContext &sh)
 		if (vp == NULL) {	/* $- saved */
 			memcpy(sh.optlist, lvp->text.data(), sizeof(sh.optlist));
 			optschanged(sh);
-		} else if (lvp->flags == VUNSET) {
-			vp->flags &= ~(VSTRFIXED|VREADONLY);
-			unsetvar(sh, vp->text.c_str());
+		} else if (lvp->flags == VarFlag::unset) {
+			vp->flags &= ~(VarFlag::str_fixed | VarFlag::readonly);
+			unsetvar(sh, vp->text);
 		} else {
 			vp->flags = lvp->flags;
 			vp->text = std::move(lvp->text);
-			if (!(vp->flags & VNOFUNC))
+			if (!vp->flags.test(VarFlag::nofunc))
 				varfunc(sh, vp);
 		}
 		delete lvp;
@@ -621,9 +615,9 @@ unsetcmd(ShellContext &sh, int argc, char **argv)
  */
 
 dash::ShellResult<void>
-unsetvar(ShellContext &sh, const char *s)
+unsetvar(ShellContext &sh, const std::string &s)
 {
-	TRY_SHV(setvar(sh, s, 0, 0));
+	TRY_SHV(setvar(sh, s, std::nullopt));
 	return {};
 }
 

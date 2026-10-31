@@ -675,7 +675,7 @@ Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
 						return combined;
 					result = *combined;
 				}
-				if (auto r = setvarint(sh_, node.name.c_str(), result, 0); !r)
+				if (auto r = setvarint(sh_, node.name, result); !r)
 					return tl::unexpected(
 						std::string("variable assignment failed"));
 				return result;

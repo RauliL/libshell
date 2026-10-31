@@ -124,20 +124,20 @@ struct ShellContext {
 #endif
 		+ 5;
 	struct var varinit[varinit_len] = {
-		{ nullptr, VSTRFIXED, defifsvar, changeifs },
-		{ nullptr, VSTRFIXED, defpathvar, changepath },
-		{ nullptr, VSTRFIXED, "PS1=$ ", nullptr },
-		{ nullptr, VSTRFIXED, "PS2=> ", nullptr },
-		{ nullptr, VSTRFIXED, "PS4=+ ", nullptr },
-		{ nullptr, VSTRFIXED|VNOFUNC, defoptindvar, getoptsreset },
+		{ nullptr, VarFlag::str_fixed, defifsvar, changeifs },
+		{ nullptr, VarFlag::str_fixed, defpathvar, changepath },
+		{ nullptr, VarFlag::str_fixed, "PS1=$ ", nullptr },
+		{ nullptr, VarFlag::str_fixed, "PS2=> ", nullptr },
+		{ nullptr, VarFlag::str_fixed, "PS4=+ ", nullptr },
+		{ nullptr, VarFlag::str_fixed | VarFlag::nofunc, defoptindvar, getoptsreset },
 #ifdef WITH_LINENO
-		{ nullptr, VSTRFIXED, linenovar, nullptr },
+		{ nullptr, VarFlag::str_fixed, linenovar, nullptr },
 #endif
-		{ nullptr, VSTRFIXED|VFULL|VUNSET, "LC_ALL=", changelocale },
-		{ nullptr, VSTRFIXED|VFULL|VUNSET, "LC_COLLATE=", changelocale },
-		{ nullptr, VSTRFIXED|VFULL|VUNSET, "LC_CTYPE=", changelocale },
-		{ nullptr, VSTRFIXED|VFULL|VUNSET, "LC_NUMERIC=", changelocale },
-		{ nullptr, VSTRFIXED|VFULL|VUNSET, "LANG=", changelocale },
+		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_ALL=", changelocale },
+		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_COLLATE=", changelocale },
+		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_CTYPE=", changelocale },
+		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_NUMERIC=", changelocale },
+		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LANG=", changelocale },
 	};
 	struct var *vartab[39] = {};
 

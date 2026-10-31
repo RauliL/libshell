@@ -446,7 +446,7 @@ evalfor(ShellContext &sh, union node *n, EvalFlags flags)
 	sh.loopnest++;
 	flags &= EvalFlag::tested;
 	for (const std::string &word : args) {
-		TRY_SHV(setvar(sh, n->nfor.var.c_str(), word.c_str(), 0));
+		TRY_SHV(setvar(sh, n->nfor.var, word));
 		status = TRY_SH(evaltree(sh, n->nfor.body, flags));
 		if (skiploop(sh) & ~SKIPCONT)
 			break;
@@ -777,7 +777,7 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 	int execcmd;
 	int status;
 	std::vector<char *> argv_store;
-	int vflags;
+	VarFlags vflags;
 	int vlocal;
 
 	sh.errlinno = sh.lineno = cmd->ncmd.linno;
@@ -795,7 +795,7 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 	cmd_flag = 0;
 	execcmd = 0;
 	spclbltin = -1;
-	vflags = 0;
+	vflags = {};
 	vlocal = 0;
 	path = NULL;
 
@@ -844,7 +844,7 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 		argc = static_cast<int>(args.size() - arg0);
 
 		if (execcmd && argc > 1)
-			vflags = VEXPORT;
+			vflags = VarFlag::exported;
 	}
 
 	localvar_stop = TRY_SH(pushlocalvars(sh, vlocal));
@@ -884,9 +884,9 @@ bail:
 		TRY_SHV(expandarg(sh, argp, &vars, EXP_VARTILDE));
 		for (size_t i = before; i < vars.size(); i++) {
 			if (vlocal)
-				TRY_SHV(mklocal(sh, vars[i].data(), VEXPORT));
+				TRY_SHV(mklocal(sh, vars[i].data(), VarFlag::exported));
 			else
-				TRY_SHV(setvareq(sh, vars[i].data(), vflags));
+				TRY_SHV(setvareq(sh, vars[i], vflags));
 		}
 	}
 
@@ -966,7 +966,7 @@ out:
 	unwindfiles(sh, file_stop);
 	TRY_SHV(unwindlocalvars(sh, localvar_stop));
 	if (lastarg)
-		TRY_SHV(setvar(sh, "_", lastarg, 0));
+		TRY_SHV(setvar(sh, "_", lastarg));
 
 	return status;
 }

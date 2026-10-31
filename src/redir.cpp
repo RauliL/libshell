@@ -190,7 +190,7 @@ redirect(ShellContext &sh, union node *redir, int flags)
 
 
 static tl::unexpected<dash::ShellErr>
-sh_open_fail(ShellContext &sh, const char *pathname, int flags, int e)
+sh_open_fail(ShellContext &sh, const std::filesystem::path &pathname, int flags, int e)
 {
 	const char *word;
 	int action;
@@ -202,18 +202,18 @@ sh_open_fail(ShellContext &sh, const char *pathname, int flags, int e)
 		action = E_CREAT;
 	}
 
-	return sh_error(sh, "cannot %s %s: %s", word, pathname, errmsg(sh, e, action));
+	return sh_error(sh, "cannot %s %s: %s", word, pathname.c_str(), errmsg(sh, e, action));
 }
 
 
 dash::ShellResult<int>
-sh_open(ShellContext &sh, const char *pathname, int flags, int mayfail)
+sh_open(ShellContext &sh, const std::filesystem::path &pathname, int flags, int mayfail)
 {
 	int fd;
 	int e;
 
 	do {
-		fd = open64(pathname, flags, 0666);
+		fd = open64(pathname.c_str(), flags, 0666);
 		e = errno;
 	} while (fd < 0 && e == EINTR && !sh.pending_sig);
 
@@ -236,7 +236,7 @@ openredirect(ShellContext &sh, union node *redir)
 	case NFROM:
 		flags = O_RDONLY;
 do_open:
-		f = TRY_SH(sh_open(sh, redir->nfile.expfname.c_str(), flags, 0));
+		f = TRY_SH(sh_open(sh, redir->nfile.expfname, flags, 0));
 		break;
 	case NFROMTO:
 		flags = O_RDWR|O_CREAT;

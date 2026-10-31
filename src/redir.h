@@ -35,6 +35,7 @@
  *
  *	@(#)redir.h	8.2 (Berkeley) 5/4/95
  */
+#include <filesystem>
 
 #include "error.h"
 
@@ -54,7 +55,7 @@ dash::ShellResult<int> savefd(ShellContext &sh, int, int);
 dash::ShellResult<int> redirectsafe(ShellContext &sh, union node *, int);
 dash::ShellResult<void> unwindredir(ShellContext &sh, struct redirtab *stop);
 struct redirtab *pushredir(ShellContext &sh, union node *redir);
-dash::ShellResult<int> sh_open(ShellContext &sh, const char *pathname, int flags, int mayfail);
+dash::ShellResult<int> sh_open(ShellContext &sh, const std::filesystem::path &pathname, int flags, int mayfail);
 dash::ShellResult<int> sh_pipe(ShellContext &sh, int pip[2], int memfd);
 
 #endif

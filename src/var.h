@@ -38,8 +38,12 @@
  *	@(#)var.h	8.2 (Berkeley) 5/4/95
  */
 
+#include <bitset>
+#include <cstddef>
 #include <inttypes.h>
+#include <optional>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 struct ShellContext;
@@ -48,22 +52,129 @@ struct ShellContext;
  * Shell variables.
  */
 
-/* flags */
-#define VEXPORT		0x01	/* variable is exported */
-#define VREADONLY	0x02	/* variable cannot be modified */
-#define VSTRFIXED	0x04	/* variable struct is statically allocated */
-#define VTEXTFIXED	0x08	/* legacy: ignored (text always owned) */
-#define VSTACK		0x10	/* legacy: unused */
-#define VUNSET		0x20	/* the variable is not set */
-#define VNOFUNC		0x40	/* don't call the callback function */
-#define VFULL		0x80	/* pass value suitable for putenv */
-#define VNOSAVE		0x100	/* caller heap buffer; setvareq copies then frees */
+enum class VarFlag : std::size_t {
+	exported,	/* variable is exported */
+	readonly,	/* variable cannot be modified */
+	str_fixed,	/* variable struct is statically allocated */
+	unset,		/* the variable is not set */
+	nofunc,		/* don't call the callback function */
+	full,		/* pass value suitable for putenv */
+};
+
+class VarFlags {
+	static constexpr std::size_t nbits =
+		static_cast<std::size_t>(VarFlag::full) + 1;
+	std::bitset<nbits> bits{};
+
+	static constexpr std::size_t index(VarFlag flag)
+	{
+		return static_cast<std::size_t>(flag);
+	}
+
+	explicit VarFlags(std::bitset<nbits> b) : bits(b) {}
+
+public:
+	VarFlags() = default;
+	VarFlags(VarFlag flag) { bits.set(index(flag)); }
+
+	bool test(VarFlag flag) const { return bits.test(index(flag)); }
+	bool any() const { return bits.any(); }
+	bool none() const { return bits.none(); }
+
+	VarFlags &set(VarFlag flag)
+	{
+		bits.set(index(flag));
+		return *this;
+	}
+
+	VarFlags &reset(VarFlag flag)
+	{
+		bits.reset(index(flag));
+		return *this;
+	}
+
+	VarFlags &operator|=(VarFlag flag) { return set(flag); }
+
+	VarFlags &operator|=(VarFlags other)
+	{
+		bits |= other.bits;
+		return *this;
+	}
+
+	VarFlags &operator&=(VarFlags other)
+	{
+		bits &= other.bits;
+		return *this;
+	}
+
+	VarFlags operator|(VarFlag flag) const
+	{
+		VarFlags out = *this;
+		out.set(flag);
+		return out;
+	}
+
+	VarFlags operator|(VarFlags other) const
+	{
+		VarFlags out = *this;
+		out |= other;
+		return out;
+	}
+
+	VarFlags operator&(VarFlag flag) const
+	{
+		return *this & VarFlags(flag);
+	}
+
+	VarFlags operator&(VarFlags other) const
+	{
+		VarFlags out = *this;
+		out &= other;
+		return out;
+	}
+
+	VarFlags operator~() const { return VarFlags(~bits); }
+
+	friend bool operator==(VarFlags a, VarFlags b)
+	{
+		return a.bits == b.bits;
+	}
+
+	friend bool operator!=(VarFlags a, VarFlags b) { return !(a == b); }
+
+	friend bool operator==(VarFlags a, VarFlag b)
+	{
+		return a == VarFlags(b);
+	}
+
+	friend bool operator!=(VarFlags a, VarFlag b) { return !(a == b); }
+};
+
+inline VarFlags operator|(VarFlag a, VarFlag b)
+{
+	VarFlags flags(a);
+	flags.set(b);
+	return flags;
+}
+
+inline VarFlags operator|(VarFlag a, VarFlags b)
+{
+	return b | a;
+}
+
+inline VarFlags operator~(VarFlag flag)
+{
+	return ~VarFlags(flag);
+}
+
+static_assert(std::is_trivially_copyable_v<VarFlags>);
+static_assert(std::is_trivially_destructible_v<VarFlags>);
 
 
 struct var {
 	struct var *next;		/* next entry in hash list */
-	int flags;			/* flags are defined above */
-	std::string text;		/* name=value (owned; empty value when VUNSET) */
+	VarFlags flags;
+	std::string text;		/* name=value (owned; empty value when unset) */
 	void (*func)(ShellContext &, const char *);
 					/* function to be called when  */
 					/* the variable gets set/unset */
@@ -73,7 +184,7 @@ struct var {
 struct localvar {
 	struct localvar *next;		/* next local variable in list */
 	struct var *vp;			/* the variable that was made local */
-	int flags;			/* saved flags */
+	VarFlags flags;			/* saved flags */
 	std::string text;		/* saved text or $- optlist bytes */
 };
 
@@ -103,7 +214,7 @@ extern const char defpathvar[];
  */
 
 #define ifsval()	(vifs.text.c_str() + 4)
-#define ifsset()	((vifs.flags & VUNSET) == 0)
+#define ifsset()	(!vifs.flags.test(VarFlag::unset))
 #define pathval()	(vpath.text.c_str() + 5)
 #define ps1val()	(vps1.text.c_str() + 4)
 #define ps2val()	(vps2.text.c_str() + 4)
@@ -113,24 +224,29 @@ extern const char defpathvar[];
 
 struct ShellContext;
 void initvar(ShellContext &sh);
-dash::ShellResult<struct var *> setvar(ShellContext &sh, const char *name, const char *val, int flags);
-dash::ShellResult<intmax_t> setvarint(ShellContext &sh, const char *, intmax_t, int);
-dash::ShellResult<struct var *> setvareq(ShellContext &sh, char *s, int flags);
+dash::ShellResult<struct var *> setvar(ShellContext &sh, const std::string &name,
+				       std::optional<std::string> val,
+				       VarFlags flags = {});
+dash::ShellResult<intmax_t> setvarint(ShellContext &sh, const std::string &,
+				      intmax_t, VarFlags flags = {});
+dash::ShellResult<struct var *> setvareq(ShellContext &sh, std::string s,
+					 VarFlags flags = {});
 char *lookupvar(ShellContext &sh, const char *);
 dash::ShellResult<intmax_t> lookupvarint(ShellContext &sh, const char *);
-std::vector<char *> listvars(ShellContext &sh, int, int);
+std::vector<char *> listvars(ShellContext &sh, VarFlags on, VarFlags off);
 inline std::vector<char *> environment(ShellContext &sh)
 {
-	return listvars(sh, VEXPORT, VUNSET);
+	return listvars(sh, VarFlag::exported, VarFlag::unset);
 }
-dash::ShellResult<int> showvars(ShellContext &sh, const char *, int, int);
+dash::ShellResult<int> showvars(ShellContext &sh, const char *, VarFlags on,
+				VarFlags off);
 dash::ShellResult<int> exportcmd(ShellContext &sh, int, char **);
 dash::ShellResult<int> localcmd(ShellContext &sh, int, char **);
-dash::ShellResult<void> mklocal(ShellContext &sh, char *name, int flags);
+dash::ShellResult<void> mklocal(ShellContext &sh, char *name, VarFlags flags = {});
 dash::ShellResult<struct localvar_list *> pushlocalvars(ShellContext &sh, int push);
 dash::ShellResult<void> unwindlocalvars(ShellContext &sh, struct localvar_list *stop);
 dash::ShellResult<int> unsetcmd(ShellContext &sh, int, char **);
-dash::ShellResult<void> unsetvar(ShellContext &sh, const char *);
+dash::ShellResult<void> unsetvar(ShellContext &sh, const std::string &);
 int varcmp(const char *, const char *);
 
 static inline unsigned int hashval(const char *p)
