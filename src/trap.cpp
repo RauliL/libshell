@@ -184,18 +184,9 @@ setsignal(ShellContext &sh, int signo)
 	if (rootshell && action == S_DFL && !lvforked) {
 		switch (signo) {
 		case SIGINT:
-			if (iflag || sh.minusc || sflag == 0)
+			/* Catch so INTOFF/INTON can defer; onint re-raises. */
+			if (sh.minusc || sflag == 0)
 				action = S_CATCH;
-			break;
-		case SIGQUIT:
-#ifdef DEBUG
-			if (debug)
-				break;
-#endif
-			/* FALLTHROUGH */
-		case SIGTERM:
-			if (iflag)
-				action = S_IGN;
 			break;
 #if JOBS
 		case SIGTSTP:
@@ -320,18 +311,6 @@ dotrap(ShellContext &sh)
 
 	sh.savestatus = last_status;
 	return {};
-}
-
-void
-setinteractive(ShellContext &sh, int on)
-{
-
-	if (++on == sh.is_interactive)
-		return;
-	sh.is_interactive = on;
-	setsignal(sh, SIGINT);
-	setsignal(sh, SIGQUIT);
-	setsignal(sh, SIGTERM);
 }
 
 void

@@ -14,7 +14,6 @@
 #include "shell.h"
 #include "main.h"
 #include "shell_context.h"
-#include "mail.h"
 #include "options.h"
 #include "output.h"
 #include "parser.h"
@@ -43,8 +42,8 @@ static dash::ShellResult<void> read_profile(ShellContext &sh, const char *name);
 static dash::ShellResult<int> interactive_cmdloop(ShellContext &sh);
 
 /*
- * Top-level interactive parse/eval loop: prompting, mail checks, ignoreeof,
- * and recovering from parse errors at the prompt.
+ * Top-level interactive parse/eval loop: prompting, ignoreeof, and
+ * recovering from parse errors at the prompt.
  */
 static dash::ShellResult<int>
 interactive_cmdloop(ShellContext &sh)
@@ -59,7 +58,6 @@ interactive_cmdloop(ShellContext &sh)
 
 		if (sh.jobctl)
 			showjobs(sh, sh.out2, SHOW_CHANGED);
-		chkmail(sh);
 		try {
 			n = parsecmd(sh, 1);
 			if (n == NEOF) {
@@ -236,11 +234,7 @@ handle_err:
 
 		reset(sh);
 
-		if (ecode == EXINT
-#if ATTY
-		 && (! attyset() || equal(termval(), "emacs"))
-#endif
-		 ) {
+		if (ecode == EXINT) {
 			out2c('\n');
 #ifdef FLUSHERR
 			flushout(sh, sh.out2);

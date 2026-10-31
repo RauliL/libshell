@@ -82,15 +82,8 @@ struct localvar_list;
 
 /* varinit / defifsvar / linenovar live on ShellContext; macros require &sh. */
 
-#if ATTY
-#define vatty (sh.varinit[0])
-#define vifs (sh.varinit[1])
-#else
 #define vifs (sh.varinit[0])
-#endif
-#define vmail (&vifs)[1]
-#define vmpath (&vmail)[1]
-#define vpath (&vmpath)[1]
+#define vpath (&vifs)[1]
 #define vps1 (&vpath)[1]
 #define vps2 (&vps1)[1]
 #define vps4 (&vps2)[1]
@@ -111,19 +104,12 @@ extern const char defpathvar[];
 
 #define ifsval()	(vifs.text.c_str() + 4)
 #define ifsset()	((vifs.flags & VUNSET) == 0)
-#define mailval()	(vmail.text.c_str() + 5)
-#define mpathval()	(vmpath.text.c_str() + 9)
 #define pathval()	(vpath.text.c_str() + 5)
 #define ps1val()	(vps1.text.c_str() + 4)
 #define ps2val()	(vps2.text.c_str() + 4)
 #define ps4val()	(vps4.text.c_str() + 4)
 #define optindval()	(voptind.text.c_str() + 7)
 #define linenoval()	(vlineno.text.c_str() + 7)
-
-#if ATTY
-#define attyset()	((vatty.flags & VUNSET) == 0)
-#endif
-#define mpathset()	((vmpath.flags & VUNSET) == 0)
 
 struct ShellContext;
 void initvar(ShellContext &sh);

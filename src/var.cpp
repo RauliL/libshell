@@ -55,7 +55,6 @@
 #include "exec.h"
 #include "syntax.h"
 #include "options.h"
-#include "mail.h"
 #include "var.h"
 #include "memalloc.h"
 #include "error.h"

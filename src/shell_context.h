@@ -15,7 +15,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <ctime>
 #include <cwchar>
 #include <inttypes.h>
 #include <limits.h>
@@ -65,7 +64,6 @@ struct stdin_state {
 struct ShellContext;
 
 void changeifs(ShellContext &sh, const char *val);
-void changemail(ShellContext &sh, const char *val);
 void changepath(ShellContext &sh, const char *val);
 void getoptsreset(ShellContext &sh, const char *val);
 void changelocale(ShellContext &sh, const char *val);
@@ -110,7 +108,6 @@ struct ShellContext {
 	char gotsig[NSIG - 1] = {};
 	volatile sig_atomic_t pending_sig = 0;
 	volatile sig_atomic_t gotsigchld = 0;
-	int is_interactive = 0;
 
 	struct job *jobtab = nullptr;
 	unsigned njobs = 0;
@@ -133,21 +130,13 @@ struct ShellContext {
 	struct localvar_list *localvar_stack = nullptr;
 
 	static constexpr int varinit_len =
-#if ATTY
-		1 +
-#endif
-		8
+		6
 #ifdef WITH_LINENO
 		+ 1
 #endif
 		+ 5;
 	struct var varinit[varinit_len] = {
-#if ATTY
-		{ nullptr, VSTRFIXED|VUNSET, "ATTY=", nullptr },
-#endif
 		{ nullptr, VSTRFIXED, defifsvar, changeifs },
-		{ nullptr, VSTRFIXED|VUNSET, "MAIL=", changemail },
-		{ nullptr, VSTRFIXED|VUNSET, "MAILPATH=", changemail },
 		{ nullptr, VSTRFIXED, defpathvar, changepath },
 		{ nullptr, VSTRFIXED, "PS1=$ ", nullptr },
 		{ nullptr, VSTRFIXED, "PS2=> ", nullptr },
@@ -225,9 +214,6 @@ struct ShellContext {
 	unsigned closed_redirs = 0;
 	std::string curdir;	/* empty when unknown */
 	std::string physdir;	/* empty when unknown */
-
-	time_t mailtime[10] = {};
-	int changed = 0;
 
 	char **t_wp = nullptr;
 	const struct t_op *t_wp_op = nullptr;

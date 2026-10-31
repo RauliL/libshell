@@ -57,17 +57,14 @@ struct shparam {
 #define sflag (sh.optlist[6])
 #define xflag (sh.optlist[7])
 #define vflag (sh.optlist[8])
-#define Vflag (sh.optlist[9])
-#define	Eflag (sh.optlist[10])
-#define	Cflag (sh.optlist[11])
-#define	aflag (sh.optlist[12])
-#define	bflag (sh.optlist[13])
-#define	uflag (sh.optlist[14])
-#define	nolog (sh.optlist[15])
-#define	pipefail (sh.optlist[16])
-#define	debug (sh.optlist[17])
+#define	Cflag (sh.optlist[9])
+#define	aflag (sh.optlist[10])
+#define	bflag (sh.optlist[11])
+#define	uflag (sh.optlist[12])
+#define	pipefail (sh.optlist[13])
+#define	debug (sh.optlist[14])
 
-#define NOPTS	18
+#define NOPTS	15
 
 extern const char optletters[NOPTS];
 /* optlist, minusc, arg0, shellparam, argptr, optionarg, optptr: ShellContext fields */

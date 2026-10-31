@@ -1037,16 +1037,6 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 
 	STARTSTACKSTR(out);
 	loop: {	/* for each line, until end of word */
-#if ATTY
-		if (c == '\034' && sh.doprompt
-		 && attyset() && ! equal(termval(), "emacs")) {
-			attyline();
-			if (synstack->syntax == BASESYNTAX)
-				return readtoken(sh);
-			c = pgetc_top(sh, synstack);
-			goto loop;
-		}
-#endif
 		CHECKEND();	/* set c to PEOF if at end of here document */
 		/* Until end of line or end of word */
 		for (;; c = pgetc_top(sh, synstack)) {

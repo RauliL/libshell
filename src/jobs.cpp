@@ -918,11 +918,6 @@ forkchild(ShellContext &sh, struct job *jp, union node *n, int mode)
 			 */
 		}
 	}
-	if (!oldlvl && iflag) {
-		setsignal(sh, SIGINT);
-		setsignal(sh, SIGQUIT);
-		setsignal(sh, SIGTERM);
-	}
 
 	if (lvforked)
 		return;

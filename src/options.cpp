@@ -73,13 +73,10 @@ static const char *const optnames[NOPTS] = {
 	"stdin",
 	"xtrace",
 	"verbose",
-	"vi",
-	"emacs",
 	"noclobber",
 	"allexport",
 	"notify",
 	"nounset",
-	"nolog",
 	"pipefail",
 	"debug",
 };
@@ -94,13 +91,10 @@ const char optletters[NOPTS] = {
 	's',
 	'x',
 	'v',
-	'V',
-	'E',
 	'C',
 	'a',
 	'b',
 	'u',
-	0,
 	0,
 	0,
 };
@@ -180,7 +174,9 @@ optschanged(ShellContext &sh)
 #ifdef DEBUG
 	opentrace(sh);
 #endif
-	setinteractive(sh, iflag);
+	setsignal(sh, SIGINT);
+	setsignal(sh, SIGQUIT);
+	setsignal(sh, SIGTERM);
 	setjobctl(sh, mflag);
 }
 
@@ -276,13 +272,6 @@ setoption(ShellContext &sh, int flag, int val)
 	for (i = 0; i < NOPTS; i++)
 		if (optletters[i] == flag) {
 			sh.optlist[i] = val;
-			if (val) {
-				/* #%$ hack for ksh semantics */
-				if (flag == 'V')
-					Eflag = 0;
-				else if (flag == 'E')
-					Vflag = 0;
-			}
 			return {};
 		}
 	return sh_error(sh, "Illegal option -%c", flag);

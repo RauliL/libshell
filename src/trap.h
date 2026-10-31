@@ -51,7 +51,6 @@ void setsignal(ShellContext &sh, int);
 void ignoresig(ShellContext &sh, int);
 void onsig(ShellContext &sh, int);
 dash::ShellResult<void> dotrap(ShellContext &sh);
-void setinteractive(ShellContext &sh, int);
 void exitshell(ShellContext &sh) __attribute__((__noreturn__));
 int decode_signal(ShellContext &sh, const char *, int);
 void sigblockall(ShellContext &sh, sigset_t *oldmask);

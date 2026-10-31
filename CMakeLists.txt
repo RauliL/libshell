@@ -199,7 +199,6 @@ set(DASH_SOURCES
   src/expand.cpp
   src/input.cpp
   src/jobs.cpp
-  src/mail.cpp
   src/main.cpp
   src/memalloc.cpp
   src/miscbltin.cpp

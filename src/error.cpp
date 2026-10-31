@@ -47,7 +47,6 @@
 #include "shell.h"
 #include "shell_context.h"
 #include "main.h"
-#include "options.h"
 #include "output.h"
 #include "error.h"
 #include "show.h"
@@ -78,8 +77,8 @@ exraise(ShellContext &sh, int e)
 
 
 /*
- * Called when a deferred SIGINT is delivered (INTON).  Non-interactive
- * shells re-raise SIGINT; interactive shells unwind with EXINT.
+ * Called when a deferred SIGINT is delivered (INTON).  Restore the
+ * default disposition and re-raise so the process exits.
  */
 
 tl::unexpected<dash::ShellErr>
@@ -88,10 +87,8 @@ onint(ShellContext &sh)
 
 	sh.intpending = 0;
 	sigclearmask();
-	if (!(rootshell && iflag)) {
-		signal(SIGINT, SIG_DFL);
-		::raise(SIGINT);
-	}
+	signal(SIGINT, SIG_DFL);
+	::raise(SIGINT);
 	sh.exitstatus = SIGINT + 128;
 	return exraise(sh, EXINT);
 }
