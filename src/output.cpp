@@ -48,6 +48,7 @@
 #include <sys/ioctl.h>
 
 #include <stdio.h>	/* defines BUFSIZ */
+#include <string>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -262,9 +263,9 @@ fmtstr(ShellContext &sh, char *outbuf, size_t length, const char *fmt, ...)
 
 
 static dash::ShellResult<int>
-xvasprintf(ShellContext &sh, char **sp, size_t size, const char *f, va_list ap)
+xvasprintf(ShellContext &sh, char **sp, size_t size, std::string &overflow,
+	   const char *f, va_list ap)
 {
-	char *s;
 	int len;
 	va_list ap2;
 
@@ -273,24 +274,25 @@ xvasprintf(ShellContext &sh, char **sp, size_t size, const char *f, va_list ap)
 	va_end(ap2);
 	if (len < 0)
 		return sh_error(sh, "xvsnprintf failed");
-	if (len < size)
+	if (len < static_cast<int>(size))
 		return len;
 
-	s = stalloc(sh, (len >= stackblocksize() ? len : stackblocksize()) + 1);
-	*sp = s;
-	len = xvsnprintf(sh, s, len + 1, f, ap);
+	overflow.resize(static_cast<size_t>(len) + 1);
+	*sp = overflow.data();
+	len = xvsnprintf(sh, *sp, static_cast<size_t>(len) + 1, f, ap);
 	return len;
 }
 
 
 dash::ShellResult<int>
-xasprintf(ShellContext &sh, char **sp, const char *f, ...)
+xasprintf(ShellContext &sh, std::string &out, const char *f, ...)
 {
 	va_list ap;
+	char *p = nullptr;
 	int ret;
 
 	va_start(ap, f);
-	ret = TRY_SH(xvasprintf(sh, sp, 0, f, ap));
+	ret = TRY_SH(xvasprintf(sh, &p, 0, out, f, ap));
 	va_end(ap);
 	return ret;
 }
@@ -303,30 +305,24 @@ doformat(ShellContext &sh, struct output *dest, const char *f, va_list ap)
 	char *s;
 	int len;
 	int olen;
-	std::size_t su = sh.stackstr.used;
-	std::size_t hc = sh.stackheaps.size();
+	std::string overflow;
 
 	s = dest->nextc;
 	olen = dest->end - dest->nextc;
 	{
-		auto r = xvasprintf(sh, &s, olen, f, ap);
+		auto r = xvasprintf(sh, &s, static_cast<size_t>(olen), overflow,
+				    f, ap);
 		if (!r) {
 			dest->flags |= OUTPUT_ERR;
-			goto out;
+			return;
 		}
 		len = *r;
 	}
 	if (likely(olen > len)) {
 		dest->nextc += len;
-		goto out;
+		return;
 	}
 	outmem(sh, s, len, dest);
-out:
-	while (sh.stackheaps.size() > hc) {
-		ckfree(sh.stackheaps.back());
-		sh.stackheaps.pop_back();
-	}
-	sh.stackstr.rewind(su);
 }
 #endif
 

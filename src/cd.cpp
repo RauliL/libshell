@@ -99,6 +99,7 @@ cdcmd(ShellContext &sh, int argc, char **argv)
 	struct stat64 statb;
 	int flags;
 	int len;
+	std::string candidate;
 
 	flags = TRY_SH(cdopt(sh));
 	dest = *sh.argptr;
@@ -130,7 +131,9 @@ dotdot:
 	path = bltinlookup(sh, "CDPATH");
 	while (p = path, (len = padvance_magic(sh, &path, dest, 0)) >= 0) {
 		c = *p;
-		p = stalloc(sh, len);
+		(void)len;
+		candidate.assign(stackblock());
+		p = candidate.c_str();
 
 		if (stat64(p, &statb) >= 0 && S_ISDIR(statb.st_mode)) {
 			if (c && c != ':')

@@ -35,6 +35,7 @@
 #include <cstring>
 #include <locale.h>
 #include <string>
+#include <vector>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -354,40 +355,22 @@ lookupvarint(ShellContext &sh, const char *name)
  * Generate a list of variables satisfying the given conditions.
  */
 
-char **
-listvars(ShellContext &sh, int on, int off, char ***end)
+std::vector<char *>
+listvars(ShellContext &sh, int on, int off)
 {
 	struct var **vpp;
 	struct var *vp;
-	char **ep;
 	int mask;
-	std::size_t n = 0;
-	std::size_t cap = 32;
-	char **list = stalloc(sh, cap * sizeof(char *));
+	std::vector<char *> list;
 
 	vpp = sh.vartab;
 	mask = on | off;
 	do {
 		for (vp = *vpp ; vp ; vp = vp->next)
-			if ((vp->flags & mask) == on) {
-				if (n + 1 >= cap) {
-					cap *= 2;
-					char **nl = stalloc(sh, cap * sizeof(char *));
-					std::memcpy(nl, list, n * sizeof(char *));
-					list = nl;
-				}
-				list[n++] = const_cast<char *>(vp->text.c_str());
-			}
+			if ((vp->flags & mask) == on)
+				list.push_back(const_cast<char *>(vp->text.c_str()));
 	} while (++vpp < sh.vartab + VTABSIZE);
-	if (n + 1 >= cap) {
-		char **nl = stalloc(sh, (n + 1) * sizeof(char *));
-		std::memcpy(nl, list, n * sizeof(char *));
-		list = nl;
-	}
-	ep = list + n;
-	if (end)
-		*end = ep;
-	*ep = NULL;
+	list.push_back(nullptr);
 	return list;
 }
 
@@ -405,10 +388,11 @@ dash::ShellResult<int>
 showvars(ShellContext &sh, const char *prefix, int on, int off)
 {
 	const char *sep;
-	char **ep, **epend;
+	std::vector<char *> list = listvars(sh, on, off);
+	char **ep = list.data();
+	char **epend = list.data() + list.size() - 1;
 
-	ep = listvars(sh, on, off, &epend);
-	qsort(ep, epend - ep, sizeof(char *), vpcmp);
+	qsort(ep, static_cast<size_t>(epend - ep), sizeof(char *), vpcmp);
 
 	sep = *prefix ? spcstr : prefix;
 

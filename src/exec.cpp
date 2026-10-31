@@ -39,6 +39,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string>
+#include <vector>
 #ifdef HAVE_PATHS_H
 #include <paths.h>
 #endif
@@ -111,10 +112,10 @@ shellexec(ShellContext &sh, char **argv, const char *path, int idx)
 {
 	char *cmdname;
 	int e;
-	char **envp;
+	std::vector<char *> env = environment(sh);
+	char **envp = env.data();
 	int exerrno;
 
-	envp = environment();
 	if (strchr(argv[0], '/') != NULL) {
 		tryexec(sh, argv[0], argv, envp);
 		e = errno;
@@ -474,13 +475,12 @@ loop:
 			goto loop;
 		}
 		if (lpathopt) {		/* this is a %func directory */
-			stalloc(sh, len);
-			readcmdfile(sh, fullname);
+			std::string pathcopy(fullname);
+			TRY_SHV(readcmdfile(sh, pathcopy.data()));
 			if ((cmdp = cmdlookup(sh, name, 0)) == NULL ||
 			    cmdp->cmdtype != CMDFUNCTION)
 				return sh_error(sh, "%s not defined in %s", name,
-					 fullname);
-			stunalloc(sh, fullname);
+					 pathcopy.c_str());
 			goto success;
 		}
 		e = EACCES;	/* if we fail, this will be the error */

@@ -40,6 +40,7 @@
 #ifdef USE_GLIBC_STDIO
 #include <stdio.h>
 #endif
+#include <string>
 #include <sys/types.h>
 
 struct output {
@@ -69,7 +70,7 @@ void out1fmt(ShellContext &sh, const char *, ...)
     __attribute__((__format__(__printf__,2,3)));
 int fmtstr(ShellContext &sh, char *, size_t, const char *, ...)
     __attribute__((__format__(__printf__,4,5)));
-dash::ShellResult<int> xasprintf(ShellContext &sh, char **, const char *, ...);
+dash::ShellResult<int> xasprintf(ShellContext &sh, std::string &, const char *, ...);
 #ifndef USE_GLIBC_STDIO
 void doformat(ShellContext &sh, struct output *, const char *, va_list);
 #endif

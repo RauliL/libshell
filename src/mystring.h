@@ -76,7 +76,6 @@ dash::ShellResult<intmax_t> atomax10(ShellContext &sh, const char *);
 dash::ShellResult<int> number(ShellContext &sh, const char *);
 int is_number(ShellContext &sh, const char *);
 char *single_quote(ShellContext &sh, const char *);
-char *sstrdup(ShellContext &sh, const char *);
 int pstrcmp(const void *, const void *);
 const char *const *findstring(const char *, const char *const *, size_t);
 

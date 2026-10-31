@@ -75,17 +75,17 @@ static void check_conversion(ShellContext &sh, const char *, const char *);
 	} \
 }
 
-#define ASPF(sp, f, func) ({ \
+#define ASPF(out, f, func) ({ \
 	dash::ShellResult<int> ret; \
 	switch ((char *)param - (char *)array) { \
 	default: \
-		ret = xasprintf(sh, sp, f, array[0], array[1], func); \
+		ret = xasprintf(sh, out, f, array[0], array[1], func); \
 		break; \
 	case sizeof(*param): \
-		ret = xasprintf(sh, sp, f, array[0], func); \
+		ret = xasprintf(sh, out, f, array[0], func); \
 		break; \
 	case 0: \
-		ret = xasprintf(sh, sp, f, func); \
+		ret = xasprintf(sh, out, f, func); \
 		break; \
 	} \
 	if (!ret) \
@@ -102,7 +102,7 @@ print_escape_str(ShellContext &sh, const char *f, int *param, int *array, char *
 	int len;
 	int total;
 	std::size_t su = sh.stackstr.used;
-	std::size_t hc = sh.stackheaps.size();
+	std::string formatted;
 
 	done = conv_escape_str(sh, s, &q);
 	p = stackblock();
@@ -119,7 +119,8 @@ print_escape_str(ShellContext &sh, const char *f, int *param, int *array, char *
 	p[total] = 0;
 
 	q = stackblock();
-	total = ASPF(&p, f, p);
+	total = ASPF(formatted, f, p);
+	p = formatted.data();
 
 	len = strchrnul(p, 'X') - p;
 	memcpy(p + len, q, strspn(p + len, "X"));
@@ -127,10 +128,6 @@ print_escape_str(ShellContext &sh, const char *f, int *param, int *array, char *
 easy:
 	out1mem(p, total);
 
-	while (sh.stackheaps.size() > hc) {
-		ckfree(sh.stackheaps.back());
-		sh.stackheaps.pop_back();
-	}
 	sh.stackstr.rewind(su);
 	return done;
 }

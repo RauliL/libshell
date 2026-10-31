@@ -42,6 +42,7 @@
  */
 
 #include <string>
+#include <vector>
 
 #include "init.h"
 #include "main.h"
@@ -765,7 +766,7 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 	int cmd_flag;
 	int execcmd;
 	int status;
-	char **nargv;
+	std::vector<char *> argv_store;
 	int vflags;
 	int vlocal;
 
@@ -839,17 +840,18 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 	localvar_stop = TRY_SH(pushlocalvars(sh, vlocal));
 
 	/* Reserve one extra spot at the front for shellexec. */
-	nargv = stalloc(sh, sizeof (char *) * (argc + 2));
-	argv = ++nargv;
+	argv_store.reserve(static_cast<size_t>(argc) + 2);
+	argv_store.push_back(nullptr);
 	for (size_t i = arg0; i < args.size(); i++) {
 		TRACE(("evalcommand arg: %s\n", args[i].c_str()));
-		*nargv++ = args[i].data();
+		argv_store.push_back(args[i].data());
 	}
-	*nargv = NULL;
+	argv_store.push_back(nullptr);
+	argv = argv_store.data() + 1;
 
 	lastarg = NULL;
 	if (iflag && sh.funcline == 0 && argc > 0)
-		lastarg = nargv[-1];
+		lastarg = argv[argc - 1];
 
 	sh.preverrout.fd = 2;
 	TRY_SHV(expredir(sh, cmd->ncmd.redirect));

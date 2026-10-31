@@ -74,7 +74,6 @@ chkmail(ShellContext &sh)
 	time_t *mtp;
 	struct stat64 statb;
 	std::size_t su = sh.stackstr.used;
-	std::size_t hc = sh.stackheaps.size();
 
 	mpath = mpathset() ? mpathval() : mailval();
 	for (mtp = sh.mailtime; mtp < sh.mailtime + MAXMBOXES; mtp++) {
@@ -104,10 +103,6 @@ chkmail(ShellContext &sh)
 		*mtp = statb.st_mtime;
 	}
 	sh.changed = 0;
-	while (sh.stackheaps.size() > hc) {
-		ckfree(sh.stackheaps.back());
-		sh.stackheaps.pop_back();
-	}
 	sh.stackstr.rewind(su);
 }
 

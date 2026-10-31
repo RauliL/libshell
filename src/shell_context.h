@@ -72,7 +72,6 @@ void changelocale(ShellContext &sh, const char *val);
 
 struct ShellContext {
 	StackStr stackstr;
-	std::vector<void *> stackheaps;
 
 	struct output output = {
 #ifdef USE_GLIBC_STDIO
@@ -264,9 +263,8 @@ inline void freestdout(ShellContext &sh)
 }
 
 #ifdef USE_GLIBC_STDIO
-inline void outc(ShellContext &sh, int ch, struct output *file)
+inline void outc(ShellContext &, int ch, struct output *file)
 {
-	(void)sh;
 	putc(ch, file->stream);
 }
 #else

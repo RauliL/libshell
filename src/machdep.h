@@ -47,9 +47,5 @@ union shell_align {
 	double d;
 };
 #define SHELL_SIZE (sizeof(union shell_align) - 1)
-/*
- * It appears that grabstackstr() will barf with such alignments
- * because stalloc() will return a string allocated in a new stackblock.
- */
 #define SHELL_ALIGN(nbytes) (((nbytes) + SHELL_SIZE) & ~SHELL_SIZE)
 #endif

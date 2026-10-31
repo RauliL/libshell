@@ -27,7 +27,6 @@ struct ShellContext;
 rawmem ckmalloc(ShellContext &sh, std::size_t);
 rawmem ckrealloc(ShellContext &sh, void *, std::size_t);
 char *savestr(ShellContext &sh, const char *);
-rawmem stalloc(ShellContext &sh, std::size_t);
 void clear_stack_temps(ShellContext &sh);
 void stunalloc(ShellContext &sh, void *);
 rawmem growstackstr(ShellContext &sh);

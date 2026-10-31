@@ -1771,13 +1771,8 @@ setprompt(ShellContext &sh, int which)
 
 	if (!sh.parsefile->nleft) {
 		std::size_t su = sh.stackstr.used;
-		std::size_t hc = sh.stackheaps.size();
 		sh.stackstr.commit(stackblocksize());
 		out2str(getprompt(sh, NULL));
-		while (sh.stackheaps.size() > hc) {
-			ckfree(sh.stackheaps.back());
-			sh.stackheaps.pop_back();
-		}
 		sh.stackstr.rewind(su);
 	}
 }

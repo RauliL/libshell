@@ -32,6 +32,7 @@
  * SUCH DAMAGE.
  */
 
+#include <string>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -59,7 +60,7 @@ int *dash_errno;
 #include "parse_error.h"
 #include "nodes_free.h"
 
-static dash::ShellResult<char *> find_dot_file(ShellContext &sh, char *);
+static dash::ShellResult<std::string> find_dot_file(ShellContext &sh, char *);
 
 /*
  * Read and execute commands until EOF.  No prompting or other interactive
@@ -134,24 +135,21 @@ readcmdfile(ShellContext &sh, char *name)
  * Take commands from a file.  To be compatible we should do a path
  * search for the file, which is necessary to find sub-commands.
  */
-static dash::ShellResult<char *>
+static dash::ShellResult<std::string>
 find_dot_file(ShellContext &sh, char *basename)
 {
-	char *fullname;
 	const char *path = pathval();
 	struct stat64 statb;
-	int len;
 
 	/* don't try this for absolute or relative paths */
 	if (strchr(basename, '/'))
-		return basename;
+		return std::string(basename);
 
-	while ((len = padvance(sh, &path, basename)) >= 0) {
-		fullname = stackblock();
+	while (padvance(sh, &path, basename) >= 0) {
+		const char *fullname = stackblock();
 		if ((!sh.pathopt || *sh.pathopt == 'f') &&
 		    !stat64(fullname, &statb) && S_ISREG(statb.st_mode)) {
-			/* This will be freed by the caller. */
-			return stalloc(sh, len);
+			return std::string(fullname);
 		}
 	}
 
@@ -171,8 +169,8 @@ dotcmd(ShellContext &sh, int argc, char **argv)
 		auto fullname_r = find_dot_file(sh, *argv);
 		if (!fullname_r)
 			return tl::unexpected(fullname_r.error());
-		char *fullname = *fullname_r;
-		TRY_SHV(setinputfile(sh, fullname, INPUT_PUSH_FILE));
+		std::string fullname = *std::move(fullname_r);
+		TRY_SHV(setinputfile(sh, fullname.c_str(), INPUT_PUSH_FILE));
 		sh.commandname = fullname;
 		auto r = cmdloop(sh);
 		popfile(sh);

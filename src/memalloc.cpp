@@ -51,26 +51,9 @@ savestr(ShellContext &sh, const char *s)
 	return checknull(sh, ::strdup(s));
 }
 
-/*
- * Allocate nbytes on the heap. Tracked for mark-based / command-scope cleanup.
- * String commits go through stackstr_commit() (see grabstackstr).
- * AST nodes use new via nodes_new.h / freenode().
- */
-rawmem
-stalloc(ShellContext &sh, std::size_t nbytes)
-{
-	std::size_t aligned = SHELL_ALIGN(nbytes);
-	void *p = ckmalloc(sh, aligned);
-	sh.stackheaps.push_back(p);
-	return {p};
-}
-
 void
 clear_stack_temps(ShellContext &sh)
 {
-	for (void *p : sh.stackheaps)
-		ckfree(p);
-	sh.stackheaps.clear();
 	sh.stackstr.reset();
 }
 

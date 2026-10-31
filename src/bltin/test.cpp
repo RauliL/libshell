@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <vector>
 #include "../exec.h"
 #include "bltin.h"
 
@@ -677,7 +678,6 @@ test_file_access(ShellContext &sh, const char *path, int mode)
  */
 int test_access(const struct stat64 *sp, int stmode)
 {
-	gid_t *groups;
 	int n;
 	uid_t euid;
 	int maxgroups;
@@ -703,10 +703,10 @@ int test_access(const struct stat64 *sp, int stmode)
 		/* XXX stolen almost verbatim from ksh93.... */
 		/* on some systems you can be in several groups */
 		maxgroups = getgroups(0, NULL);
-		groups = stalloc(maxgroups * sizeof(*groups));
-		n = getgroups(maxgroups, groups);
+		std::vector<gid_t> groupvec(static_cast<size_t>(maxgroups));
+		n = getgroups(maxgroups, groupvec.data());
 		while (--n >= 0) {
-			if (groups[n] == sp->st_gid) {
+			if (groupvec[static_cast<size_t>(n)] == sp->st_gid) {
 				stmode <<= 3;
 				break;
 			}

@@ -3,7 +3,6 @@
 /* For generated init.cpp only; do not include in other TUs that use sh.field. */
 
 #define stackstr (sh.stackstr)
-#define stackheaps (sh.stackheaps)
 #define errout (sh.errout)
 #define preverrout (sh.preverrout)
 #define out1 (sh.out1)

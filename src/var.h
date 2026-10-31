@@ -40,6 +40,7 @@
 
 #include <inttypes.h>
 #include <string>
+#include <vector>
 
 struct ShellContext;
 
@@ -131,8 +132,11 @@ dash::ShellResult<intmax_t> setvarint(ShellContext &sh, const char *, intmax_t, 
 dash::ShellResult<struct var *> setvareq(ShellContext &sh, char *s, int flags);
 char *lookupvar(ShellContext &sh, const char *);
 dash::ShellResult<intmax_t> lookupvarint(ShellContext &sh, const char *);
-char **listvars(ShellContext &sh, int, int, char ***);
-#define environment() listvars(sh, VEXPORT, VUNSET, 0)
+std::vector<char *> listvars(ShellContext &sh, int, int);
+inline std::vector<char *> environment(ShellContext &sh)
+{
+	return listvars(sh, VEXPORT, VUNSET);
+}
 dash::ShellResult<int> showvars(ShellContext &sh, const char *, int, int);
 dash::ShellResult<int> exportcmd(ShellContext &sh, int, char **);
 dash::ShellResult<int> localcmd(ShellContext &sh, int, char **);

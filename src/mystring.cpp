@@ -237,19 +237,6 @@ single_quote(ShellContext &sh, const char *s)
 }
 
 /*
- * Like strdup but works with the ash stack.
- */
-
-char *
-sstrdup(ShellContext &sh, const char *p)
-{
-	std::size_t len = std::strlen(p) + 1;
-	char *dst = stalloc(sh, len);
-	std::memcpy(dst, p, len);
-	return dst;
-}
-
-/*
  * Wrapper around strcmp for qsort/bsearch/...
  */
 int

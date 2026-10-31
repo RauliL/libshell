@@ -87,8 +87,8 @@
  */
 #define RMESCAPE_ALLOC	0x1	/* Allocate a new string */
 #define RMESCAPE_GLOB	0x2	/* Add backslashes for glob */
-#define RMESCAPE_GROW	0x8	/* Grow strings instead of stalloc */
-#define RMESCAPE_HEAP	0x10	/* Malloc strings instead of stalloc */
+#define RMESCAPE_GROW	0x8	/* Grow StackStr instead of malloc */
+#define RMESCAPE_HEAP	0x10	/* Malloc strings */
 
 /* Add CTLESC when necessary. */
 #define QUOTES_ESC	(EXP_FULL | EXP_CASE)
@@ -143,7 +143,7 @@ static tl::unexpected<dash::ShellErr> varunset(ShellContext &sh, const char *, c
 /*
  * Prepare a pattern for a glob(3) call.
  *
- * Returns an stalloced string.
+ * Returns a possibly malloc'd string (caller frees if != pattern).
  */
 
 static inline char *
@@ -514,13 +514,8 @@ expari(ShellContext &sh, char *start, int flag)
 
 	{
 		std::size_t su = sh.stackstr.used;
-		std::size_t hc = sh.stackheaps.size();
 		sh.stackstr.commit(endoff);
 		result = TRY_SH(arith(sh, start));
-		while (sh.stackheaps.size() > hc) {
-			ckfree(sh.stackheaps.back());
-			sh.stackheaps.pop_back();
-		}
 		sh.stackstr.rewind(su);
 	}
 
@@ -555,13 +550,8 @@ expbackq(ShellContext &sh, union node *cmd, int flag)
 	startloc = sh.expdest - (char *)stackblock();
 	{
 		std::size_t su = sh.stackstr.used;
-		std::size_t hc = sh.stackheaps.size();
 		sh.stackstr.commit(startloc);
 		TRY_SHV(evalbackcmd(sh, cmd, (struct backcmd *) &in));
-		while (sh.stackheaps.size() > hc) {
-			ckfree(sh.stackheaps.back());
-			sh.stackheaps.pop_back();
-		}
 		sh.stackstr.rewind(su);
 	}
 
@@ -1794,7 +1784,7 @@ out_opendir:
 static void
 addfname(ShellContext &sh, char *name)
 {
-	addfname_common(sh, sstrdup(sh, name));
+	addfname_common(sh, name);
 }
 
 
@@ -2034,10 +2024,8 @@ _rmescapes(ShellContext &sh, char *str, int flag)
 			r = makestrspace(sh, fulllen, sh.expdest);
 			str = (char *)stackblock() + strloc;
 			p = str + len;
-		} else if (flag & RMESCAPE_HEAP) {
-			r = ckmalloc(sh, fulllen);
 		} else {
-			r = stalloc(sh, fulllen);
+			r = ckmalloc(sh, fulllen);
 		}
 		q = r;
 		if (len > 0) {
@@ -2123,7 +2111,6 @@ casematch(ShellContext &sh, union node *pattern, char *val)
 {
 	int result;
 	std::size_t su = sh.stackstr.used;
-	std::size_t hc = sh.stackheaps.size();
 
 	sh.argbackq = &pattern->narg.backquote;
 	sh.argbackq_i = 0;
@@ -2131,10 +2118,6 @@ casematch(ShellContext &sh, union node *pattern, char *val)
 	TRY_SHV(argstr(sh, pattern->narg.text.data(), EXP_TILDE | EXP_CASE));
 	ifsfree(sh);
 	result = patmatch(sh, stackblock(), val);
-	while (sh.stackheaps.size() > hc) {
-		ckfree(sh.stackheaps.back());
-		sh.stackheaps.pop_back();
-	}
 	sh.stackstr.rewind(su);
 	return result;
 }
