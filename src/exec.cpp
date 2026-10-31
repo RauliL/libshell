@@ -146,7 +146,7 @@ shellexec(ShellContext &sh, char **argv, const char *path, int idx)
 	sh.exitstatus = exerrno;
 	TRACE(("shellexec failed for %s, errno %d, suppressint %d\n",
 		argv[0], e, sh.suppressint ));
-	exerror(sh, EXEND, "%s: %s", argv[0], errmsg(sh, e, E_EXEC));
+	exerror(sh, EXEND, "%s: %s", argv[0], errmsg(e, E_EXEC));
 	/* NOTREACHED */
 }
 
@@ -504,7 +504,7 @@ loop:
 	if (cmdp && updatetbl)
 		delete_cmd_entry(sh);
 	if (act & DO_ERR)
-		sh_warnx(sh, "%s: %s", name, errmsg(sh, e, E_EXEC));
+		sh_warnx(sh, "%s: %s", name, errmsg(e, E_EXEC));
 fail:
 	entry->cmdtype = CMDUNKNOWN;
 	return {};
@@ -691,7 +691,7 @@ delete_cmd_entry(ShellContext &sh)
 	cmdp = *sh.lastcmdentry;
 	*sh.lastcmdentry = cmdp->next;
 	if (cmdp->cmdtype == CMDFUNCTION)
-		freefunc(sh, cmdp->param.func);
+		freefunc(cmdp->param.func);
 	delete cmdp;
 	INTON_DEFER;
 }
@@ -727,7 +727,7 @@ addcmdentry(ShellContext &sh, char *name, struct cmdentry *entry)
 
 	cmdp = cmdlookup(sh, name, 1);
 	if (cmdp->cmdtype == CMDFUNCTION) {
-		freefunc(sh, cmdp->param.func);
+		freefunc(cmdp->param.func);
 	}
 	cmdp->cmdtype = entry->cmdtype;
 	cmdp->param = entry->u;

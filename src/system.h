@@ -36,10 +36,10 @@
 struct ShellContext;
 
 #ifndef SSIZE_MAX
-#define SSIZE_MAX ((ssize_t)((size_t)-1 >> 1))
+#define SSIZE_MAX ((ssize_t)((std::size_t)-1 >> 1))
 #endif
 
-static inline void sigclearmask(void)
+static inline void sigclearmask()
 {
 #if defined(HAVE_SIGSETMASK) && \
     (!defined(__GLIBC__) || \

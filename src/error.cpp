@@ -176,11 +176,10 @@ sh_warnx(ShellContext &sh, const char *fmt, ...)
 
 
 const char *
-errmsg(ShellContext &sh, int e, int action)
+errmsg(int e, int action)
 {
-	(void)sh;
 	if (e != ENOENT && e != ENOTDIR)
-		return strerror(e);
+		return std::strerror(e);
 
 	if (action & E_OPEN)
 		return "No such file";

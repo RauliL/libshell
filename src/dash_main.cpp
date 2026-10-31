@@ -256,7 +256,7 @@ exit:
 #endif
 #if GPROF
 	{
-		extern void _mcleanup(void);
+		extern void _mcleanup();
 		_mcleanup();
 	}
 #endif

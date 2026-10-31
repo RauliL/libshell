@@ -1051,7 +1051,7 @@ evalfun(ShellContext &sh, struct funcnode *func, int argc, char **argv, EvalFlag
 	INTOFF;
 	sh.loopnest = saveloopnest;
 	sh.funcline = savefuncline;
-	freefunc(sh, func);
+	freefunc(func);
 	sh.shellparam = std::move(saveparam);
 	INTON;
 	sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);

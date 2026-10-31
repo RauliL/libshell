@@ -83,12 +83,13 @@ const char defpathvar[] =
 
 
 void
-changelocale(ShellContext &sh, const char *val)
+changelocale(ShellContext &, const char *val)
 {
-	(void)sh;
-	const char *eq = strchr(val, '=');
+	const auto eq = std::strchr(val, '=');
+
 	if (eq) {
-		std::string name(val, static_cast<size_t>(eq - val));
+		std::string name(val, static_cast<std::size_t>(eq - val));
+
 		if (eq[1] == '\0')
 			unsetenv(name.c_str());
 		else

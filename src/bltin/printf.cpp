@@ -64,13 +64,13 @@ static void check_conversion(ShellContext &sh, const char *, const char *);
 #define PF(f, func) { \
 	switch ((char *)param - (char *)array) { \
 	default: \
-		(void)printf(f, array[0], array[1], func); \
+		printf(f, array[0], array[1], func); \
 		break; \
 	case sizeof(*param): \
-		(void)printf(f, array[0], func); \
+		printf(f, array[0], func); \
 		break; \
 	case 0: \
-		(void)printf(f, func); \
+		printf(f, func); \
 		break; \
 	} \
 }

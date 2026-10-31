@@ -16,20 +16,15 @@
 #include "mystring.h"
 #include "system.h"
 
-static __attribute__((__always_inline__)) inline void
-outofspace(ShellContext &sh)
-{
-	/* OOM is fatal; avoid ShellResult blast radius through ckmalloc. */
-	(void)sh;
-	fprintf(stderr, "Out of space\n");
-	_exit(2);
-}
-
 static rawmem
 checknull(ShellContext &sh, void *p)
 {
-	if (!p)
-		outofspace(sh);
+	if (!p) {
+		// OOM is fatal; avoid ShellResult blast radius through ckmalloc.
+		std::fprintf(stderr, "Out of space\n");
+		_exit(2);
+	}
+
 	return {p};
 }
 
@@ -78,10 +73,8 @@ stunalloc(ShellContext &sh, void *p)
 static char *
 growstackblock(ShellContext &sh, size_t min)
 {
-	std::size_t off = 0;
 	/* Preserve relative cursor if someone held a pointer into the buffer —
 	 * callers re-base via makestrspace return value. */
-	(void)off;
 	sh.stackstr.ensure_avail(min < 128 ? 128 : min);
 	/* Growing may reallocate; return new base of in-progress string. */
 	return sh.stackstr.base();

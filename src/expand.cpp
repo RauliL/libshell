@@ -1041,7 +1041,6 @@ varvalue(ShellContext &sh, char *name, int varflags, unsigned flags)
 	char *p;
 	int i;
 
-	(void)0;
 	discard = (subtype == VSPLUS || subtype == VSLENGTH) |
 		  (flags & EXP_DISCARD);
 

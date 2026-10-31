@@ -96,7 +96,7 @@ static void forkchild(ShellContext &sh, Job *, union node *, int);
 static dash::ShellResult<void> forkparent(ShellContext &sh, Job *, union node *, int, pid_t);
 static int dowait(ShellContext &sh, int, Job *);
 #ifdef SYSV
-STATIC int onsigchild(void);
+STATIC int onsigchild();
 #endif
 static int waitproc(ShellContext &sh, int, int *);
 static std::string commandtext(ShellContext &sh, union node *);
@@ -852,9 +852,9 @@ forkchild(ShellContext &sh, Job *jp, union node *n, int mode)
 		else
 			pgrp = jp->pgid();
 		/* This can fail because we are doing it in the parent also */
-		(void)setpgid(0, pgrp);
+		setpgid(0, pgrp);
 		if (mode == FORK_FG)
-			(void)xxtcsetpgrp(sh, pgrp);
+			xxtcsetpgrp(sh, pgrp);
 		setsignal(sh, SIGTSTP);
 		setsignal(sh, SIGTTOU);
 	} else
@@ -864,7 +864,7 @@ forkchild(ShellContext &sh, Job *jp, union node *n, int mode)
 		ignoresig(sh, SIGQUIT);
 		if (jp && jp->procs.empty()) {
 			close(0);
-			(void)sh_open(sh, _PATH_DEVNULL, O_RDONLY, 0);
+			sh_open(sh, _PATH_DEVNULL, O_RDONLY, 0);
 			/* Should call reset_input here, but it's harmless
 			 * for now.
 			 */
@@ -908,7 +908,7 @@ forkparent(ShellContext &sh, Job *jp, union node *n, int mode, pid_t pid)
 		else
 			pgrp = jp->pgid();
 		/* This can fail because we are doing it in the child also */
-		(void)setpgid(pid, pgrp);
+		setpgid(pid, pgrp);
 	}
 #endif
 	if (mode == FORK_BG) {

@@ -324,7 +324,7 @@ exitshell(ShellContext &sh)
 		if (!sh.ptrap) {
 			sh.evalskip = 0;
 			/* EXIT trap failure must not skip teardown. */
-			(void)evalstring(sh, exittrap.data(), {});
+			evalstring(sh, exittrap.data(), {});
 			sh.evalskip = SKIPFUNCDEF;
 		}
 	}

@@ -132,7 +132,7 @@ tl::unexpected<dash::ShellErr> exraise(ShellContext &sh, int);
 tl::unexpected<dash::ShellErr> sh_error(ShellContext &sh, const char *, ...);
 tl::unexpected<dash::ShellErr> exerror(ShellContext &sh, int, const char *, ...);
 
-const char *errmsg(ShellContext &sh, int, int);
+const char *errmsg(int, int);
 
 void sh_warnx(ShellContext &sh, const char *, ...);
 #endif

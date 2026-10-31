@@ -93,10 +93,10 @@ static FILE *hfile;
 static const char *syntax[513];
 
 static void filltable(const char *);
-static void init(void);
+static void init();
 static void add(const char *, const char *);
 static void print(const char *);
-static void output_type_macros(void);
+static void output_type_macros();
 int main(int, char **);
 
 int
@@ -230,13 +230,11 @@ filltable(const char *dftval)
  */
 
 static void
-init(void)
+init()
 {
-	int ctl;
-
 	filltable("CWORD");
 	syntax[0] = "CEOF";
-	for (ctl = CTL_FIRST; ctl <= CTL_LAST; ctl++ )
+	for (int ctl = CTL_FIRST; ctl <= CTL_LAST; ctl++)
 		syntax[129 + ctl] = "CCTL";
 }
 
@@ -301,11 +299,9 @@ static const char *macro[] = {
 };
 
 static void
-output_type_macros(void)
+output_type_macros()
 {
-	const char **pp;
-
-	for (pp = macro ; *pp ; pp++)
-		fputs(*pp, hfile);
-	fputs("#define digit_val(c)\t((c) - '0')\n", hfile);
+	for (const char **pp = macro ; *pp ; pp++)
+		std::fputs(*pp, hfile);
+	std::fputs("#define digit_val(c)\t((c) - '0')\n", hfile);
 }

@@ -85,9 +85,8 @@ copynodelist(ShellContext &sh, const std::vector<union node *> &src)
  * Free a function parse tree when the last reference drops.
  */
 void
-freefunc(ShellContext &sh, struct funcnode *f)
+freefunc(struct funcnode *f)
 {
-	(void)sh;
 	if (f && --f->count < 0) {
 		freenode(f->n);
 		delete f;

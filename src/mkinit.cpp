@@ -155,7 +155,7 @@ int gooddefine(char *);
 void doevent(struct event *, FILE *, char *);
 void doinclude(char *);
 void dodecl(char *, FILE *);
-void output(void);
+void output();
 void addstr(const char *, struct text *);
 void addchar(int, struct text *);
 void writetext(struct text *, FILE *);
@@ -377,7 +377,7 @@ dodecl(char *line1, FILE *fp)
  */
 
 void
-output(void)
+output()
 {
 	FILE *fp;
 	const char **pp;

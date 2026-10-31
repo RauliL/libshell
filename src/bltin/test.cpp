@@ -355,7 +355,7 @@ binop(ShellContext &sh)
 	struct t_op const *op;
 
 	opnd1 = *sh.t_wp;
-	(void) t_lex(sh, ++sh.t_wp);
+	t_lex(sh, ++sh.t_wp);
 	op = sh.t_wp_op;
 
 	if ((opnd2 = *++sh.t_wp) == (char *)0)

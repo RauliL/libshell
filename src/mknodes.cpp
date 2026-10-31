@@ -81,14 +81,14 @@ static char line[1024];
 static int linno;
 static char *linep;
 
-static void parsenode(void);
-static void parsefield(void);
+static void parsenode();
+static void parsefield();
 static void output(char *);
-static void outfunc(FILE *, int);
+static void outfunc(FILE *);
 static void indent(int, FILE *);
 static int nextfield(char *);
-static void skipbl(void);
-static int readline(void);
+static void skipbl();
+static int readline();
 static void error(const char *, ...);
 static char *savestr(const char *);
 int main(int, char **);
@@ -122,7 +122,7 @@ main(int argc, char **argv)
 
 
 static void
-parsenode(void)
+parsenode()
 {
 	char name[BUFLEN];
 	char tag[BUFLEN];
@@ -152,7 +152,7 @@ parsenode(void)
 
 
 static void
-parsefield(void)
+parsefield()
 {
 	char name[BUFLEN];
 	char type[BUFLEN];
@@ -248,14 +248,14 @@ output(char *file)
 	fputs("};\n\n\n", hfile);
 	fputs("struct ShellContext;\n", hfile);
 	fputs("struct funcnode *copyfunc(ShellContext &, union node *);\n", hfile);
-	fputs("void freefunc(ShellContext &, struct funcnode *);\n", hfile);
+	fputs("void freefunc(struct funcnode *);\n", hfile);
 	fputs("\n#endif /* NODES_H */\n", hfile);
 
 	fputs(writer, cfile);
 	while (fgets(line, sizeof line, patfile) != NULL) {
 		for (p = line ; *p == ' ' || *p == '\t' ; p++);
 		if (strcmp(p, "%COPY\n") == 0)
-			outfunc(cfile, 0);
+			outfunc(cfile);
 		else
 			fputs(line, cfile);
 	}
@@ -264,13 +264,12 @@ output(char *file)
 
 
 static void
-outfunc(FILE *cfile, int calcsize)
+outfunc(FILE *cfile)
 {
 	struct str *sp;
 	struct field *fp;
 	int i;
 
-	(void)calcsize;
 	fputs("      if (n == NULL)\n", cfile);
 	fputs("	    return NULL;\n", cfile);
 	fputs("      switch (n->type) {\n", cfile);
@@ -346,7 +345,7 @@ nextfield(char *buf)
 
 
 static void
-skipbl(void)
+skipbl()
 {
 	while (*linep == ' ' || *linep == '\t')
 		linep++;
@@ -354,7 +353,7 @@ skipbl(void)
 
 
 static int
-readline(void)
+readline()
 {
 	char *p;
 
@@ -380,9 +379,9 @@ error(const char *msg, ...)
 
 	va_start(va, msg);
 
-	(void) fprintf(stderr, "line %d: ", linno);
-	(void) vfprintf(stderr, msg, va);
-	(void) fputc('\n', stderr);
+	std::fprintf(stderr, "line %d: ", linno);
+	std::vfprintf(stderr, msg, va);
+	std::fputc('\n', stderr);
 
 	va_end(va);
 
@@ -399,6 +398,6 @@ savestr(const char *s)
 
 	if ((p = static_cast<char *>(std::malloc(std::strlen(s) + 1))) == nullptr)
 		error("Out of space");
-	(void) strcpy(p, s);
+	std::strcpy(p, s);
 	return p;
 }

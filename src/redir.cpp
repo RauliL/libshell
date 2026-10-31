@@ -202,7 +202,7 @@ sh_open_fail(ShellContext &sh, const std::filesystem::path &pathname, int flags,
 		action = E_CREAT;
 	}
 
-	return sh_error(sh, "cannot %s %s: %s", word, pathname.c_str(), errmsg(sh, e, action));
+	return sh_error(sh, "cannot %s %s: %s", word, pathname.c_str(), errmsg(e, action));
 }
 
 

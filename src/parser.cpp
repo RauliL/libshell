@@ -1810,7 +1810,7 @@ expandstr(ShellContext &sh, const char *ps)
 		err = 1;
 	}
 
-	(void)restore_handler_expandarg(sh, err);
+	restore_handler_expandarg(sh, err);
 
 	sh.doprompt = saveprompt;
 	unwindfiles(sh, file_stop);

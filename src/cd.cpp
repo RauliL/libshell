@@ -131,7 +131,6 @@ dotdot:
 	path = bltinlookup(sh, "CDPATH");
 	while (p = path, (len = padvance_magic(sh, &path, dest, 0)) >= 0) {
 		c = *p;
-		(void)len;
 		candidate.assign(stackblock());
 		p = candidate.c_str();
 
