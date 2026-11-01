@@ -29,7 +29,6 @@
 #include "init.h"
 #include "mystring.h"
 #include "parse_error.h"
-#include "nodes_free.h"
 
 #define PROFILE 0
 

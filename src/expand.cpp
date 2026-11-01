@@ -126,7 +126,7 @@ struct ifs_state {
 static dash::ShellResult<char *> argstr(ShellContext &sh, char *p, int flag);
 static char * exptilde(ShellContext &sh, char *startp, int flag);
 static dash::ShellResult<char *> expari(ShellContext &sh, char *start, int flag);
-static dash::ShellResult<void> expbackq(ShellContext &sh, union node *, int);
+static dash::ShellResult<void> expbackq(ShellContext &sh, Node *, int);
 static dash::ShellResult<char *> evalvar(ShellContext &sh, char *, int);
 static size_t strtodest(ShellContext &sh, const char *p, int flags);
 static size_t memtodest(ShellContext &sh, const char *p, size_t len, int flags);
@@ -223,14 +223,14 @@ getpwhome(ShellContext &sh, const char *name)
  */
 
 dash::ShellResult<void>
-expandarg(ShellContext &sh, union node *arg, ArgList *alist, int flag)
+expandarg(ShellContext &sh, Node *arg, ArgList *alist, int flag)
 {
 	char *p;
 
-	sh.argbackq = &arg->narg.backquote;
+	sh.argbackq = &as<Node::Arg>(arg)->backquote;
 	sh.argbackq_i = 0;
 	STARTSTACKSTR(sh.expdest);
-	TRY_SHV(argstr(sh, arg->narg.text.data(), flag));
+	TRY_SHV(argstr(sh, as<Node::Arg>(arg)->text.data(), flag));
 	if (alist == NULL) {
 		/* here document expanded */
 		goto out;
@@ -389,7 +389,7 @@ addquote:
 			p = TRY_SH(evalvar(sh, p, flag | inquotes));
 			goto start;
 		case CTLBACKQ:
-			TRY_SHV(expbackq(sh, (*sh.argbackq)[sh.argbackq_i], flag | inquotes));
+			TRY_SHV(expbackq(sh, (*sh.argbackq)[sh.argbackq_i].get(), flag | inquotes));
 			goto start;
 		case CTLARI:
 			p = TRY_SH(expari(sh, p, flag | inquotes));
@@ -468,7 +468,7 @@ removerecordregions(ShellContext &sh, int endoff)
 		}
 		return {};
 	}
-	
+
 	sh.ifslastp = &sh.ifsfirst;
 	while (sh.ifslastp->next && sh.ifslastp->next->begoff < endoff)
 		sh.ifslastp=sh.ifslastp->next;
@@ -535,7 +535,7 @@ out:
  */
 
 static dash::ShellResult<void>
-expbackq(ShellContext &sh, union node *cmd, int flag)
+expbackq(ShellContext &sh, Node *cmd, int flag)
 {
 	struct backcmd in;
 	int i;
@@ -2108,15 +2108,15 @@ setnesc:
  */
 
 dash::ShellResult<int>
-casematch(ShellContext &sh, union node *pattern, char *val)
+casematch(ShellContext &sh, Node *pattern, char *val)
 {
 	int result;
 	std::size_t su = sh.stackstr.used;
 
-	sh.argbackq = &pattern->narg.backquote;
+	sh.argbackq = &as<Node::Arg>(pattern)->backquote;
 	sh.argbackq_i = 0;
 	STARTSTACKSTR(sh.expdest);
-	TRY_SHV(argstr(sh, pattern->narg.text.data(), EXP_TILDE | EXP_CASE));
+	TRY_SHV(argstr(sh, as<Node::Arg>(pattern)->text.data(), EXP_TILDE | EXP_CASE));
 	ifsfree(sh);
 	result = patmatch(sh, stackblock(), val);
 	sh.stackstr.rewind(su);

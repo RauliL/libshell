@@ -67,7 +67,6 @@
 #include "show.h"
 #include "mystring.h"
 #include "parse_error.h"
-#include "nodes_free.h"
 
 
 			/* set if we are skipping commands */
@@ -86,18 +85,18 @@
 
 
 
-static void evaltreenr(ShellContext &, union node *, EvalFlags)
+static void evaltreenr(ShellContext &, Node *, EvalFlags)
 	__attribute__((__noreturn__));
-static dash::ShellResult<int> evalloop(ShellContext &sh, union node *, EvalFlags);
-static dash::ShellResult<int> evalfor(ShellContext &sh, union node *, EvalFlags);
-static dash::ShellResult<int> evalcase(ShellContext &sh, union node *, EvalFlags);
-static dash::ShellResult<int> evalsubshell(ShellContext &sh, union node *, EvalFlags);
-static dash::ShellResult<void> expredir(ShellContext &sh, union node *);
-static dash::ShellResult<int> evalpipe(ShellContext &sh, union node *, EvalFlags);
-static dash::ShellResult<int> evalcommand(ShellContext &sh, union node *, EvalFlags);
+static dash::ShellResult<int> evalloop(ShellContext &sh, Node *, EvalFlags);
+static dash::ShellResult<int> evalfor(ShellContext &sh, Node *, EvalFlags);
+static dash::ShellResult<int> evalcase(ShellContext &sh, Node *, EvalFlags);
+static dash::ShellResult<int> evalsubshell(ShellContext &sh, Node *, EvalFlags);
+static dash::ShellResult<void> expredir(ShellContext &sh, Node *);
+static dash::ShellResult<int> evalpipe(ShellContext &sh, Node *, EvalFlags);
+static dash::ShellResult<int> evalcommand(ShellContext &sh, Node *, EvalFlags);
 static dash::ShellResult<int> evalbltin(ShellContext &sh, const struct builtincmd *, int, char **, EvalFlags);
-static dash::ShellResult<int> evalfun(ShellContext &sh, struct funcnode *, int, char **, EvalFlags);
-static dash::ShellResult<void> prehash(ShellContext &sh, union node *);
+static dash::ShellResult<int> evalfun(ShellContext &sh, const std::shared_ptr<Node> &, int, char **, EvalFlags);
+static dash::ShellResult<void> prehash(ShellContext &sh, Node *);
 static int eprintlist(ShellContext &sh, struct output *, const ArgList &, int);
 static dash::ShellResult<int> bltincmd(ShellContext &sh, int, char **);
 
@@ -180,14 +179,17 @@ dash::ShellResult<int>
 ShellContext::eval(const std::string &script, EvalFlags flags)
 {
 	ShellContext &sh = *this;
-	union node *n;
 	int status = 0;
 	std::string copy = script;
 
 	setinputstring(sh, copy.data());
 
 	try {
-		for (; (n = parsecmd(sh, 0)) != NEOF; clear_stack_temps(sh)) {
+		for (;;) {
+			ParseCmdResult cmd = parsecmd(sh, 0);
+			if (cmd.eof)
+				break;
+			Node *n = cmd.tree.get();
 			int i;
 
 			EvalFlags child = flags;
@@ -196,8 +198,6 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
 			auto r = evaltree(sh, n, child);
 			if (!r) {
 				sh.exception = r.error().code;
-				if (n && n != NEOF)
-					freenode(n);
 				clear_stack_temps(sh);
 				popfile(sh);
 				if (r.error().code == EXERROR)
@@ -207,8 +207,7 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
 			i = *r;
 			if (n)
 				status = i;
-			if (n && n != NEOF)
-				freenode(n);
+			clear_stack_temps(sh);
 
 			if (sh.evalskip)
 				break;
@@ -231,10 +230,10 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
  */
 
 dash::ShellResult<int>
-evaltree(ShellContext &sh, union node *n, EvalFlags flags)
+evaltree(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	bool checkexit = false;
-	dash::ShellResult<int> (*evalfn)(ShellContext &, union node *, EvalFlags);
+	dash::ShellResult<int> (*evalfn)(ShellContext &, Node *, EvalFlags);
 	unsigned isor;
 	int status = 0;
 
@@ -257,65 +256,61 @@ evaltree(ShellContext &sh, union node *n, EvalFlags flags)
 		flushout(sh, sh.out1);
 		break;
 #endif
-	case NNOT:
-		status = TRY_SH(evaltree(sh, n->nnot.com, EvalFlag::tested));
+	case Node::Type::Not:
+		status = TRY_SH(evaltree(sh, as<Node::Not>(n)->com.get(), EvalFlag::tested));
 		if (!sh.evalskip)
 			status = !status;
 		break;
-	case NREDIR:
-		sh.errlinno = sh.lineno = n->nredir.linno;
+	case Node::Type::Redir:
+		sh.errlinno = sh.lineno = as<Node::Redir>(n)->linno;
 		if (sh.funcline)
 			sh.lineno -= sh.funcline - 1;
-		TRY_SHV(expredir(sh, n->nredir.redirect));
-		pushredir(sh, n->nredir.redirect);
-		status = TRY_SH(redirectsafe(sh, n->nredir.redirect, REDIR_PUSH));
+		TRY_SHV(expredir(sh, as<Node::Redir>(n)->redirect.get()));
+		pushredir(sh, as<Node::Redir>(n)->redirect.get());
+		status = TRY_SH(redirectsafe(sh, as<Node::Redir>(n)->redirect.get(), REDIR_PUSH));
 		if (status)
 			checkexit = true;
 		else
-			status = TRY_SH(evaltree(sh, n->nredir.n,
+			status = TRY_SH(evaltree(sh, as<Node::Redir>(n)->n.get(),
 						 flags & EvalFlag::tested));
-		if (n->nredir.redirect)
+		if (as<Node::Redir>(n)->redirect)
 			popredir(sh, 0);
 		break;
-	case NCMD:
+	case Node::Type::Cmd:
 		evalfn = evalcommand;
 checkexit:
 		checkexit = true;
 		goto calleval;
-	case NFOR:
+	case Node::Type::For:
 		evalfn = evalfor;
 		goto calleval;
-	case NWHILE:
-	case NUNTIL:
+	case Node::Type::While:
+	case Node::Type::Until:
 		evalfn = evalloop;
 		goto calleval;
-	case NSUBSHELL:
-	case NBACKGND:
+	case Node::Type::Subshell:
+	case Node::Type::Backgnd:
 		evalfn = evalsubshell;
 		goto checkexit;
-	case NPIPE:
+	case Node::Type::Pipe:
 		evalfn = evalpipe;
 		goto checkexit;
-	case NCASE:
+	case Node::Type::Case:
 		evalfn = evalcase;
 		goto calleval;
-	case NAND:
-	case NOR:
-	case NSEMI: {
-#if NAND + 1 != NOR
-#error NAND + 1 != NOR
-#endif
-#if NOR + 1 != NSEMI
-#error NOR + 1 != NSEMI
-#endif
-		isor = n->type - NAND;
+	case Node::Type::And:
+	case Node::Type::Or:
+	case Node::Type::Semi: {
+		static_assert(static_cast<int>(Node::Type::And) + 1 == static_cast<int>(Node::Type::Or));
+		static_assert(static_cast<int>(Node::Type::Or) + 1 == static_cast<int>(Node::Type::Semi));
+		isor = static_cast<int>(n->type) - static_cast<int>(Node::Type::And);
 		EvalFlags left;
-		if (n->type != NSEMI || flags.test(EvalFlag::tested))
+		if (n->type != Node::Type::Semi || flags.test(EvalFlag::tested))
 			left.set(EvalFlag::tested);
-		status = TRY_SH(evaltree(sh, n->nbinary.ch1, left));
+		status = TRY_SH(evaltree(sh, as<Node::Binary>(n)->ch1.get(), left));
 		if ((!status) == isor || sh.evalskip)
 			break;
-		n = n->nbinary.ch2;
+		n = as<Node::Binary>(n)->ch2.get();
 		goto evaln;
 	}
 evaln:
@@ -323,20 +318,20 @@ evaln:
 calleval:
 		status = TRY_SH(evalfn(sh, n, flags));
 		break;
-	case NIF:
-		status = TRY_SH(evaltree(sh, n->nif.test, EvalFlag::tested));
+	case Node::Type::If:
+		status = TRY_SH(evaltree(sh, as<Node::If>(n)->test.get(), EvalFlag::tested));
 		if (sh.evalskip)
 			break;
 		if (!status) {
-			n = n->nif.ifpart;
+			n = as<Node::If>(n)->ifpart.get();
 			goto evaln;
-		} else if (n->nif.elsepart) {
-			n = n->nif.elsepart;
+		} else if (as<Node::If>(n)->elsepart) {
+			n = as<Node::If>(n)->elsepart.get();
 			goto evaln;
 		}
 		status = 0;
 		break;
-	case NDEFUN:
+	case Node::Type::Defun:
 		defun(sh, n);
 		break;
 	}
@@ -359,7 +354,7 @@ exexit:
 
 
 static void
-evaltreenr(ShellContext &sh, union node *n, EvalFlags flags)
+evaltreenr(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	evaltree(sh, n, flags);
 	exitshell(sh);
@@ -391,7 +386,7 @@ skiploop(ShellContext &sh)
 
 
 static dash::ShellResult<int>
-evalloop(ShellContext &sh, union node *n, EvalFlags flags)
+evalloop(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	int skip;
 	int status;
@@ -402,17 +397,17 @@ evalloop(ShellContext &sh, union node *n, EvalFlags flags)
 	do {
 		int i;
 
-		i = TRY_SH(evaltree(sh, n->nbinary.ch1, EvalFlag::tested));
+		i = TRY_SH(evaltree(sh, as<Node::Binary>(n)->ch1.get(), EvalFlag::tested));
 		skip = skiploop(sh);
 		if (skip == SKIPFUNC)
 			status = i;
 		if (skip)
 			continue;
-		if (n->type != NWHILE)
+		if (n->type != Node::Type::While)
 			i = !i;
 		if (i != 0)
 			break;
-		status = TRY_SH(evaltree(sh, n->nbinary.ch2, flags));
+		status = TRY_SH(evaltree(sh, as<Node::Binary>(n)->ch2.get(), flags));
 		skip = skiploop(sh);
 	} while (!(skip & ~SKIPCONT));
 	sh.loopnest--;
@@ -423,17 +418,17 @@ evalloop(ShellContext &sh, union node *n, EvalFlags flags)
 
 
 static dash::ShellResult<int>
-evalfor(ShellContext &sh, union node *n, EvalFlags flags)
+evalfor(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	ArgList args;
-	union node *argp;
+	Node *argp;
 	int status;
 
-	sh.errlinno = sh.lineno = n->nfor.linno;
+	sh.errlinno = sh.lineno = as<Node::For>(n)->linno;
 	if (sh.funcline)
 		sh.lineno -= sh.funcline - 1;
 
-	for (argp = n->nfor.args ; argp ; argp = argp->narg.next) {
+	for (argp = as<Node::For>(n)->args.get() ; argp ; argp = as<Node::Arg>(argp)->next.get()) {
 		TRY_SHV(expandarg(sh, argp, &args, EXP_FULL | EXP_TILDE));
 	}
 
@@ -441,8 +436,8 @@ evalfor(ShellContext &sh, union node *n, EvalFlags flags)
 	sh.loopnest++;
 	flags &= EvalFlag::tested;
 	for (const std::string &word : args) {
-		TRY_SHV(setvar(sh, n->nfor.var, word));
-		status = TRY_SH(evaltree(sh, n->nfor.body, flags));
+		TRY_SHV(setvar(sh, as<Node::For>(n)->var, word));
+		status = TRY_SH(evaltree(sh, as<Node::For>(n)->body.get(), flags));
 		if (skiploop(sh) & ~SKIPCONT)
 			break;
 	}
@@ -454,29 +449,29 @@ evalfor(ShellContext &sh, union node *n, EvalFlags flags)
 
 
 static dash::ShellResult<int>
-evalcase(ShellContext &sh, union node *n, EvalFlags flags)
+evalcase(ShellContext &sh, Node *n, EvalFlags flags)
 {
-	union node *cp;
-	union node *patp;
+	Node *cp;
+	Node *patp;
 	ArgList args;
 	int status = 0;
 
-	sh.errlinno = sh.lineno = n->ncase.linno;
+	sh.errlinno = sh.lineno = as<Node::Case>(n)->linno;
 	if (sh.funcline)
 		sh.lineno -= sh.funcline - 1;
 
-	expandarg(sh, n->ncase.expr, &args, FNMATCH_IS_ENABLED ? EXP_TILDE :
+	expandarg(sh, as<Node::Case>(n)->expr.get(), &args, FNMATCH_IS_ENABLED ? EXP_TILDE :
 					   EXP_TILDE | EXP_MBCHAR);
-	for (cp = n->ncase.cases ; cp && sh.evalskip == 0 ; cp = cp->nclist.next) {
-		for (patp = cp->nclist.pattern ; patp ; patp = patp->narg.next) {
+	for (cp = as<Node::Case>(n)->cases.get() ; cp && sh.evalskip == 0 ; cp = as<Node::CaseList>(cp)->next.get()) {
+		for (patp = as<Node::CaseList>(cp)->pattern.get() ; patp ; patp = as<Node::Arg>(patp)->next.get()) {
 			if (casematch(sh, patp, args[0].data())) {
 				/* Ensure body is non-empty as otherwise
 				 * EvalFlag::exit may prevent us from setting the
 				 * exit status.
 				 */
-				if (sh.evalskip == 0 && cp->nclist.body) {
+				if (sh.evalskip == 0 && as<Node::CaseList>(cp)->body) {
 					status = TRY_SH(evaltree(sh,
-							cp->nclist.body,
+							as<Node::CaseList>(cp)->body.get(),
 							flags));
 				}
 				goto out;
@@ -500,31 +495,31 @@ have_traps(const ShellContext& sh)
  */
 
 static dash::ShellResult<int>
-evalsubshell(ShellContext &sh, union node *n, EvalFlags flags)
+evalsubshell(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	Job *jp;
-	int backgnd = (n->type == NBACKGND);
+	bool backgnd = n->type == Node::Type::Backgnd;
 	int status;
 
-	sh.errlinno = sh.lineno = n->nredir.linno;
+	sh.errlinno = sh.lineno = as<Node::Redir>(n)->linno;
 	if (sh.funcline)
 		sh.lineno -= sh.funcline - 1;
 
-	TRY_SHV(expredir(sh, n->nredir.redirect));
+	TRY_SHV(expredir(sh, as<Node::Redir>(n)->redirect.get()));
 	INTOFF;
 	if (!backgnd && flags.test(EvalFlag::exit) && !have_traps(sh)) {
 		forkreset(sh, NULL);
 		goto nofork;
 	}
 	jp = makejob(sh, 1);
-	if (TRY_SH(forkshell(sh, jp, n->nredir.n, backgnd)) == 0) {
+	if (TRY_SH(forkshell(sh, jp, as<Node::Redir>(n)->n.get(), backgnd)) == 0) {
 		flags.set(EvalFlag::exit);
 		if (backgnd)
 			flags.reset(EvalFlag::tested);
 nofork:
 		INTON;
-		TRY_SHV(redirect(sh, n->nredir.redirect, 0));
-		evaltreenr(sh, n->nredir.n, flags);
+		TRY_SHV(redirect(sh, as<Node::Redir>(n)->redirect.get(), 0));
+		evaltreenr(sh, as<Node::Redir>(n)->n.get(), flags);
 		/* never returns */
 	}
 	status = 0;
@@ -541,27 +536,29 @@ nofork:
  */
 
 static dash::ShellResult<void>
-expredir(ShellContext &sh, union node *n)
+expredir(ShellContext &sh, Node *n)
 {
-	union node *redir;
+	Node *redir;
 
-	for (redir = n ; redir ; redir = redir->nfile.next) {
+	for (redir = n ; redir ; redir = as<Node::RedirList>(redir)->next.get()) {
 		ArgList fn;
 		switch (redir->type) {
-		case NFROMTO:
-		case NFROM:
-		case NTO:
-		case NCLOBBER:
-		case NAPPEND:
-			TRY_SHV(expandarg(sh, redir->nfile.fname, &fn, EXP_TILDE | EXP_REDIR));
-			redir->nfile.expfname = fn[0];
+		case Node::Type::FromTo:
+		case Node::Type::From:
+		case Node::Type::To:
+		case Node::Type::Clobber:
+		case Node::Type::Append:
+			TRY_SHV(expandarg(sh, as<Node::File>(redir)->fname.get(), &fn, EXP_TILDE | EXP_REDIR));
+			as<Node::File>(redir)->expfname = fn[0];
 			break;
-		case NFROMFD:
-		case NTOFD:
-			if (redir->ndup.vname) {
-				TRY_SHV(expandarg(sh, redir->ndup.vname, &fn, EXP_TILDE | EXP_REDIR));
+		case Node::Type::FromFd:
+		case Node::Type::ToFd:
+			if (as<Node::Dup>(redir)->vname) {
+				TRY_SHV(expandarg(sh, as<Node::Dup>(redir)->vname.get(), &fn, EXP_TILDE | EXP_REDIR));
 				fixredir(sh, redir, fn[0].c_str(), 1);
 			}
+			break;
+		default:
 			break;
 		}
 	}
@@ -578,7 +575,7 @@ expredir(ShellContext &sh, union node *n)
  */
 
 static dash::ShellResult<int>
-evalpipe(ShellContext &sh, union node *n, EvalFlags flags)
+evalpipe(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	Job *jp;
 	int pipelen;
@@ -587,22 +584,22 @@ evalpipe(ShellContext &sh, union node *n, EvalFlags flags)
 	int status = 0;
 
 	TRACE(("evalpipe(0x%lx) called\n", (long)n));
-	pipelen = static_cast<int>(n->npipe.cmdlist.size());
+	pipelen = static_cast<int>(as<Node::Pipe>(n)->cmdlist.size());
 	flags.set(EvalFlag::exit);
 	INTOFF;
 	jp = makejob(sh, pipelen);
 	prevfd = -1;
-	for (std::size_t i = 0; i < n->npipe.cmdlist.size(); i++) {
-		union node *cmd = n->npipe.cmdlist[i];
+	for (std::size_t i = 0; i < as<Node::Pipe>(n)->cmdlist.size(); i++) {
+		Node *cmd = as<Node::Pipe>(n)->cmdlist[i].get();
 		TRY_SHV(prehash(sh, cmd));
 		pip[1] = -1;
-		if (i + 1 < n->npipe.cmdlist.size()) {
+		if (i + 1 < as<Node::Pipe>(n)->cmdlist.size()) {
 			if (pipe(pip) < 0) {
 				close(prevfd);
 				return sh_error(sh, "Pipe call failed");
 			}
 		}
-		if (TRY_SH(forkshell(sh, jp, cmd, n->npipe.backgnd)) == 0) {
+		if (TRY_SH(forkshell(sh, jp, cmd, as<Node::Pipe>(n)->backgnd)) == 0) {
 			INTON;
 			if (pip[1] >= 0) {
 				close(pip[0]);
@@ -624,7 +621,7 @@ evalpipe(ShellContext &sh, union node *n, EvalFlags flags)
 		prevfd = pip[0];
 		close(pip[1]);
 	}
-	if (n->npipe.backgnd == 0) {
+	if (as<Node::Pipe>(n)->backgnd == 0) {
 		status = TRY_SH(waitforjob(sh, jp));
 		TRACE(("evalpipe:  job done exit status %d\n", status));
 	}
@@ -643,7 +640,7 @@ evalpipe(ShellContext &sh, union node *n, EvalFlags flags)
  */
 
 dash::ShellResult<void>
-evalbackcmd(ShellContext &sh, union node *n, struct backcmd *result)
+evalbackcmd(ShellContext &sh, Node *n, struct backcmd *result)
 {
 	Job *jp;
 	int pip[2];
@@ -683,14 +680,14 @@ out:
 
 /* Expand at least one more word into ArgList; return false if none. */
 static dash::ShellResult<bool>
-fill_arglist(ShellContext &sh, ArgList *alist, union node **argpp)
+fill_arglist(ShellContext &sh, ArgList *alist, Node **argpp)
 {
 	size_t before = alist->size();
-	union node *argp;
+	Node *argp;
 
 	while ((argp = *argpp)) {
 		TRY_SHV(expandarg(sh, argp, alist, EXP_FULL | EXP_TILDE));
-		*argpp = argp->narg.next;
+		*argpp = as<Node::Arg>(argp)->next.get();
 		if (alist->size() > before)
 			return true;
 	}
@@ -700,7 +697,7 @@ fill_arglist(ShellContext &sh, ArgList *alist, union node **argpp)
 
 /* Skip `command [-p] [--]` words; set *arg0 to the real command index. */
 static dash::ShellResult<int>
-parse_command_args(ShellContext &sh, ArgList *alist, union node **argpp,
+parse_command_args(ShellContext &sh, ArgList *alist, Node **argpp,
 			      const char **path, size_t *arg0)
 {
 	size_t start = *arg0;
@@ -744,12 +741,12 @@ parse_command_args(ShellContext &sh, ArgList *alist, union node **argpp,
  */
 
 dash::ShellResult<int>
-evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
+evalcommand(ShellContext &sh, Node *cmd, EvalFlags flags)
 {
 	struct localvar_list *localvar_stop;
 	struct parsefile *file_stop;
 	struct redirtab *redir_stop;
-	union node *argp;
+	Node *argp;
 	ArgList args;
 	ArgList vars;
 	char **argv;
@@ -768,7 +765,7 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 	VarFlags vflags;
 	int vlocal;
 
-	sh.errlinno = sh.lineno = cmd->ncmd.linno;
+	sh.errlinno = sh.lineno = as<Node::Command>(cmd)->linno;
 	if (sh.funcline)
 		sh.lineno -= sh.funcline - 1;
 
@@ -788,7 +785,7 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 	path = NULL;
 
 	argc = 0;
-	argp = cmd->ncmd.args;
+	argp = as<Node::Command>(cmd)->args.get();
 	if (TRY_SH(fill_arglist(sh, &args, &argp))) {
 		int pseudovarflag = 0;
 
@@ -823,10 +820,10 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 			xtrace_end = args.size();
 		}
 
-		for (; argp; argp = argp->narg.next)
+		for (; argp; argp = as<Node::Arg>(argp)->next.get())
 			TRY_SHV(expandarg(sh, argp, &args,
 				  pseudovarflag &&
-				  isassignment(sh, argp->narg.text) ?
+				  isassignment(as<Node::Arg>(argp)->text) ?
 				  EXP_VARTILDE : EXP_FULL | EXP_TILDE));
 
 		argc = static_cast<int>(args.size() - arg0);
@@ -852,9 +849,9 @@ evalcommand(ShellContext &sh, union node *cmd, EvalFlags flags)
 		lastarg = argv[argc - 1];
 
 	sh.preverrout.fd = 2;
-	TRY_SHV(expredir(sh, cmd->ncmd.redirect));
-	redir_stop = pushredir(sh, cmd->ncmd.redirect);
-	status = TRY_SH(redirectsafe(sh, cmd->ncmd.redirect, REDIR_PUSH|REDIR_SAVEFD2));
+	TRY_SHV(expredir(sh, as<Node::Command>(cmd)->redirect.get()));
+	redir_stop = pushredir(sh, as<Node::Command>(cmd)->redirect.get());
+	status = TRY_SH(redirectsafe(sh, as<Node::Command>(cmd)->redirect.get(), REDIR_PUSH|REDIR_SAVEFD2));
 
 	if (unlikely(status)) {
 bail:
@@ -867,7 +864,7 @@ bail:
 		goto out;
 	}
 
-	for (argp = cmd->ncmd.assign; argp; argp = argp->narg.next) {
+	for (argp = as<Node::Command>(cmd)->assign.get(); argp; argp = as<Node::Arg>(argp)->next.get()) {
 		size_t before = vars.size();
 		TRY_SHV(expandarg(sh, argp, &vars, EXP_VARTILDE));
 		for (size_t i = before; i < vars.size(); i++) {
@@ -948,7 +945,7 @@ bail:
 	FORCEINTON;
 
 out:
-	if (cmd->ncmd.redirect)
+	if (as<Node::Command>(cmd)->redirect)
 		popredir(sh, execcmd);
 	unwindredir(sh, redir_stop);
 	unwindfiles(sh, file_stop);
@@ -1005,7 +1002,7 @@ evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv,
 }
 
 static dash::ShellResult<int>
-evalfun(ShellContext &sh, struct funcnode *func, int argc, char **argv, EvalFlags flags)
+evalfun(ShellContext &sh, const std::shared_ptr<Node> &func, int argc, char **argv, EvalFlags flags)
 {
 	struct shparam saveparam = std::move(sh.shellparam);
 	int savefuncline = sh.funcline;
@@ -1014,8 +1011,7 @@ evalfun(ShellContext &sh, struct funcnode *func, int argc, char **argv, EvalFlag
 	dash::ShellErr fail_err{};
 
 	INTOFF;
-	func->count++;
-	sh.funcline = func->n->ndefun.linno;
+	sh.funcline = as<Node::Defun>(func)->linno;
 	sh.loopnest = 0;
 	barrier();
 	if (--sh.suppressint == 0 && sh.intpending) {
@@ -1028,7 +1024,7 @@ evalfun(ShellContext &sh, struct funcnode *func, int argc, char **argv, EvalFlag
 			sh.shellparam.p.emplace_back(argv[i]);
 		sh.shellparam.optind = 1;
 		sh.shellparam.optoff = -1;
-		auto r = evaltree(sh, func->n->ndefun.body,
+		auto r = evaltree(sh, as<Node::Defun>(func)->body.get(),
 				  flags & EvalFlag::tested);
 		if (!r) {
 			fail_err = r.error();
@@ -1039,7 +1035,6 @@ evalfun(ShellContext &sh, struct funcnode *func, int argc, char **argv, EvalFlag
 	INTOFF;
 	sh.loopnest = saveloopnest;
 	sh.funcline = savefuncline;
-	freefunc(func);
 	sh.shellparam = std::move(saveparam);
 	INTON;
 	sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
@@ -1057,14 +1052,14 @@ evalfun(ShellContext &sh, struct funcnode *func, int argc, char **argv, EvalFlag
  */
 
 dash::ShellResult<void>
-prehash(ShellContext &sh, union node *n)
+prehash(ShellContext &sh, Node *n)
 {
 	struct cmdentry entry;
 
-	if (n->type == NCMD && n->ncmd.args)
-		if (endofname(n->ncmd.args->narg.text) ==
-		    n->ncmd.args->narg.text.size())
-			TRY_SHV(find_command(sh, n->ncmd.args->narg.text.data(), &entry, 0,
+	if (n->type == Node::Type::Cmd && as<Node::Command>(n)->args)
+		if (endofname(as<Node::Arg>(as<Node::Command>(n)->args)->text) ==
+		    as<Node::Arg>(as<Node::Command>(n)->args)->text.size())
+			TRY_SHV(find_command(sh, as<Node::Arg>(as<Node::Command>(n)->args)->text.data(), &entry, 0,
 				     pathval()));
 	return {};
 }

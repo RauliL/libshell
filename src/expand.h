@@ -71,14 +71,14 @@ struct mbpair {
 #define EXP_DISCARD	0x400	/* discard result of expansion */
 
 
-union node;
+struct Node;
 
 struct ShellContext;
 #include "error.h"
-dash::ShellResult<void> expandarg(ShellContext &sh, union node *, ArgList *, int);
+dash::ShellResult<void> expandarg(ShellContext &sh, Node *, ArgList *, int);
 #define rmescapes(p) _rmescapes(sh, (p), 0)
 char *_rmescapes(ShellContext &sh, char *, int);
-dash::ShellResult<int> casematch(ShellContext &sh, union node *, char *);
+dash::ShellResult<int> casematch(ShellContext &sh, Node *, char *);
 void recordregion(ShellContext &sh, int, int, int);
 dash::ShellResult<void> removerecordregions(ShellContext &sh, int);
 void ifsbreakup(ShellContext &sh, char *, int, ArgList *);

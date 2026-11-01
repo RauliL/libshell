@@ -58,7 +58,6 @@ int *dash_errno;
 #include "mystring.h"
 #include "exec.h"
 #include "parse_error.h"
-#include "nodes_free.h"
 #include "show.h"
 
 static dash::ShellResult<std::string> find_dot_file(ShellContext &sh, char *);
@@ -70,7 +69,6 @@ static dash::ShellResult<std::string> find_dot_file(ShellContext &sh, char *);
 dash::ShellResult<int>
 run_interactive(ShellContext &sh)
 {
-	union node *n;
 	int status = 0;
 	int numeof = 0;
 
@@ -81,8 +79,8 @@ run_interactive(ShellContext &sh)
 		if (sh.jobctl)
 			showjobs(sh, sh.out2, SHOW_CHANGED);
 		try {
-			n = parsecmd(sh, 1);
-			if (n == NEOF) {
+			ParseCmdResult cmd = parsecmd(sh, 1);
+			if (cmd.eof) {
 				clear_stack_temps(sh);
 				if (numeof >= 50)
 					break;
@@ -98,13 +96,12 @@ run_interactive(ShellContext &sh)
 				}
 				numeof++;
 			} else {
+				Node *n = cmd.tree.get();
 				sh.job_warning = (sh.job_warning == 2) ? 1 : 0;
 				numeof = 0;
 				auto r = evaltree(sh, n, {});
 				if (!r) {
 					sh.exception = r.error().code;
-					if (n && n != NEOF)
-						freenode(n);
 					clear_stack_temps(sh);
 					if (r.error().code == EXERROR) {
 						skip = sh.evalskip;
@@ -118,8 +115,6 @@ run_interactive(ShellContext &sh)
 				}
 				if (n)
 					status = *r;
-				if (n && n != NEOF)
-					freenode(n);
 				clear_stack_temps(sh);
 			}
 		} catch (const dash::ParseError &e) {
@@ -152,7 +147,6 @@ run_interactive(ShellContext &sh)
 dash::ShellResult<int>
 cmdloop(ShellContext &sh)
 {
-	union node *n;
 	int status = 0;
 
 	TRACE(("cmdloop() called\n"));
@@ -162,25 +156,22 @@ cmdloop(ShellContext &sh)
 		if (sh.jobctl)
 			showjobs(sh, sh.out2, SHOW_CHANGED);
 		try {
-			n = parsecmd(sh, 0);
-			if (n == NEOF) {
+			ParseCmdResult cmd = parsecmd(sh, 0);
+			if (cmd.eof) {
 				clear_stack_temps(sh);
 				break;
 			}
+			Node *n = cmd.tree.get();
 			sh.job_warning = (sh.job_warning == 2) ? 1 : 0;
 			auto r = evaltree(sh, n, {});
 			if (!r) {
 				sh.exception = r.error().code;
-				if (n && n != NEOF)
-					freenode(n);
 				clear_stack_temps(sh);
 				if (r.error().code == EXERROR)
 					return sh.exitstatus;
 				return r;
 			}
 			status = *r;
-			if (n && n != NEOF)
-				freenode(n);
 			clear_stack_temps(sh);
 		} catch (const dash::ParseError &e) {
 			report_parse_error(sh, e);

@@ -60,7 +60,7 @@
 
 struct ShellContext;
 struct output;
-union node;
+struct Node;
 
 /*
  * A job is either a single process or a pipeline.  Process status lives in
@@ -107,8 +107,8 @@ dash::ShellResult<int> jobscmd(ShellContext &, int, char **);
 void showjobs(ShellContext &, struct output *, int);
 dash::ShellResult<int> waitcmd(ShellContext &, int, char **);
 Job *makejob(ShellContext &, int);
-dash::ShellResult<int> forkshell(ShellContext &, Job *, union node *, int);
-dash::ShellResult<Job *> vforkexec(ShellContext &, union node *, char **, const char *, int);
+dash::ShellResult<int> forkshell(ShellContext &, Job *, Node *, int);
+dash::ShellResult<Job *> vforkexec(ShellContext &, Node *, char **, const char *, int);
 dash::ShellResult<int> waitforjob(ShellContext &, Job *);
 int stoppedjobs(ShellContext &);
 

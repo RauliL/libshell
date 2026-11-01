@@ -1,5 +1,3 @@
-#ifndef PARSER_H
-#define PARSER_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,13 +33,14 @@
  *
  *	@(#)parser.h	8.3 (Berkeley) 5/4/95
  */
+#pragma once
 
 #include <cstddef>
 #include <string_view>
+#include "nodes.h"
 #include "token.h"
 #include "result.h"
 
-union node;
 namespace dash { class ParseError; }
 
 /* control characters in argument strings */
@@ -81,19 +80,20 @@ namespace dash { class ParseError; }
 #define CHKEOFMARK	0x8
 
 
-/*
- * NEOF is returned by parsecmd when it encounters an end of file.  It
- * must be distinct from NULL, so we use the address of a ShellContext
- * field that happens to be handy. Requires ShellContext &sh in scope.
- */
-#define NEOF ((union node *)&sh.tokpushback)
-
 struct ShellContext;
 
-bool isassignment(ShellContext &sh, std::string_view p);
-bool issimplecmd(ShellContext &sh, union node *n, std::string_view name);
-union node *parsecmd(ShellContext &sh, int);
-void fixredir(ShellContext &sh, union node *, const char *, int);
+/**
+ * Result of `parsecmd()`: EOF vs blank line vs parse tree.
+ */
+struct ParseCmdResult {
+	bool eof = false;
+	Node::ptr tree;
+};
+
+bool isassignment(std::string_view p);
+bool issimplecmd(Node *n, std::string_view name);
+ParseCmdResult parsecmd(ShellContext &sh, int);
+void fixredir(ShellContext &sh, Node *, const char *, int);
 const char *getprompt(ShellContext &, void *);
 const char *const *findkwd(ShellContext &, const char *);
 /* Length of a leading legal variable name; 0 if none. */
@@ -102,5 +102,3 @@ const char *expandstr(ShellContext &sh, const char *);
 unsigned getmbc(ShellContext &sh, int c, char *out, int mode);
 void report_parse_error(ShellContext &sh, const dash::ParseError &e);
 dash::Result<void> try_parse_string(ShellContext &sh, std::string_view s);
-
-#endif

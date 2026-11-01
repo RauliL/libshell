@@ -191,7 +191,7 @@ endfunction()
 set(DASH_SOURCES
   src/alias.cpp
   src/arith.cpp
-  src/nodes_free.cpp
+  src/nodes.cpp
   src/cd.cpp
   src/error.cpp
   src/eval.cpp
@@ -231,11 +231,9 @@ add_custom_command(
 )
 
 add_executable(mkinit src/mkinit.cpp)
-add_executable(mknodes src/mknodes.cpp)
 add_executable(mksyntax src/mksyntax.cpp "${CMAKE_CURRENT_BINARY_DIR}/token.h")
 add_executable(mksignames src/mksignames.cpp)
 dash_configure_tool(mkinit)
-dash_configure_tool(mknodes)
 dash_configure_tool(mksyntax)
 dash_configure_tool(mksignames)
 
@@ -271,19 +269,6 @@ add_custom_command(
 )
 
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/nodes.cpp"
-         "${CMAKE_CURRENT_BINARY_DIR}/nodes.h"
-  COMMAND mknodes
-          "${CMAKE_CURRENT_SOURCE_DIR}/src/nodetypes"
-          "${CMAKE_CURRENT_SOURCE_DIR}/src/nodes.c.pat"
-  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  DEPENDS mknodes
-          "${CMAKE_CURRENT_SOURCE_DIR}/src/nodetypes"
-          "${CMAKE_CURRENT_SOURCE_DIR}/src/nodes.c.pat"
-  COMMENT "Generating parse-node tables"
-)
-
-add_custom_command(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
          "${CMAKE_CURRENT_BINARY_DIR}/syntax.h"
   COMMAND mksyntax
@@ -303,16 +288,14 @@ set_source_files_properties(
   ${DASH_SOURCES}
   "${CMAKE_CURRENT_BINARY_DIR}/builtins.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
-  "${CMAKE_CURRENT_BINARY_DIR}/nodes.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/signames.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
   PROPERTIES OBJECT_DEPENDS
-  "${CMAKE_CURRENT_BINARY_DIR}/token.h;${CMAKE_CURRENT_BINARY_DIR}/nodes.h;${CMAKE_CURRENT_BINARY_DIR}/builtins.h;${CMAKE_CURRENT_BINARY_DIR}/syntax.h")
+  "${CMAKE_CURRENT_BINARY_DIR}/token.h;${CMAKE_CURRENT_BINARY_DIR}/builtins.h;${CMAKE_CURRENT_BINARY_DIR}/syntax.h")
 
 set(DASH_GENERATED_SOURCES
   "${CMAKE_CURRENT_BINARY_DIR}/builtins.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
-  "${CMAKE_CURRENT_BINARY_DIR}/nodes.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/signames.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
 )
@@ -342,7 +325,10 @@ if(BUILD_TESTING)
   )
   FetchContent_MakeAvailable(Catch2)
 
-  add_executable(parse_tests tests/parse/parse_tests.cpp)
+  add_executable(parse_tests
+    tests/parse/parse_tests.cpp
+    tests/parse/ast_tests.cpp
+  )
   target_include_directories(parse_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/parse")
   target_compile_definitions(parse_tests PRIVATE

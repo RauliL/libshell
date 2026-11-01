@@ -6,11 +6,8 @@ dash
 init.c
 init.cpp
 mkinit
-mknodes
 mksignames
 mksyntax
-nodes.[ch]
-nodes.cpp
 signames.c
 signames.cpp
 syntax.[ch]

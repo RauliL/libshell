@@ -39,8 +39,6 @@
 #include "system.h"
 #include "var.h"
 
-union node;
-struct funcnode;
 struct backcmd;
 struct alias;
 struct redirtab;
@@ -130,7 +128,7 @@ struct ShellContext {
 	struct var *vartab[39] = {};
 
 	char *expdest = nullptr;
-	const std::vector<union node *> *argbackq = nullptr;
+	const std::vector<Node::ptr> *argbackq = nullptr;
 	std::size_t argbackq_i = 0;
 	struct ifsregion ifsfirst = {};
 	struct ifsregion *ifslastp = nullptr;
@@ -147,8 +145,8 @@ struct ShellContext {
 	int tokpushback = 0;
 	std::string wordtext;
 	int checkkwd = 0;
-	std::vector<union node *> backquotelist;
-	union node *redirnode = nullptr;
+	std::vector<Node::ptr> backquotelist;
+	Node::ptr redirnode;
 	struct heredoc *heredoc = nullptr;
 	int quoteflag = 0;
 

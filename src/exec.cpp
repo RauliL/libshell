@@ -691,8 +691,6 @@ delete_cmd_entry(ShellContext &sh)
 	INTOFF;
 	cmdp = *sh.lastcmdentry;
 	*sh.lastcmdentry = cmdp->next;
-	if (cmdp->cmdtype == CMDFUNCTION)
-		freefunc(cmdp->param.func);
 	delete cmdp;
 	INTON_DEFER;
 }
@@ -727,9 +725,6 @@ addcmdentry(ShellContext &sh, char *name, struct cmdentry *entry)
 	struct tblentry *cmdp;
 
 	cmdp = cmdlookup(sh, name, 1);
-	if (cmdp->cmdtype == CMDFUNCTION) {
-		freefunc(cmdp->param.func);
-	}
 	cmdp->cmdtype = entry->cmdtype;
 	cmdp->param = entry->u;
 	cmdp->rehash = 0;
@@ -741,14 +736,14 @@ addcmdentry(ShellContext &sh, char *name, struct cmdentry *entry)
  */
 
 void
-defun(ShellContext &sh, union node *func)
+defun(ShellContext &sh, Node *func)
 {
 	struct cmdentry entry;
 
 	INTOFF;
 	entry.cmdtype = CMDFUNCTION;
-	entry.u.func = copyfunc(sh, func);
-	addcmdentry(sh, const_cast<char *>(func->ndefun.text.c_str()), &entry);
+	entry.u.func = std::shared_ptr<Node>(func->clone());
+	addcmdentry(sh, const_cast<char *>(as<Node::Defun>(func)->text.c_str()), &entry);
 	INTON_DEFER;
 }
 

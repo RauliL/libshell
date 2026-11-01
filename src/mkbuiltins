@@ -92,7 +92,7 @@ dash::ShellResult<int> fgcmd(ShellContext &sh, int argc, char **argv);
 dash::ShellResult<int> bgcmd(ShellContext &sh, int argc, char **argv);
 dash::ShellResult<int> jobscmd(ShellContext &sh, int argc, char **argv);
 dash::ShellResult<int> waitcmd(ShellContext &sh, int argc, char **argv);
-dash::ShellResult<int> forkshell(ShellContext &sh, Job *jp, union node *n, int mode);
+dash::ShellResult<int> forkshell(ShellContext &sh, Job *jp, Node *n, int mode);
 dash::ShellResult<int> waitforjob(ShellContext &sh, Job *jp);
 dash::ShellResult<int> readcmd(ShellContext &sh, int argc, char **argv);
 dash::ShellResult<int> umaskcmd(ShellContext &sh, int argc, char **argv);

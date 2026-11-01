@@ -84,9 +84,9 @@ struct redirtab {
 /* Bit map of currently closed file descriptors. */
 
 
-static dash::ShellResult<int> openredirect(ShellContext &sh, union node *);
-static dash::ShellResult<void> dupredirect(ShellContext &sh, union node *, int);
-static dash::ShellResult<int> openhere(ShellContext &sh, union node *);
+static dash::ShellResult<int> openredirect(ShellContext &sh, Node *);
+static dash::ShellResult<void> dupredirect(ShellContext &sh, Node *, int);
+static dash::ShellResult<int> openhere(ShellContext &sh, Node *);
 
 
 static unsigned
@@ -113,9 +113,9 @@ update_closed_redirs(ShellContext &sh, int fd, int nfd)
  */
 
 dash::ShellResult<void>
-redirect(ShellContext &sh, union node *redir, int flags)
+redirect(ShellContext &sh, Node *redir, int flags)
 {
-	union node *n;
+	Node *n;
 	struct redirtab *sv;
 	int i;
 	int fd;
@@ -133,7 +133,7 @@ redirect(ShellContext &sh, union node *redir, int flags)
 		if (newfd < -1)
 			continue;
 
-		fd = n->nfile.fd;
+		fd = as<Node::RedirList>(n)->fd;
 		if (fd == 0)
 			reset_input(sh);
 
@@ -160,7 +160,7 @@ redirect(ShellContext &sh, union node *redir, int flags)
 			continue;
 
 		TRY_SHV(dupredirect(sh, n, newfd));
-	} while ((n = n->nfile.next));
+	} while ((n = as<Node::RedirList>(n)->next.get()));
 	INTON;
 	if (flags & REDIR_SAVEFD2 && sv->renamed[2] >= 0)
 		sh.preverrout.fd = sv->renamed[2];
@@ -204,26 +204,26 @@ sh_open(ShellContext &sh, const std::filesystem::path &pathname, int flags, int 
 
 
 static dash::ShellResult<int>
-openredirect(ShellContext &sh, union node *redir)
+openredirect(ShellContext &sh, Node *redir)
 {
 	struct stat64 sb;
 	const char *fname;
 	int flags;
 	int f;
 
-	switch (redir->nfile.type) {
-	case NFROM:
+	switch (redir->type) {
+	case Node::Type::From:
 		flags = O_RDONLY;
 do_open:
-		f = TRY_SH(sh_open(sh, redir->nfile.expfname, flags, 0));
+		f = TRY_SH(sh_open(sh, as<Node::File>(redir)->expfname, flags, 0));
 		break;
-	case NFROMTO:
+	case Node::Type::FromTo:
 		flags = O_RDWR|O_CREAT;
 		goto do_open;
-	case NTO:
+	case Node::Type::To:
 		/* Take care of noclobber mode. */
 		if (Cflag) {
-			fname = redir->nfile.expfname.c_str();
+			fname = as<Node::File>(redir)->expfname.c_str();
 			if (stat64(fname, &sb) < 0) {
 				flags = O_WRONLY|O_CREAT|O_EXCL;
 				goto do_open;
@@ -240,16 +240,16 @@ do_open:
 			break;
 		}
 		/* FALLTHROUGH */
-	case NCLOBBER:
+	case Node::Type::Clobber:
 		flags = O_WRONLY|O_CREAT|O_TRUNC;
 		goto do_open;
-	case NAPPEND:
+	case Node::Type::Append:
 		flags = O_WRONLY|O_CREAT|O_APPEND;
 		goto do_open;
-	case NTOFD:
-	case NFROMFD:
-		f = redir->ndup.dupfd;
-		if (f == redir->nfile.fd)
+	case Node::Type::ToFd:
+	case Node::Type::FromFd:
+		f = as<Node::Dup>(redir)->dupfd;
+		if (f == as<Node::RedirList>(redir)->fd)
 			f = -2;
 		break;
 	default:
@@ -257,8 +257,8 @@ do_open:
 		abort();
 #endif
 		/* Fall through to eliminate warning. */
-	case NHERE:
-	case NXHERE:
+	case Node::Type::Here:
+	case Node::Type::XHere:
 		f = TRY_SH(openhere(sh, redir));
 		break;
 	}
@@ -285,11 +285,11 @@ sh_dup2(ShellContext &sh, int ofd, int nfd, int cfd)
 	return nfd;
 }
 
-static dash::ShellResult<void> dupredirect(ShellContext &sh, union node *redir, int f)
+static dash::ShellResult<void> dupredirect(ShellContext &sh, Node *redir, int f)
 {
-	int fd = redir->nfile.fd;
+	int fd = as<Node::RedirList>(redir)->fd;
 
-	if (redir->nfile.type == NTOFD || redir->nfile.type == NFROMFD) {
+	if (redir->type == Node::Type::ToFd || redir->type == Node::Type::FromFd) {
 		/* if not ">&-" */
 		if (f >= 0) {
 			TRY_SHV(sh_dup2(sh, f, fd, -1));
@@ -325,16 +325,16 @@ sh_pipe(ShellContext &sh, int pip[2], int memfd)
  */
 
 static dash::ShellResult<int>
-openhere(ShellContext &sh, union node *redir)
+openhere(ShellContext &sh, Node *redir)
 {
 	size_t len = 0;
 	int pip[2];
 	int memfd;
 	char *p;
 
-	p = redir->nhere.doc->narg.text.data();
-	if (redir->type == NXHERE) {
-		TRY_SHV(expandarg(sh, redir->nhere.doc, NULL, EXP_QUOTED));
+	p = as<Node::Arg>(as<Node::Here>(redir)->doc)->text.data();
+	if (redir->type == Node::Type::XHere) {
+		TRY_SHV(expandarg(sh, as<Node::Here>(redir)->doc.get(), NULL, EXP_QUOTED));
 		p = stackblock();
 	}
 
@@ -461,7 +461,7 @@ savefd(ShellContext &sh, int from, int ofd)
 
 
 dash::ShellResult<int>
-redirectsafe(ShellContext &sh, union node *redir, int flags)
+redirectsafe(ShellContext &sh, Node *redir, int flags)
 {
 	int err = 0;
 	int saveint;
@@ -487,7 +487,7 @@ unwindredir(ShellContext &sh, struct redirtab *stop)
 
 
 struct redirtab *
-pushredir(ShellContext &sh, union node *redir)
+pushredir(ShellContext &sh, Node *redir)
 {
 	struct redirtab *sv;
 	struct redirtab *q;

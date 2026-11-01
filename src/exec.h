@@ -36,7 +36,10 @@
  *	@(#)exec.h	8.3 (Berkeley) 6/8/95
  */
 
+#include <memory>
 #include <string_view>
+
+#include "nodes.h"
 
 /* values of cmdtype */
 #define CMDUNKNOWN	-1	/* no entry in table for command */
@@ -45,19 +48,16 @@
 #define CMDBUILTIN	2	/* command is a shell builtin */
 
 
-union param {
-	int index;
-	const struct builtincmd *cmd;
-	struct funcnode *func;
+struct cmdparam {
+	int index = 0;
+	const struct builtincmd *cmd = nullptr;
+    std::shared_ptr<Node> func;
 };
 
 struct cmdentry {
-	int cmdtype;
-	union param u;
+	int cmdtype = CMDUNKNOWN;
+	cmdparam u;
 };
-
-/* The member name `param` would hide the union type in C++. */
-using cmdparam = param;
 
 
 /* action to find_command() */
@@ -68,7 +68,7 @@ using cmdparam = param;
 #define DO_REGBLTIN	0x10	/* regular built-ins and functions only */
 
 struct ShellContext;
-union node;
+struct Node;
 
 extern const char *pathopt;	/* set by padvance */
 
@@ -84,7 +84,7 @@ void changepath(ShellContext &, std::string_view);
 #ifdef notdef
 void getcmdentry(char *, struct cmdentry *);
 #endif
-void defun(ShellContext &, union node *);
+void defun(ShellContext &, Node *);
 void unsetfunc(ShellContext &, std::string_view);
 int typecmd(int, char **);
 int commandcmd(int, char **);

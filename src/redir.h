@@ -44,14 +44,14 @@
 #define REDIR_SAVEFD2 03	/* set preverrout */
 
 struct redirtab;
-union node;
+struct Node;
 struct ShellContext;
-dash::ShellResult<void> redirect(ShellContext &sh, union node *, int);
+dash::ShellResult<void> redirect(ShellContext &sh, Node *, int);
 dash::ShellResult<void> popredir(ShellContext &sh, int);
 dash::ShellResult<int> savefd(ShellContext &sh, int, int);
-dash::ShellResult<int> redirectsafe(ShellContext &sh, union node *, int);
+dash::ShellResult<int> redirectsafe(ShellContext &sh, Node *, int);
 dash::ShellResult<void> unwindredir(ShellContext &sh, struct redirtab *stop);
-struct redirtab *pushredir(ShellContext &sh, union node *redir);
+struct redirtab *pushredir(ShellContext &sh, Node *redir);
 dash::ShellResult<int> sh_open(ShellContext &sh, const std::filesystem::path &pathname, int flags, int mayfail);
 dash::ShellResult<int> sh_pipe(ShellContext &sh, int pip[2], int memfd);
 

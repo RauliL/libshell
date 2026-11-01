@@ -50,6 +50,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <string_view>
 
 #include "shell.h"
 #include "shell_context.h"
@@ -92,17 +93,17 @@ static void set_curjob(ShellContext &sh, Job *, unsigned);
 static int sprint_status(ShellContext &sh, char *, int, int);
 static void freejob(ShellContext &sh, Job *);
 static dash::ShellResult<Job *> getjob(ShellContext &sh, const char *, int);
-static void forkchild(ShellContext &sh, Job *, union node *, int);
-static dash::ShellResult<void> forkparent(ShellContext &sh, Job *, union node *, int, pid_t);
+static void forkchild(ShellContext &sh, Job *, Node *, int);
+static dash::ShellResult<void> forkparent(ShellContext &sh, Job *, Node *, int, pid_t);
 static int dowait(ShellContext &sh, int, Job *);
 #ifdef SYSV
 STATIC int onsigchild();
 #endif
 static int waitproc(ShellContext &sh, int, int *);
-static std::string commandtext(ShellContext &sh, union node *);
-static void cmdtxt(ShellContext &sh, union node *);
-static void cmdlist(ShellContext &sh, union node *, int);
-static void cmdputs(ShellContext &sh, const char *);
+static std::string commandtext(ShellContext &sh, Node *);
+static void cmdtxt(ShellContext &sh, Node *);
+static void cmdlist(ShellContext &sh, Node *, int);
+static void cmdputs(ShellContext &sh, std::string_view);
 static void showjob(ShellContext &sh, struct output *, Job *, int);
 
 #if JOBS
@@ -821,7 +822,7 @@ makejob(ShellContext &sh, int nprocs)
  */
 
 static void
-forkchild(ShellContext &sh, Job *jp, union node *n, int mode)
+forkchild(ShellContext &sh, Job *jp, Node *n, int mode)
 {
 	int lvforked;
 	int oldlvl;
@@ -879,7 +880,7 @@ forkchild(ShellContext &sh, Job *jp, union node *n, int mode)
 
 	freejob(sh, jp);
 
-	if (issimplecmd(sh, n, JOBSCMD->name))
+	if (issimplecmd(n, JOBSCMD->name))
 		return;
 
 	while (!sh.job_order.empty())
@@ -887,7 +888,7 @@ forkchild(ShellContext &sh, Job *jp, union node *n, int mode)
 }
 
 static dash::ShellResult<void>
-forkparent(ShellContext &sh, Job *jp, union node *n, int mode, pid_t pid)
+forkparent(ShellContext &sh, Job *jp, Node *n, int mode, pid_t pid)
 {
 	if (pid < 0) {
 		TRACE(("Fork failed, errno=%d", errno));
@@ -925,7 +926,7 @@ forkparent(ShellContext &sh, Job *jp, union node *n, int mode, pid_t pid)
 }
 
 dash::ShellResult<int>
-forkshell(ShellContext &sh, Job *jp, union node *n, int mode)
+forkshell(ShellContext &sh, Job *jp, Node *n, int mode)
 {
 	int pid;
 
@@ -943,7 +944,7 @@ forkshell(ShellContext &sh, Job *jp, union node *n, int mode)
 }
 
 dash::ShellResult<Job *>
-vforkexec(ShellContext &sh, union node *n, char **argv, const char *path, int idx)
+vforkexec(ShellContext &sh, Node *n, char **argv, const char *path, int idx)
 {
 	Job *jp;
 	int pid;
@@ -1212,7 +1213,7 @@ out:
 
 
 static std::string
-commandtext(ShellContext &sh, union node *n)
+commandtext(ShellContext &sh, Node *n)
 {
 	STARTSTACKSTR(sh.cmdnextc);
 	cmdtxt(sh, n);
@@ -1221,9 +1222,9 @@ commandtext(ShellContext &sh, union node *n)
 }
 
 static void
-cmdtxt(ShellContext &sh, union node *n)
+cmdtxt(ShellContext &sh, Node *n)
 {
-	union node *np;
+	Node *np;
 	const char *p;
 	char s[2];
 
@@ -1234,159 +1235,159 @@ cmdtxt(ShellContext &sh, union node *n)
 #if DEBUG
 		abort();
 #endif
-	case NPIPE:
-		for (std::size_t i = 0; i < n->npipe.cmdlist.size(); i++) {
+	case Node::Type::Pipe:
+		for (std::size_t i = 0; i < as<Node::Pipe>(n)->cmdlist.size(); i++) {
 			if (i)
 				cmdputs(sh, " | ");
-			cmdtxt(sh, n->npipe.cmdlist[i]);
+			cmdtxt(sh, as<Node::Pipe>(n)->cmdlist[i].get());
 		}
 		break;
-	case NSEMI:
+	case Node::Type::Semi:
 		p = "; ";
 		goto binop;
-	case NAND:
+	case Node::Type::And:
 		p = " && ";
 		goto binop;
-	case NOR:
+	case Node::Type::Or:
 		p = " || ";
 binop:
-		cmdtxt(sh, n->nbinary.ch1);
+		cmdtxt(sh, as<Node::Binary>(n)->ch1.get());
 		cmdputs(sh, p);
-		n = n->nbinary.ch2;
+		n = as<Node::Binary>(n)->ch2.get();
 		goto donode;
-	case NREDIR:
-	case NBACKGND:
-		n = n->nredir.n;
+	case Node::Type::Redir:
+	case Node::Type::Backgnd:
+		n = as<Node::Redir>(n)->n.get();
 		goto donode;
-	case NNOT:
+	case Node::Type::Not:
 		cmdputs(sh, "!");
-		n = n->nnot.com;
+		n = as<Node::Not>(n)->com.get();
 donode:
 		cmdtxt(sh, n);
 		break;
-	case NIF:
+	case Node::Type::If:
 		cmdputs(sh, "if ");
-		cmdtxt(sh, n->nif.test);
+		cmdtxt(sh, as<Node::If>(n)->test.get());
 		cmdputs(sh, "; then ");
-		if (n->nif.elsepart) {
-			cmdtxt(sh, n->nif.ifpart);
+		if (as<Node::If>(n)->elsepart) {
+			cmdtxt(sh, as<Node::If>(n)->ifpart.get());
 			cmdputs(sh, "; else ");
-			n = n->nif.elsepart;
+			n = as<Node::If>(n)->elsepart.get();
 		} else {
-			n = n->nif.ifpart;
+			n = as<Node::If>(n)->ifpart.get();
 		}
 		p = "; fi";
 		goto dotail;
-	case NSUBSHELL:
+	case Node::Type::Subshell:
 		cmdputs(sh, "(");
-		n = n->nredir.n;
+		n = as<Node::Redir>(n)->n.get();
 		p = ")";
 		goto dotail;
-	case NWHILE:
+	case Node::Type::While:
 		p = "while ";
 		goto until;
-	case NUNTIL:
+	case Node::Type::Until:
 		p = "until ";
 until:
 		cmdputs(sh, p);
-		cmdtxt(sh, n->nbinary.ch1);
-		n = n->nbinary.ch2;
+		cmdtxt(sh, as<Node::Binary>(n)->ch1.get());
+		n = as<Node::Binary>(n)->ch2.get();
 		p = "; done";
 dodo:
 		cmdputs(sh, "; do ");
 dotail:
 		cmdtxt(sh, n);
 		goto dotail2;
-	case NFOR:
+	case Node::Type::For:
 		cmdputs(sh, "for ");
-		cmdputs(sh, n->nfor.var.c_str());
+		cmdputs(sh, as<Node::For>(n)->var);
 		cmdputs(sh, " in ");
-		cmdlist(sh, n->nfor.args, 1);
-		n = n->nfor.body;
+		cmdlist(sh, as<Node::For>(n)->args.get(), 1);
+		n = as<Node::For>(n)->body.get();
 		p = "; done";
 		goto dodo;
-	case NDEFUN:
-		cmdputs(sh, n->ndefun.text.c_str());
+	case Node::Type::Defun:
+		cmdputs(sh, as<Node::Defun>(n)->text);
 		p = "() { ... }";
 		goto dotail2;
-	case NCMD:
-		cmdlist(sh, n->ncmd.args, 1);
-		cmdlist(sh, n->ncmd.redirect, 0);
+	case Node::Type::Cmd:
+		cmdlist(sh, as<Node::Command>(n)->args.get(), 1);
+		cmdlist(sh, as<Node::Command>(n)->redirect.get(), 0);
 		break;
-	case NARG:
-		p = n->narg.text.c_str();
+	case Node::Type::Arg:
+		cmdputs(sh, as<Node::Arg>(n)->text);
+		break;
+	case Node::Type::Here:
+	case Node::Type::XHere:
+		p = "<<...";
 dotail2:
 		cmdputs(sh, p);
 		break;
-	case NHERE:
-	case NXHERE:
-		p = "<<...";
-		goto dotail2;
-	case NCASE:
+	case Node::Type::Case:
 		cmdputs(sh, "case ");
-		cmdputs(sh, n->ncase.expr->narg.text.c_str());
+		cmdputs(sh, as<Node::Arg>(as<Node::Case>(n)->expr)->text);
 		cmdputs(sh, " in ");
-		for (np = n->ncase.cases; np; np = np->nclist.next) {
-			cmdtxt(sh, np->nclist.pattern);
+		for (np = as<Node::Case>(n)->cases.get(); np; np = as<Node::CaseList>(np)->next.get()) {
+			cmdtxt(sh, as<Node::CaseList>(np)->pattern.get());
 			cmdputs(sh, ") ");
-			cmdtxt(sh, np->nclist.body);
+			cmdtxt(sh, as<Node::CaseList>(np)->body.get());
 			cmdputs(sh, ";; ");
 		}
 		p = "esac";
 		goto dotail2;
-	case NTO:
+	case Node::Type::To:
 		p = ">";
 		goto redir;
-	case NCLOBBER:
+	case Node::Type::Clobber:
 		p = ">|";
 		goto redir;
-	case NAPPEND:
+	case Node::Type::Append:
 		p = ">>";
 		goto redir;
-	case NTOFD:
+	case Node::Type::ToFd:
 		p = ">&";
 		goto redir;
-	case NFROM:
+	case Node::Type::From:
 		p = "<";
 		goto redir;
-	case NFROMFD:
+	case Node::Type::FromFd:
 		p = "<&";
 		goto redir;
-	case NFROMTO:
+	case Node::Type::FromTo:
 		p = "<>";
 redir:
-		s[0] = n->nfile.fd + '0';
+		s[0] = as<Node::RedirList>(n)->fd + '0';
 		s[1] = '\0';
 		cmdputs(sh, s);
 		cmdputs(sh, p);
-		if (n->type == NTOFD || n->type == NFROMFD) {
-			s[0] = n->ndup.dupfd + '0';
+		if (n->type == Node::Type::ToFd || n->type == Node::Type::FromFd) {
+			s[0] = as<Node::Dup>(n)->dupfd + '0';
 			p = s;
 			goto dotail2;
 		} else {
-			n = n->nfile.fname;
+			n = as<Node::File>(n)->fname.get();
 			goto donode;
 		}
 	}
 }
 
 static void
-cmdlist(ShellContext &sh, union node *np, int sep)
+cmdlist(ShellContext &sh, Node *np, int sep)
 {
-	for (; np; np = np->narg.next) {
+	for (; np; np = as<Node::Arg>(np)->next.get()) {
 		if (!sep)
 			cmdputs(sh, spcstr);
 		cmdtxt(sh, np);
-		if (sep && np->narg.next)
+		if (sep && as<Node::Arg>(np)->next)
 			cmdputs(sh, spcstr);
 	}
 }
 
 
 static void
-cmdputs(ShellContext &sh, const char *s)
+cmdputs(ShellContext &sh, std::string_view s)
 {
-	const char *p, *str;
+	const char *p, *end, *str;
 	char cc[2] = " ";
 	char *nextc;
 	signed char c;
@@ -1397,16 +1398,20 @@ cmdputs(ShellContext &sh, const char *s)
 		"%", "%%", "#", "##",
 	};
 
-	nextc = makestrspace(sh, (strlen(s) + 1) * 8, sh.cmdnextc);
-	p = s;
-	while ((c = *p++) != 0) {
+	nextc = makestrspace(sh, (s.size() + 1) * 8, sh.cmdnextc);
+	p = s.data();
+	end = p + s.size();
+	while (p < end) {
+		c = *p++;
 		str = 0;
 		switch (c) {
 		case CTLESC:
-			c = *p++;
+			if (p < end)
+				c = *p++;
 			break;
 		case CTLVAR:
-			subtype = *p++;
+			if (p < end)
+				subtype = *p++;
 			if ((subtype & VSTYPE) == VSLENGTH)
 				str = "${#";
 			else

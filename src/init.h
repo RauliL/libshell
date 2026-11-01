@@ -36,12 +36,12 @@
  *	@(#)init.h	8.2 (Berkeley) 5/4/95
  */
 
-union node;
+struct Node;
 
 struct ShellContext;
 void init(ShellContext &sh);
 void exitreset(ShellContext &sh);
-void forkreset(ShellContext &sh, union node *);
+void forkreset(ShellContext &sh, Node *);
 void postexitreset(ShellContext &sh);
 void reset(ShellContext &sh);
 #endif
