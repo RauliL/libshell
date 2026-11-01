@@ -809,8 +809,8 @@ evalcommand(ShellContext &sh, Node *cmd, EvalFlags flags)
 				;
 				vlocal = spclbltin ^ BUILTIN_SPECIAL;
 			}
-			execcmd = cmdentry.u.cmd == EXECCMD;
-			if (likely(cmdentry.u.cmd != COMMANDCMD))
+			execcmd = cmdentry.u.cmd == &builtin_exec;
+			if (likely(cmdentry.u.cmd != &builtin_command))
 				break;
 
 			cmd_flag = TRY_SH(parse_command_args(sh, &args, &argp, &path,
@@ -974,7 +974,7 @@ evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv,
 	sh.optptr = NULL;			/* initialize nextopt */
 
 	dash::ShellResult<int> r;
-	if (cmd == EVALCMD)
+	if (cmd == &builtin_eval)
 		r = evalcmd(sh, argc, argv, flags);
 	else
 		r = cmd->builtin(sh, argc, argv);

@@ -191,6 +191,7 @@ endfunction()
 set(DASH_SOURCES
   src/alias.cpp
   src/arith.cpp
+  src/builtins.cpp
   src/nodes.cpp
   src/cd.cpp
   src/error.cpp
@@ -229,29 +230,6 @@ dash_configure_tool(mksyntax)
 dash_configure_tool(mksignames)
 
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/builtins.def"
-  COMMAND "${CMAKE_CXX_COMPILER}" -E -P -x c++
-          -D_GNU_SOURCE -DJOBS=1 -DBSD=1 -DSHELL
-          -include "${CMAKE_CURRENT_BINARY_DIR}/config.h"
-          "${CMAKE_CURRENT_SOURCE_DIR}/src/builtins.def.in"
-          -o "${CMAKE_CURRENT_BINARY_DIR}/builtins.def"
-  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/config.h"
-          "${CMAKE_CURRENT_SOURCE_DIR}/src/builtins.def.in"
-  COMMENT "Preprocessing builtin table"
-)
-
-add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/builtins.cpp"
-         "${CMAKE_CURRENT_BINARY_DIR}/builtins.h"
-  COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/src/mkbuiltins"
-          "${CMAKE_CURRENT_BINARY_DIR}/builtins.def"
-  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/mkbuiltins"
-          "${CMAKE_CURRENT_BINARY_DIR}/builtins.def"
-  COMMENT "Generating builtin command table"
-)
-
-add_custom_command(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
   COMMAND mkinit ${MKINIT_INPUTS}
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -277,15 +255,13 @@ add_custom_command(
 
 set_source_files_properties(
   ${DASH_SOURCES}
-  "${CMAKE_CURRENT_BINARY_DIR}/builtins.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/signames.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
   PROPERTIES OBJECT_DEPENDS
-  "${CMAKE_CURRENT_BINARY_DIR}/builtins.h;${CMAKE_CURRENT_BINARY_DIR}/syntax.h")
+  "${CMAKE_CURRENT_BINARY_DIR}/syntax.h")
 
 set(DASH_GENERATED_SOURCES
-  "${CMAKE_CURRENT_BINARY_DIR}/builtins.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/signames.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"

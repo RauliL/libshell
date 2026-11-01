@@ -50,7 +50,7 @@
 #include "parser.h"
 #include "nodes.h"
 #include "expand.h"	/* defines rmescapes() */
-#include "exec.h"	/* defines find_builtin() */
+#include "exec.h"
 #include "syntax.h"
 #include "options.h"
 #include "input.h"
@@ -579,7 +579,7 @@ simplecmd(ShellContext &sh)
 				args && app == &as<Node::Arg>(args)->next &&
 				!vars && !redir
 			) {
-				struct builtincmd *bcmd;
+				const builtincmd *bcmd;
 				std::string fname = std::move(as<Node::Arg>(args)->text);
 
 				/* We have a function */
@@ -587,7 +587,7 @@ simplecmd(ShellContext &sh)
 					synexpect(sh, Token::Rp);
 				if (
 					endofname(fname) != fname.size() || (
-						(bcmd = find_builtin(sh, fname.c_str())) &&
+						(bcmd = find_builtin(fname)) &&
 						bcmd->flags & BUILTIN_SPECIAL
 					)
 				)

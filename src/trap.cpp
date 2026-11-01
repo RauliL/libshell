@@ -146,7 +146,7 @@ clear_traps(ShellContext &sh, Node *n)
 {
 	int simplecmd;
 
-	simplecmd = issimplecmd(n, TRAPCMD->name);
+	simplecmd = issimplecmd(n, builtin_trap.name);
 
 	INTOFF;
 	for (int i = 0; i < NSIG; i++) {

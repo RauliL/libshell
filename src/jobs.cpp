@@ -880,7 +880,7 @@ forkchild(ShellContext &sh, Job *jp, Node *n, int mode)
 
 	freejob(sh, jp);
 
-	if (issimplecmd(n, JOBSCMD->name))
+	if (issimplecmd(n, builtin_jobs.name))
 		return;
 
 	while (!sh.job_order.empty())

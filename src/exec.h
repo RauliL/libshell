@@ -76,15 +76,14 @@ struct stat64;
 
 void shellexec(ShellContext &, char **, const char *, int);
 int padvance_magic(ShellContext &sh, const char **path, const char *name, int magic);
-int hashcmd(int, char **);
 dash::ShellResult<void> find_command(ShellContext &, char *, struct cmdentry *, int, const char *);
-struct builtincmd *find_builtin(ShellContext &, const char *);
 void hashcd(ShellContext &);
 void changepath(ShellContext &, std::string_view);
 void defun(ShellContext &, Node *);
 void unsetfunc(ShellContext &, std::string_view);
-int typecmd(int, char **);
-int commandcmd(int, char **);
+dash::ShellResult<int> hashcmd(ShellContext &sh, int, char **);
+dash::ShellResult<int> typecmd(ShellContext &sh, int, char **);
+dash::ShellResult<int> commandcmd(ShellContext &sh, int, char **);
 
 int test_file_access(ShellContext &sh, const char *path, int mode);
 int test_access(const struct stat64 *sp, int stmode);

@@ -362,7 +362,7 @@ find_command(ShellContext &sh, char *name, struct cmdentry *entry, int act, cons
 	struct stat64 statb;
 	int e;
 	int updatetbl;
-	struct builtincmd *bcmd;
+	const builtincmd *bcmd;
 	int len;
 
 	/* If name contains a slash, don't use PATH or hash table */
@@ -421,7 +421,7 @@ absfail:
 	}
 
 	/* If %builtin not in path, check for builtin next */
-	bcmd = find_builtin(sh, name);
+	bcmd = find_builtin(name);
 	if (bcmd && ((bcmd->flags & BUILTIN_REGULAR) | (act & DO_ALTPATH) |
 		     (sh.builtinloc <= 0)))
 		goto builtin_success;
@@ -532,18 +532,6 @@ success:
 /*
  * Search the table of builtin commands.
  */
-
-struct builtincmd *
-find_builtin(ShellContext &sh, const char *name)
-{
-	struct builtincmd *bp;
-
-	bp = static_cast<struct builtincmd *>(bsearch(
-		&name, builtincmd, NUMBUILTINS, sizeof(struct builtincmd),
-		pstrcmp
-	));
-	return bp;
-}
 
 
 

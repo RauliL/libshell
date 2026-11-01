@@ -1,7 +1,4 @@
 *.o
-builtins.[ch]
-builtins.cpp
-builtins.def
 dash
 init.c
 init.cpp
