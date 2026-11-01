@@ -697,23 +697,6 @@ delete_cmd_entry(ShellContext &sh)
 
 
 
-#ifdef notdef
-static void
-getcmdentry(ShellContext &sh, char *name, struct cmdentry *entry)
-{
-	struct tblentry *cmdp = cmdlookup(sh, name, 0);
-
-	if (cmdp) {
-		entry->u = cmdp->param;
-		entry->cmdtype = cmdp->cmdtype;
-	} else {
-		entry->cmdtype = CMDUNKNOWN;
-		entry->u.index = 0;
-	}
-}
-#endif
-
-
 /*
  * Add a new command entry, replacing any existing command entry for
  * the same name - except special builtins.

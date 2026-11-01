@@ -26,9 +26,7 @@ struct ShellContext;
 
 rawmem ckmalloc(ShellContext &sh, std::size_t);
 rawmem ckrealloc(ShellContext &sh, void *, std::size_t);
-char *savestr(ShellContext &sh, const char *);
 void clear_stack_temps(ShellContext &sh);
-void stunalloc(ShellContext &sh, void *);
 rawmem growstackstr(ShellContext &sh);
 char *growstackto(ShellContext &sh, std::size_t len);
 char *makestrspace(ShellContext &sh, size_t, char *);
@@ -64,7 +62,6 @@ char *_STPUTC(ShellContext &sh, int c, char *p);
 
 #define grabstackstr(p)	(stackstr_commit(sh, static_cast<size_t>( \
 	reinterpret_cast<char *>(p) - (char *)stackblock())))
-#define ungrabstackstr(s, p) stunalloc(sh, (s))
 #define stackstrend() (static_cast<void *>(sstrend))
 
 #define ckfree(p)	std::free(const_cast<void *>(static_cast<const void *>(p)))

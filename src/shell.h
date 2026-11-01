@@ -53,8 +53,6 @@
  */
 
 #include <sys/param.h>
-#include <cstring>
-#include <type_traits>
 
 #ifndef JOBS
 #define JOBS 1
@@ -74,21 +72,6 @@ typedef void *pointer;
 #define NULL nullptr
 #endif
 
-/* Byte copy of a trivially copyable object. Assignment of volatile class
- * objects is ill-formed in C++; used when saving shellparam across unwinds. */
-template<class T>
-void pod_copy(volatile T &dst, const T &src)
-{
-	static_assert(std::is_trivially_copyable_v<T>);
-	std::memcpy(const_cast<T *>(&dst), &src, sizeof(T));
-}
-
-template<class T>
-void pod_copy(T &dst, const volatile T &src)
-{
-	static_assert(std::is_trivially_copyable_v<T>);
-	std::memcpy(&dst, const_cast<const T *>(&src), sizeof(T));
-}
 #define STATIC static
 #define MKINIT	/* empty */
 

@@ -160,7 +160,6 @@ void setinputstring(ShellContext &sh, char *);
 void pushstdin(ShellContext &sh);
 void popfile(ShellContext &sh);
 void unwindfiles(ShellContext &sh, parsefile *);
-void popallfiles(ShellContext &sh);
 void flush_input(ShellContext &sh);
 void reset_input(ShellContext &sh);
 

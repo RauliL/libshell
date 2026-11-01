@@ -37,8 +37,6 @@
 
 #ifdef DEBUG
 struct ShellContext;
-struct Node;
-void showtree(ShellContext &, Node *);
 void trace(const char *, ...);
 void tracev(const char *, va_list);
 void trargs(ShellContext &, char **);

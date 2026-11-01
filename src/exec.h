@@ -81,9 +81,6 @@ dash::ShellResult<void> find_command(ShellContext &, char *, struct cmdentry *, 
 struct builtincmd *find_builtin(ShellContext &, const char *);
 void hashcd(ShellContext &);
 void changepath(ShellContext &, std::string_view);
-#ifdef notdef
-void getcmdentry(char *, struct cmdentry *);
-#endif
 void defun(ShellContext &, Node *);
 void unsetfunc(ShellContext &, std::string_view);
 int typecmd(int, char **);

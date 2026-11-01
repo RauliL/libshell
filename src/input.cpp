@@ -679,12 +679,6 @@ unwindfiles(ShellContext &sh, struct parsefile *stop)
 }
 
 void
-popallfiles(ShellContext &sh)
-{
-	popallfiles(sh, sh.input);
-}
-
-void
 flush_input(ShellContext &sh)
 {
 	flush_input(sh, sh.input);

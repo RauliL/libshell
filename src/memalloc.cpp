@@ -40,12 +40,6 @@ ckrealloc(ShellContext &sh, void *p, std::size_t nbytes)
 	return checknull(sh, std::realloc(p, nbytes));
 }
 
-char *
-savestr(ShellContext &sh, const char *s)
-{
-	return checknull(sh, ::strdup(s));
-}
-
 void
 clear_stack_temps(ShellContext &sh)
 {
@@ -56,18 +50,6 @@ rawmem
 stackstr_commit(ShellContext &sh, std::size_t nbytes)
 {
 	return {sh.stackstr.commit(nbytes)};
-}
-
-void
-stunalloc(ShellContext &sh, void *p)
-{
-	if (!p)
-		return;
-	/* Only supports un-commit of the trailing string region. */
-	char *base = sh.stackstr.buf.data();
-	char *cp = static_cast<char *>(p);
-	if (cp >= base && cp <= base + sh.stackstr.used)
-		sh.stackstr.rewind(static_cast<std::size_t>(cp - base));
 }
 
 static char *

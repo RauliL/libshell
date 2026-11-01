@@ -37,7 +37,6 @@
  *
  *	equal(s1, s2)		Return true if strings are equal.
  *	scopy(from, to)		Copy a string.
- *	scopyn(from, to, n)	Like scopy, but checks for overflow.
  *	number(s)		Convert a string of digits to an integer.
  *	is_number(s)		Return true if s is a string of digits.
  */
@@ -80,26 +79,6 @@ const char dotdir[] = ".";
 /*
  * scopy - #defined in mystring.h
  */
-
-
-#if 0
-/*
- * scopyn - copy a string from "from" to "to", truncating the string
- *		if necessary.  "To" is always nul terminated, even if
- *		truncation is performed.  "Size" is the size of "to".
- */
-
-static void
-scopyn(ShellContext &sh, const char *from, char *to, int size)
-{
-
-	while (--size > 0) {
-		if ((*to++ = *from++) == '\0')
-			return;
-	}
-	*to = '\0';
-}
-#endif
 
 
 /*
