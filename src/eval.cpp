@@ -167,7 +167,7 @@ evalcmd(ShellContext &sh, int argc, char **argv, EvalFlags flags)
 static inline bool
 parser_eof(const ShellContext &sh)
 {
-	return sh.tokpushback && sh.lasttoken == TEOF;
+	return sh.tokpushback && sh.lasttoken == Token::Eof;
 }
 
 

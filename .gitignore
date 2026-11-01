@@ -23,9 +23,9 @@ Makefile
 /config.log
 /config.status
 /stamp-h1
-/src/token_vars.h
 
 # Apple debug symbol bundles
+
 *.dSYM/
 
 # backups and patch artefacts

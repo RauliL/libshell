@@ -221,17 +221,8 @@ foreach(src ${DASH_SOURCES})
   list(APPEND MKINIT_INPUTS "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
 endforeach()
 
-add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/token.h"
-         "${CMAKE_CURRENT_BINARY_DIR}/token_vars.h"
-  COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/src/mktokens"
-  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/mktokens"
-  COMMENT "Generating token tables"
-)
-
 add_executable(mkinit src/mkinit.cpp)
-add_executable(mksyntax src/mksyntax.cpp "${CMAKE_CURRENT_BINARY_DIR}/token.h")
+add_executable(mksyntax src/mksyntax.cpp)
 add_executable(mksignames src/mksignames.cpp)
 dash_configure_tool(mkinit)
 dash_configure_tool(mksyntax)
@@ -291,7 +282,7 @@ set_source_files_properties(
   "${CMAKE_CURRENT_BINARY_DIR}/signames.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
   PROPERTIES OBJECT_DEPENDS
-  "${CMAKE_CURRENT_BINARY_DIR}/token.h;${CMAKE_CURRENT_BINARY_DIR}/builtins.h;${CMAKE_CURRENT_BINARY_DIR}/syntax.h")
+  "${CMAKE_CURRENT_BINARY_DIR}/builtins.h;${CMAKE_CURRENT_BINARY_DIR}/syntax.h")
 
 set(DASH_GENERATED_SOURCES
   "${CMAKE_CURRENT_BINARY_DIR}/builtins.cpp"

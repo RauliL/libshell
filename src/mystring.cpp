@@ -246,13 +246,3 @@ pstrcmp(const void *a, const void *b)
 	return std::strcmp(*static_cast<const char *const *>(a),
 			   *static_cast<const char *const *>(b));
 }
-
-/*
- * Find a string is in a sorted array.
- */
-const char *const *
-findstring(const char *s, const char *const *array, size_t nmemb)
-{
-	return static_cast<const char *const *>(
-		std::bsearch(&s, array, nmemb, sizeof(const char *), pstrcmp));
-}

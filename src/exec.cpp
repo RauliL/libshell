@@ -792,7 +792,7 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 	}
 
 	/* First look at the keywords */
-	if (findkwd(sh, command)) {
+	if (findkwd(command)) {
 		outstr(sh, verbose ? " is a shell keyword" : command, out);
 		goto out;
 	}

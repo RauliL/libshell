@@ -36,7 +36,9 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <string_view>
+
 #include "nodes.h"
 #include "token.h"
 #include "result.h"
@@ -95,7 +97,7 @@ bool issimplecmd(Node *n, std::string_view name);
 ParseCmdResult parsecmd(ShellContext &sh, int);
 void fixredir(ShellContext &sh, Node *, const char *, int);
 const char *getprompt(ShellContext &, void *);
-const char *const *findkwd(ShellContext &, const char *);
+std::optional<Token> findkwd(std::string_view);
 /* Length of a leading legal variable name; 0 if none. */
 std::size_t endofname(std::string_view name);
 const char *expandstr(ShellContext &sh, const char *);

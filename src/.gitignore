@@ -12,4 +12,3 @@ signames.c
 signames.cpp
 syntax.[ch]
 syntax.cpp
-token.h

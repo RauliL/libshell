@@ -50,7 +50,6 @@ struct t_op;
 struct ifs_state;
 struct builtincmd;
 struct cmdentry;
-enum token : int;
 enum limtype : int;
 
 struct ShellContext;
@@ -141,7 +140,7 @@ struct ShellContext {
 	struct heredoc *heredoclist = nullptr;
 	int doprompt = 0;
 	int needprompt = 0;
-	int lasttoken = 0;
+	Token lasttoken = Token::Eof;
 	int tokpushback = 0;
 	std::string wordtext;
 	int checkkwd = 0;
