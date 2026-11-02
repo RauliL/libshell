@@ -51,6 +51,7 @@
 #include <algorithm>
 #include <iterator>
 #include <string>
+#include <string_view>
 #include <cstring>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -2161,7 +2162,7 @@ varunset(ShellContext &sh, const char *end, const char *var, const char *umsg, i
 		} else
 			msg = umsg;
 	}
-	return sh_error(sh, "%.*s: %s%s", end - var - 1, var, msg, tail);
+	return sh_error(sh, "{}: {}{}", std::string_view(var, end - var - 1), msg, tail);
 }
 
 shell::Result<void>

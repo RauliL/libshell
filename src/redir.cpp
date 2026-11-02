@@ -181,7 +181,7 @@ sh_open_fail(ShellContext &sh, const std::filesystem::path &pathname, int flags,
 		action = E_CREAT;
 	}
 
-	return sh_error(sh, "cannot %s %s: %s", word, pathname.c_str(), errmsg(e, action));
+	return sh_error(sh, "cannot {} {}: {}", word, pathname.string(), errmsg(e, action));
 }
 
 
@@ -280,7 +280,7 @@ sh_dup2(ShellContext &sh, int ofd, int nfd, int cfd)
 	if (likely(cfd >= 0))
 		close(cfd);
 	if (nfd < 0)
-		return sh_error(sh, "%d: %s", ofd, strerror(errno));
+		return sh_error(sh, "{}: {}", ofd, strerror(errno));
 
 	return nfd;
 }
@@ -451,7 +451,7 @@ savefd(ShellContext &sh, int from, int ofd)
 	if (err != EBADF) {
 		close(ofd);
 		if (err)
-			return sh_error(sh, "%d: %s", from, strerror(err));
+			return sh_error(sh, "{}: {}", from, strerror(err));
 		else if(!HAVE_F_DUPFD_CLOEXEC)
 			fcntl(newfd, F_SETFD, FD_CLOEXEC);
 	}

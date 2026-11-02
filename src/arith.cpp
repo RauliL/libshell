@@ -700,14 +700,14 @@ arith(ShellContext &sh, std::string_view s)
 	std::string expr(s);
 	auto ast = dash::arith::parse(expr);
 	if (!ast)
-		return sh_error(sh, "arithmetic expression: %s: \"%s\"",
-				ast.error().c_str(), expr.c_str());
+		return sh_error(sh, "arithmetic expression: {}: \"{}\"",
+				ast.error(), expr);
 
 	dash::arith::Evaluator evaluator(*&sh);
 	auto result = evaluator.eval(*ast);
 	if (!result)
-		return sh_error(sh, "arithmetic expression: %s: \"%s\"",
-				result.error().c_str(), expr.c_str());
+		return sh_error(sh, "arithmetic expression: {}: \"{}\"",
+				result.error(), expr);
 
 	return *result;
 }

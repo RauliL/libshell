@@ -36,6 +36,7 @@
 #include <format>
 #include <locale.h>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <unistd.h>
 #include <stdio.h>
@@ -216,9 +217,8 @@ setvar(ShellContext &sh, const std::string &name, std::optional<std::string> val
 {
 	size_t namelen = endofname(name);
 	if (!namelen || (namelen < name.size() && name[namelen] != '='))
-		return sh_error(sh, "%.*s: bad variable name",
-				static_cast<int>(namelen ? namelen : name.size()),
-				name.c_str());
+		return sh_error(sh, "{}: bad variable name",
+				std::string_view(name.c_str(), namelen ? namelen : name.size()));
 
 	if (!val)
 		flags |= VarFlag::unset;
@@ -276,8 +276,8 @@ setvareq(ShellContext &sh, std::string s, VarFlags flags)
 
 		if (vp->flags.test(VarFlag::readonly)) {
 			const char *n = vp->text.c_str();
-			return sh_error(sh, "%.*s: is read only", strchrnul(n, '=') - n,
-				 n);
+			return sh_error(sh, "{}: is read only",
+				 std::string_view(n, strchrnul(n, '=') - n));
 		}
 
 		if ((flags & special) != VarFlag::unset)

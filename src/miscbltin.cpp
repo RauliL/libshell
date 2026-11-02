@@ -253,7 +253,7 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 			new_mask = 0;
 			do {
 				if (*ap >= '8' || *ap < '0')
-					return sh_error(sh, illnum, *sh.argptr);
+					return sh_error(sh, "Illegal number: {}", *sh.argptr);
 				new_mask = (new_mask << 3) + (*ap - '0');
 			} while (*++ap != '\0');
 		} else {
@@ -317,7 +317,7 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 			}
 			if (*ap) {
 error:
-				return sh_error(sh, "Illegal mode: %s", *sh.argptr);
+				return sh_error(sh, "Illegal mode: {}", *sh.argptr);
 				return 1;
 			}
 			new_mask = ~new_mask;
@@ -510,7 +510,7 @@ ulimitcmd(ShellContext &sh, int argc, char **argv)
 		if (how & SOFT)
 			limit.rlim_cur = val;
 		if (setrlimit(l->cmd, &limit) < 0)
-			return sh_error(sh, "error setting limit (%s)", strerror(errno));
+			return sh_error(sh, "error setting limit ({})", strerror(errno));
 	} else {
 		printlim(sh, how, &limit, l);
 	}

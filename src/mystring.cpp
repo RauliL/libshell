@@ -68,7 +68,6 @@ const char cqchars[] = {
 	'\\',
 	CTLESC, CTLMBCHAR, CTLQUOTEMARK, 0
 };
-const char illnum[] = "Illegal number: %s";
 const char homestr[] = "HOME";
 const char dotdir[] = ".";
 
@@ -99,7 +98,7 @@ tl::unexpected<shell::Error>
 badnum(ShellContext &sh, std::string_view s)
 {
 	std::string tmp(s);
-	return sh_error(sh, illnum, tmp.c_str());
+	return sh_error(sh, "Illegal number: {}", tmp);
 }
 
 /*

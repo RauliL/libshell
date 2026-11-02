@@ -977,7 +977,7 @@ evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv,
 		int status = *r;
 		flushall(sh);
 		if (outerr(sh.out1))
-			sh_warnx(sh, "%s: I/O error", sh.commandname.c_str());
+			sh_warnx(sh, "{}: I/O error", sh.commandname);
 		status |= outerr(sh.out1);
 		sh.exitstatus = status;
 	}

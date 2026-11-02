@@ -258,7 +258,7 @@ minus_o(ShellContext &sh, char *name, int val)
 				sh.optlist[i] = val;
 				return {};
 			}
-		return sh_error(sh, "Illegal option -o %s", name);
+		return sh_error(sh, "Illegal option -o {}", name);
 	}
 	return {};
 }
@@ -274,7 +274,7 @@ setoption(ShellContext &sh, int flag, int val)
 			sh.optlist[i] = val;
 			return {};
 		}
-	return sh_error(sh, "Illegal option -%c", flag);
+	return sh_error(sh, "Illegal option -{}", flag);
 }
 
 
@@ -516,7 +516,7 @@ nextopt(ShellContext &sh, std::string_view optstring)
 	std::size_t i = 0;
 	for (;;) {
 		if (i >= optstring.size())
-			return sh_error(sh, "Illegal option -%c", c);
+			return sh_error(sh, "Illegal option -{}", c);
 		if (optstring[i] == c)
 			break;
 		if (i + 1 < optstring.size() && optstring[i + 1] == ':')
@@ -526,7 +526,7 @@ nextopt(ShellContext &sh, std::string_view optstring)
 	}
 	if (i + 1 < optstring.size() && optstring[i + 1] == ':') {
 		if (*p == '\0' && (p = *sh.argptr++) == NULL)
-			return sh_error(sh, "No arg for -%c option", c);
+			return sh_error(sh, "No arg for -{} option", c);
 		sh.optionarg = p;
 		p = NULL;
 	}

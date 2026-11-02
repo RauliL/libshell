@@ -248,9 +248,9 @@ static tl::unexpected<shell::Error>
 syntax(ShellContext &sh, const char *op, const char *msg)
 {
 	if (op && *op)
-		return error("%s: %s", op, msg);
+		return error("{}: {}", op, msg);
 	else
-		return error("%s", msg);
+		return error("{}", msg);
 }
 
 static shell::Result<int>

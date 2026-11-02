@@ -310,8 +310,7 @@ killcmd(ShellContext &sh, int argc, char **argv)
 	if (argc <= 1) {
 usage:
 		return sh_error(sh, "Usage: kill [-s sigspec | -signum | -sigspec] [pid | job]... or\n"
-"kill -l [exitstatus]"
-		);
+"kill -l [exitstatus]");
 	}
 
 	if (**++argv == '-') {
@@ -331,9 +330,8 @@ usage:
 				case 's':
 					signo = decode_signal(sh, sh.optionarg, 1);
 					if (signo < 0) {
-						return sh_error(sh, "invalid signal number or name: %s",
-							sh.optionarg
-						);
+						return sh_error(sh, "invalid signal number or name: {}",
+							sh.optionarg);
 					}
 		                        break;
 				}
@@ -366,7 +364,7 @@ usage:
 		if (0 < signo && signo < NSIG)
 			outfmt(sh, out, snlfmt, sh.find_signal_name(signo).value_or("").data());
 		else
-			return sh_error(sh, "invalid signal number or exit status: %s",
+			return sh_error(sh, "invalid signal number or exit status: {}",
 				 *argv);
 		return 0;
 	}
@@ -380,7 +378,7 @@ usage:
 			pid = **argv == '-' ?
 				-TRY_SH(number(sh, *argv + 1)) : TRY_SH(number(sh, *argv));
 		if (kill(pid, signo) != 0) {
-			sh_warnx(sh, snlfmt, strerror(errno));
+			sh_warnx(sh, "{}", strerror(errno));
 			i = 1;
 		}
 	} while (*++argv);
@@ -698,9 +696,17 @@ sigout:
 static shell::Result<Job *>
 getjob(ShellContext &sh, const char *name, int getctl)
 {
+	enum class JobErr {
+		NoSuch,
+		NoCurrent,
+		NoPrevious,
+		Ambiguous,
+		NotJobCtl,
+	};
+
 	Job *jp;
 	Job *found;
-	const char *err_msg = "No such job: %s";
+	JobErr err_kind = JobErr::NoSuch;
 	unsigned num;
 	int c;
 	const char *p;
@@ -721,11 +727,11 @@ getjob(ShellContext &sh, const char *name, int getctl)
 	if (!p[1]) {
 		if (c == '+' || c == '%') {
 currentjob:
-			err_msg = "No current job";
+			err_kind = JobErr::NoCurrent;
 			goto check;
 		} else if (c == '-') {
 			jp = sh.job_order.size() > 1 ? sh.job_order[1] : nullptr;
-			err_msg = "No previous job";
+			err_kind = JobErr::NoPrevious;
 check:
 			if (!jp)
 				goto err;
@@ -756,10 +762,11 @@ check:
 		if (j->procs.empty())
 			continue;
 		if (match(j->procs[0].cmd.c_str(), p)) {
-			if (found)
+			if (found) {
+				err_kind = JobErr::Ambiguous;
 				goto err;
+			}
 			found = j;
-			err_msg = "%s: ambiguous";
 		}
 	}
 
@@ -769,13 +776,26 @@ check:
 
 gotit:
 #if JOBS
-	err_msg = "job %s not created under job control";
-	if (getctl && !jp->jobctl)
+	if (getctl && !jp->jobctl) {
+		err_kind = JobErr::NotJobCtl;
 		goto err;
+	}
 #endif
 	return jp;
 err:
-	return sh_error(sh, err_msg, name);
+	switch (err_kind) {
+	case JobErr::NoCurrent:
+		return sh_error(sh, "No current job");
+	case JobErr::NoPrevious:
+		return sh_error(sh, "No previous job");
+	case JobErr::Ambiguous:
+		return sh_error(sh, "{}: ambiguous", name);
+	case JobErr::NotJobCtl:
+		return sh_error(sh, "job {} not created under job control", name);
+	case JobErr::NoSuch:
+	default:
+		return sh_error(sh, "No such job: {}", name ? name : "");
+	}
 }
 
 
@@ -1495,7 +1515,7 @@ xtcsetpgrp(ShellContext &sh, int fd, pid_t pgrp)
 	sigclearmask();
 
 	if (err)
-		return sh_error(sh, "Cannot set tty process group (%s)", strerror(errno));
+		return sh_error(sh, "Cannot set tty process group ({})", strerror(errno));
 	return {};
 }
 #endif

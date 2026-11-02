@@ -218,7 +218,7 @@ find_dot_file(ShellContext &sh, char *basename)
 	}
 
 	/* not found in the PATH */
-	return sh_error(sh, "%s: not found", basename);
+	return sh_error(sh, "{}: not found", basename);
 }
 
 shell::Result<int>

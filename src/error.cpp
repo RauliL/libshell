@@ -36,10 +36,11 @@
  * Errors — shell unwind via ShellResult (tl::expected), not exceptions.
  */
 
-#include <cstdarg>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <string>
+#include <string_view>
 #include <unistd.h>
 #include <cstdio>
 
@@ -54,9 +55,6 @@
 #include "parser.h"
 #include "system.h"
 
-
-static tl::unexpected<shell::Error>
-exverror(ShellContext &sh, shell::Error, const char *, va_list);
 
 /*
  * Raise a shell unwind.  Stores the code in sh.exception and returns
@@ -96,20 +94,17 @@ onint(ShellContext &sh)
 }
 
 static void
-exvwarning2(ShellContext &sh, const char *msg, va_list ap)
+exwarning_msg(ShellContext &sh, std::string_view msg)
 {
-	struct output *errs;
-	const char *name;
-	const char *fmt;
+	struct output *errs = sh.out2;
+	const char *name = sh.arg0.empty() ? "sh" : sh.arg0.c_str();
 
-	errs = sh.out2;
-	name = sh.arg0.empty() ? "sh" : sh.arg0.c_str();
 	if (sh.commandname.empty())
-		fmt = "%s: %d: ";
+		outfmt(sh, errs, "%s: %d: ", name, sh.errlinno);
 	else
-		fmt = "%s: %d: %s: ";
-	outfmt(sh, errs, fmt, name, sh.errlinno, sh.commandname.c_str());
-	doformat(sh, errs, msg, ap);
+		outfmt(sh, errs, "%s: %d: %s: ", name, sh.errlinno,
+		       sh.commandname.c_str());
+	outmem(sh, msg.data(), msg.size(), errs);
 #if FLUSHERR
 	outc(sh, '\n', errs);
 #else
@@ -117,65 +112,37 @@ exvwarning2(ShellContext &sh, const char *msg, va_list ap)
 #endif
 }
 
-#define exvwarning(a, b, c) exvwarning2(sh, b, c)
+tl::unexpected<shell::Error>
+sh_error_msg(ShellContext &sh, std::string msg)
+{
+	sh.exitstatus = 2;
 
-static tl::unexpected<shell::Error>
-exverror(ShellContext &sh, shell::Error cond, const char *msg, va_list ap)
+#ifdef DEBUG
+	TRACE(("sh_error_msg(\"%s\") pid=%d\n", msg.c_str(), getpid()));
+#endif
+	exwarning_msg(sh, msg);
+	flushall(sh);
+
+	return exraise(sh, shell::Error::Generic);
+}
+
+tl::unexpected<shell::Error>
+exerror_msg(ShellContext &sh, shell::Error cond, std::string msg)
 {
 #ifdef DEBUG
-	if (msg) {
-		va_list aq;
-		TRACE(("exverror(%d, \"", cond));
-		va_copy(aq, ap);
-		TRACEV((msg, aq));
-		va_end(aq);
-		TRACE(("\") pid=%d\n", getpid()));
-	} else
-		TRACE(("exverror(%d, NULL) pid=%d\n", getpid()));
-	if (msg)
+	TRACE(("exerror_msg(%d, \"%s\") pid=%d\n", static_cast<int>(cond),
+	       msg.c_str(), getpid()));
 #endif
-		exvwarning(-1, msg, ap);
-
+	exwarning_msg(sh, msg);
 	flushall(sh);
 
 	return exraise(sh, cond);
 }
 
-
-tl::unexpected<shell::Error>
-sh_error(ShellContext &sh, const char *msg, ...)
-{
-	va_list ap;
-
-	sh.exitstatus = 2;
-
-	va_start(ap, msg);
-	auto r = exverror(sh, shell::Error::Generic, msg, ap);
-	va_end(ap);
-
-	return r;
-}
-
-
-tl::unexpected<shell::Error>
-exerror(ShellContext &sh, shell::Error cond, const char *msg, ...)
-{
-	va_list ap;
-
-	va_start(ap, msg);
-	auto r = exverror(sh, cond, msg, ap);
-	va_end(ap);
-	return r;
-}
-
 void
-sh_warnx(ShellContext &sh, const char *fmt, ...)
+sh_warnx_msg(ShellContext &sh, std::string msg)
 {
-	va_list ap;
-
-	va_start(ap, fmt);
-	exvwarning(-1, fmt, ap);
-	va_end(ap);
+	exwarning_msg(sh, msg);
 }
 
 

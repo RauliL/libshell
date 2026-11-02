@@ -261,7 +261,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 				break;
 			}
 			default:
-				return error("%s: invalid directive", start);
+				return error("{}: invalid directive", start);
 			}
 			*++fmt = nextch;
 		}
@@ -550,12 +550,12 @@ check_conversion(ShellContext &sh, const char *s, const char *ep)
 {
 	if (*ep) {
 		if (ep == s)
-			warnx("%s: expected numeric value", s);
+			warnx("{}: expected numeric value", s);
 		else
-			warnx("%s: not completely converted", s);
+			warnx("{}: not completely converted", s);
 		sh.rval = 1;
 	} else if (errno == ERANGE) {
-		warnx("%s: %s", s, strerror(ERANGE));
+		warnx("{}: {}", s, strerror(ERANGE));
 		sh.rval = 1;
 	}
 }

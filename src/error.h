@@ -36,6 +36,9 @@
 #pragma once
 
 #include <csignal>
+#include <format>
+#include <string>
+#include <utility>
 
 #include <libshell.hpp>
 
@@ -122,9 +125,33 @@ shell_fail_of(const shell::Result<T> &r)
 	} while (0)
 
 tl::unexpected<shell::Error> exraise(ShellContext &sh, shell::Error);
-tl::unexpected<shell::Error> sh_error(ShellContext &sh, const char *, ...);
-tl::unexpected<shell::Error> exerror(ShellContext &sh, shell::Error, const char *, ...);
+tl::unexpected<shell::Error> sh_error_msg(ShellContext &sh, std::string msg);
+tl::unexpected<shell::Error> exerror_msg(ShellContext &sh, shell::Error cond,
+					 std::string msg);
+
+template <typename... Args>
+tl::unexpected<shell::Error>
+sh_error(ShellContext &sh, std::format_string<Args...> fmt, Args &&...args)
+{
+	return sh_error_msg(sh, std::format(fmt, std::forward<Args>(args)...));
+}
+
+template <typename... Args>
+tl::unexpected<shell::Error>
+exerror(ShellContext &sh, shell::Error cond, std::format_string<Args...> fmt,
+	Args &&...args)
+{
+	return exerror_msg(sh, cond,
+			   std::format(fmt, std::forward<Args>(args)...));
+}
 
 const char *errmsg(int, int);
 
-void sh_warnx(ShellContext &sh, const char *, ...);
+void sh_warnx_msg(ShellContext &sh, std::string msg);
+
+template <typename... Args>
+void
+sh_warnx(ShellContext &sh, std::format_string<Args...> fmt, Args &&...args)
+{
+	sh_warnx_msg(sh, std::format(fmt, std::forward<Args>(args)...));
+}

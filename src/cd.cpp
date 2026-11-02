@@ -148,7 +148,7 @@ step6:
 	goto docd;
 
 err:
-	return sh_error(sh, "can't cd to %s", dest);
+	return sh_error(sh, "can't cd to {}", dest);
 out:
 	if (flags & CD_PRINT)
 		out1fmt(sh, snlfmt, sh.curdir.c_str());
@@ -213,7 +213,7 @@ updatepwd(ShellContext &sh, const char *dir)
 	char pathbuf[PATH_MAX];
 	if (cygwin_conv_path(CCP_WIN_A_TO_POSIX | CCP_RELATIVE, dir, pathbuf,
 			     sizeof(pathbuf)) < 0)
-		return sh_error(sh, "can't normalize %s", dir);
+		return sh_error(sh, "can't normalize {}", dir);
 	dir = pathbuf;
 #endif
 
@@ -285,7 +285,7 @@ getpwd(ShellContext &sh)
 		return buf;
 #endif
 
-	sh_warnx(sh, "getcwd() failed: %s", strerror(errno));
+	sh_warnx(sh, "getcwd() failed: {}", strerror(errno));
 	return {};
 }
 

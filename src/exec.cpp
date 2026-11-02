@@ -144,7 +144,7 @@ shellexec(ShellContext &sh, char **argv, const char *path, int idx)
 	sh.exitstatus = exerrno;
 	TRACE(("shellexec failed for %s, errno %d, suppressint %d\n",
 		argv[0], e, sh.suppressint ));
-	exerror(sh, shell::Error::End, "%s: %s", argv[0], errmsg(e, E_EXEC));
+	exerror(sh, shell::Error::End, "{}: {}", argv[0], errmsg(e, E_EXEC));
 	/* NOTREACHED */
 }
 
@@ -470,8 +470,8 @@ loop:
 			TRY_SHV(readcmdfile(sh, pathcopy.data()));
 			if ((cmdp = cmdlookup(sh, name, 0)) == NULL ||
 			    cmdp->cmdtype != CMDFUNCTION)
-				return sh_error(sh, "%s not defined in %s", name,
-					 pathcopy.c_str());
+				return sh_error(sh, "{} not defined in {}", name,
+					 pathcopy);
 			goto success;
 		}
 		e = EACCES;	/* if we fail, this will be the error */
@@ -495,7 +495,7 @@ loop:
 	if (cmdp && updatetbl)
 		delete_cmd_entry(sh);
 	if (act & DO_ERR)
-		sh_warnx(sh, "%s: %s", name, errmsg(e, E_EXEC));
+		sh_warnx(sh, "{}: {}", name, errmsg(e, E_EXEC));
 fail:
 	entry->cmdtype = CMDUNKNOWN;
 	return {};

@@ -62,7 +62,7 @@ setalias(ShellContext &sh, const char *name, const char *val)
 
 	do {
 		if (BASESYNTAX[(signed char)*p] != CWORD)
-			return sh_error(sh, "Invalid alias name: %s", name);
+			return sh_error(sh, "Invalid alias name: {}", name);
 	} while (*++p != '=');
 
 	namelen = static_cast<size_t>(val - name - 1); /* bytes before '=' */

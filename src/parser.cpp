@@ -1861,7 +1861,7 @@ report_parse_error(ShellContext &sh, const dash::ParseError &e)
 {
 	sh.errlinno = e.lineno();
 	sh.exitstatus = 2;
-	sh_warnx(sh, "%s", e.what());
+	sh_warnx(sh, "{}", e.what());
 }
 
 tl::expected<void, std::string>
