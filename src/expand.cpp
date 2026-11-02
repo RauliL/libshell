@@ -69,6 +69,7 @@
 #include "error.h"
 #include "eval.h"
 #include "expand.h"
+#include "expand_buf.h"
 #include "jobs.h"
 #include "main.h"
 #include "memalloc.h"
@@ -89,7 +90,7 @@
  */
 #define RMESCAPE_ALLOC	0x1	/* Allocate a new string */
 #define RMESCAPE_GLOB	0x2	/* Add backslashes for glob */
-#define RMESCAPE_GROW	0x8	/* Grow StackStr instead of malloc */
+#define RMESCAPE_GROW	0x8	/* Grow ExpandBuf instead of malloc */
 #define RMESCAPE_HEAP	0x10	/* Malloc strings */
 
 /* Add CTLESC when necessary. */
@@ -124,21 +125,21 @@ struct ifs_state {
 
 
 
-static dash::ShellResult<char *> argstr(ShellContext &sh, char *p, int flag);
-static char * exptilde(ShellContext &sh, char *startp, int flag);
-static dash::ShellResult<char *> expari(ShellContext &sh, char *start, int flag);
-static dash::ShellResult<void> expbackq(ShellContext &sh, Node *, int);
-static dash::ShellResult<char *> evalvar(ShellContext &sh, char *, int);
-static size_t strtodest(ShellContext &sh, const char *p, int flags);
-static size_t memtodest(ShellContext &sh, const char *p, size_t len, int flags);
-static dash::ShellResult<ssize_t> varvalue(ShellContext &sh, char *, int, unsigned);
-static dash::ShellResult<void> expandmeta(ShellContext &sh, ArgList &);
+static dash::ShellResult<char *> argstr(ShellContext &sh, ExpandBuf &eb, char *p, int flag);
+static char * exptilde(ShellContext &sh, ExpandBuf &eb, char *startp, int flag);
+static dash::ShellResult<char *> expari(ShellContext &sh, ExpandBuf &eb, char *start, int flag);
+static dash::ShellResult<void> expbackq(ShellContext &sh, ExpandBuf &eb, Node *, int);
+static dash::ShellResult<char *> evalvar(ShellContext &sh, ExpandBuf &eb, char *, int);
+static size_t strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, int flags);
+static size_t memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, int flags);
+static dash::ShellResult<ssize_t> varvalue(ShellContext &sh, ExpandBuf &eb, char *, int, unsigned);
+static dash::ShellResult<void> expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &);
 static void addglob(ShellContext &sh, const glob64_t *);
-static char * expmeta(ShellContext &sh, char *, unsigned, size_t);
+static char * expmeta(ShellContext &sh, ExpandBuf &eb, char *, unsigned, size_t);
 static void addfname(ShellContext &sh, char *);
-static int patmatch(ShellContext &sh, char *, const char *);
+static int patmatch(ShellContext &sh, char *, const char *, ExpandBuf *eb = nullptr);
 static int pmatch(ShellContext &sh, char *, const char *);
-static size_t cvtnum(ShellContext &sh, intmax_t num, int flags);
+static size_t cvtnum(ShellContext &sh, ExpandBuf &eb, intmax_t num, int flags);
 static tl::unexpected<dash::ShellErr> varunset(ShellContext &sh, const char *, const char *, const char *, int);
 
 
@@ -149,15 +150,15 @@ static tl::unexpected<dash::ShellErr> varunset(ShellContext &sh, const char *, c
  */
 
 static inline char *
-preglob(ShellContext &sh, const char *pattern, int flag)
+preglob(ShellContext &sh, const char *pattern, int flag, ExpandBuf *eb = nullptr)
 {
 	if (FNMATCH_IS_ENABLED) {
 		if (!flag)
-			flag = RMESCAPE_GROW;
+			flag = eb ? RMESCAPE_GROW : 0;
 		flag |= RMESCAPE_ALLOC;
 	}
 	flag |= RMESCAPE_GLOB;
-	return _rmescapes(sh, (char *)pattern, flag);
+	return _rmescapes(sh, (char *)pattern, flag, eb);
 }
 
 
@@ -226,17 +227,14 @@ getpwhome(ShellContext &sh, const char *name)
 dash::ShellResult<void>
 expandarg(ShellContext &sh, Node *arg, ArgList *alist, int flag)
 {
+	ExpandBuf eb;
 	char *p;
 
 	sh.argbackq = &as<Node::Arg>(arg)->backquote;
 	sh.argbackq_i = 0;
-	STARTSTACKSTR(sh.expdest);
-	TRY_SHV(argstr(sh, as<Node::Arg>(arg)->text.data(), flag));
-	if (alist == NULL) {
-		/* here document expanded */
-		goto out;
-	}
-	p = grabstackstr(sh.expdest);
+	eb.start();
+	TRY_SHV(argstr(sh, eb, as<Node::Arg>(arg)->text.data(), flag));
+	p = (eb.commit_to(eb.dest));
 	{
 		ArgList words;
 		/*
@@ -244,7 +242,7 @@ expandarg(ShellContext &sh, Node *arg, ArgList *alist, int flag)
 		 */
 		if (flag & EXP_FULL) {
 			ifsbreakup(sh, p, -1, &words);
-			TRY_SHV(expandmeta(sh, words));
+			TRY_SHV(expandmeta(sh, eb, words));
 		} else {
 			words.emplace_back(p);
 		}
@@ -253,9 +251,23 @@ expandarg(ShellContext &sh, Node *arg, ArgList *alist, int flag)
 				std::make_move_iterator(words.end()));
 	}
 
-out:
 	ifsfree(sh);
 	return {};
+}
+
+dash::ShellResult<std::string>
+expandarg_to_string(ShellContext &sh, Node *arg, int flag)
+{
+	ExpandBuf eb;
+
+	sh.argbackq = &as<Node::Arg>(arg)->backquote;
+	sh.argbackq_i = 0;
+	eb.start();
+	TRY_SHV(argstr(sh, eb, as<Node::Arg>(arg)->text.data(), flag));
+	eb.putc_nul(eb.dest);
+	std::string result(eb.base());
+	ifsfree(sh);
+	return result;
 }
 
 
@@ -267,7 +279,7 @@ out:
  */
 
 static dash::ShellResult<char *>
-argstr(ShellContext &sh, char *p, int flag)
+argstr(ShellContext &sh, ExpandBuf &eb, char *p, int flag)
 {
 	static const char spclchars[] = {
 		'=',
@@ -297,10 +309,10 @@ argstr(ShellContext &sh, char *p, int flag)
 		flag &= ~EXP_TILDE;
 tilde:
 		if (*p == '~')
-			p = exptilde(sh, p, flag);
+			p = exptilde(sh, eb, p, flag);
 	}
 start:
-	startloc = sh.expdest - (char *)stackblock();
+	startloc = eb.dest - eb.base();
 	for (;;) {
 		unsigned ml;
 		unsigned mb;
@@ -322,10 +334,10 @@ start:
 			int newloc;
 			char *q;
 
-			q = stnputs(sh, p, length, sh.expdest);
+			q = eb.nputs(p, length, eb.dest);
 			q[-1] &= end - 1;
-			sh.expdest = q - (flag & EXP_WORD ? end : 0);
-			newloc = q - (char *)stackblock() - end;
+			eb.dest = q - (flag & EXP_WORD ? end : 0);
+			newloc = q - eb.base() - end;
 			if (breakall && !inquotes && newloc > startloc) {
 				recordregion(sh, startloc, newloc, 0);
 			}
@@ -354,7 +366,7 @@ start:
 		case CTLQUOTEMARK:
 			/* "$@" syntax adherence hack */
 			if (!inquotes && !strcmp(p, dolatstr + 1)) {
-				p = TRY_SH(evalvar(sh, p + 1, flag | EXP_QUOTED)) + 1;
+				p = TRY_SH(evalvar(sh, eb, p + 1, flag | EXP_QUOTED)) + 1;
 				goto start;
 			}
 			inquotes ^= EXP_QUOTED;
@@ -379,7 +391,7 @@ addquote:
 				startloc += ml;
 			p += mb & 0xff;
 			if (!(flag & EXP_DISCARD))
-				sh.expdest = stnputs(sh, p, ml, sh.expdest);
+				eb.dest = eb.nputs(p, ml, eb.dest);
 			p += mb >> 8;
 			break;
 		case CTLESC:
@@ -387,13 +399,13 @@ addquote:
 			length++;
 			goto addquote;
 		case CTLVAR:
-			p = TRY_SH(evalvar(sh, p, flag | inquotes));
+			p = TRY_SH(evalvar(sh, eb, p, flag | inquotes));
 			goto start;
 		case CTLBACKQ:
-			TRY_SHV(expbackq(sh, (*sh.argbackq)[sh.argbackq_i].get(), flag | inquotes));
+			TRY_SHV(expbackq(sh, eb, (*sh.argbackq)[sh.argbackq_i].get(), flag | inquotes));
 			goto start;
 		case CTLARI:
-			p = TRY_SH(expari(sh, p, flag | inquotes));
+			p = TRY_SH(expari(sh, eb, p, flag | inquotes));
 			goto start;
 		}
 	}
@@ -401,7 +413,7 @@ addquote:
 }
 
 static char *
-exptilde(ShellContext &sh, char *startp, int flag)
+exptilde(ShellContext &sh, ExpandBuf &eb, char *startp, int flag)
 {
 	signed char c;
 	char *name;
@@ -438,7 +450,7 @@ done:
 	*p = c;
 	if (!home)
 		goto lose;
-	strtodest(sh, home, flag | EXP_QUOTED);
+	strtodest(sh, eb, home, flag | EXP_QUOTED);
 out:
 	return (p);
 lose:
@@ -492,7 +504,7 @@ removerecordregions(ShellContext &sh, int endoff)
  * evaluate, place result in (backed up) result, adjust string position.
  */
 static dash::ShellResult<char *>
-expari(ShellContext &sh, char *start, int flag)
+expari(ShellContext &sh, ExpandBuf &eb, char *start, int flag)
 {
 	int begoff;
 	int endoff;
@@ -500,28 +512,28 @@ expari(ShellContext &sh, char *start, int flag)
 	intmax_t result;
 	char *p;
 
-	p = stackblock();
-	begoff = sh.expdest - p;
-	p = TRY_SH(argstr(sh, start, flag & EXP_DISCARD));
+	p = eb.base();
+	begoff = eb.dest - p;
+	p = TRY_SH(argstr(sh, eb, start, flag & EXP_DISCARD));
 
 	if (flag & EXP_DISCARD)
 		goto out;
 
-	start = stackblock();
-	endoff = sh.expdest - start;
+	start = eb.base();
+	endoff = eb.dest - start;
 	start += begoff;
-	STADJUST(start - sh.expdest, sh.expdest);
+	((eb.dest) += (start - eb.dest));
 
 	TRY_SHV(removerecordregions(sh, begoff));
 
 	{
-		std::size_t su = sh.stackstr.used;
-		sh.stackstr.commit(endoff);
+		std::size_t su = eb.used;
+		eb.commit(endoff);
 		result = TRY_SH(arith(sh, start));
-		sh.stackstr.rewind(su);
+		eb.rewind(su);
 	}
 
-	len = cvtnum(sh, result, flag);
+	len = cvtnum(sh, eb, result, flag);
 
 	if (likely(!(flag & EXP_QUOTED)))
 		recordregion(sh, begoff, begoff + len, 0);
@@ -536,7 +548,7 @@ out:
  */
 
 static dash::ShellResult<void>
-expbackq(ShellContext &sh, Node *cmd, int flag)
+expbackq(ShellContext &sh, ExpandBuf &eb, Node *cmd, int flag)
 {
 	struct backcmd in;
 	int i;
@@ -549,12 +561,12 @@ expbackq(ShellContext &sh, Node *cmd, int flag)
 		goto out;
 
 	INTOFF;
-	startloc = sh.expdest - (char *)stackblock();
+	startloc = eb.dest - eb.base();
 	{
-		std::size_t su = sh.stackstr.used;
-		sh.stackstr.commit(startloc);
+		std::size_t su = eb.used;
+		eb.commit(startloc);
 		TRY_SHV(evalbackcmd(sh, cmd, (struct backcmd *) &in));
-		sh.stackstr.rewind(su);
+		eb.rewind(su);
 	}
 
 	p = in.buf.data();
@@ -562,7 +574,7 @@ expbackq(ShellContext &sh, Node *cmd, int flag)
 	if (i == 0)
 		goto read;
 	for (;;) {
-		memtodest(sh, p, i, flag);
+		memtodest(sh, eb, p, i, flag);
 read:
 		if (in.fd < 0)
 			break;
@@ -582,17 +594,17 @@ read:
 	INTON;
 
 	/* Eat all trailing newlines */
-	dest = sh.expdest;
-	for (; dest > ((char *)stackblock() + startloc) && dest[-1] == '\n';)
-		STUNPUTC(dest);
-	sh.expdest = dest;
+	dest = eb.dest;
+	for (; dest > (eb.base() + startloc) && dest[-1] == '\n';)
+		(--(dest));
+	eb.dest = dest;
 
 	if (!(flag & EXP_QUOTED))
-		recordregion(sh, startloc, dest - (char *)stackblock(), 0);
+		recordregion(sh, startloc, dest - eb.base(), 0);
 	TRACE(("evalbackq: size=%d: \"%.*s\"\n",
-		(dest - (char *)stackblock()) - startloc,
-		(dest - (char *)stackblock()) - startloc,
-		stackblock() + startloc));
+		(dest - eb.base()) - startloc,
+		(dest - eb.base()) - startloc,
+		eb.base() + startloc));
 
 out:
 	sh.argbackq_i++;
@@ -682,7 +694,7 @@ scanright(ShellContext &sh, char *startp, char *endp, char *rmesc, char *rmescen
 }
 
 static dash::ShellResult<char *>
-subevalvar(ShellContext &sh, char *start, char *str, int strloc, int startloc,
+subevalvar(ShellContext &sh, ExpandBuf &eb, char *start, char *str, int strloc, int startloc,
 			int varflags, int flag)
 {
 	int subtype = varflags & VSTYPE;
@@ -697,12 +709,12 @@ subevalvar(ShellContext &sh, char *start, char *str, int strloc, int startloc,
 	char *endp;
 	char *p;
 
-	p = TRY_SH(argstr(sh, start, (flag & EXP_DISCARD) | EXP_TILDE |
+	p = TRY_SH(argstr(sh, eb, start, (flag & EXP_DISCARD) | EXP_TILDE |
 			  (str ?  0 : EXP_CASE)));
 	if (flag & EXP_DISCARD)
 		return p;
 
-	startp = stackblock() + startloc;
+	startp = eb.base() + startloc;
 
 	switch (subtype) {
 	case VSASSIGN:
@@ -721,21 +733,21 @@ subevalvar(ShellContext &sh, char *start, char *str, int strloc, int startloc,
 		abort();
 #endif
 
-	rmescend = stackblock() + strloc;
-	str = preglob(sh, rmescend, 0);
+	rmescend = eb.base() + strloc;
+	str = preglob(sh, rmescend, 0, &eb);
 	if (FNMATCH_IS_ENABLED) {
-		startp = stackblock() + startloc;
-		rmescend = stackblock() + strloc;
-		nstrloc = str - (char *)stackblock();
+		startp = eb.base() + startloc;
+		rmescend = eb.base() + strloc;
+		nstrloc = str - eb.base();
 	}
 
 	rmesc = startp;
 	if (FNMATCH_IS_ENABLED || !quotes) {
-		rmesc = _rmescapes(sh, startp, RMESCAPE_ALLOC | RMESCAPE_GROW);
+		rmesc = _rmescapes(sh, startp, RMESCAPE_ALLOC | RMESCAPE_GROW, &eb);
 		if (rmesc != startp)
-			rmescend = sh.expdest;
-		startp = stackblock() + startloc;
-		str = stackblock() + nstrloc;
+			rmescend = eb.dest;
+		startp = eb.base() + startloc;
+		str = eb.base() + nstrloc;
 	}
 	rmescend--;
 
@@ -744,7 +756,7 @@ subevalvar(ShellContext &sh, char *start, char *str, int strloc, int startloc,
 	/* VSTRIMLEFT/VSTRIMRIGHTMAX -> scanleft */
 	scan = (subtype & 1) ^ zero ? scanleft : scanright;
 
-	endp = stackblock() + strloc - 1;
+	endp = eb.base() + strloc - 1;
 	loc = scan(sh, startp, endp, rmesc, rmescend, str, quotes, zero);
 	if (!loc) {
 		if (quotes) {
@@ -769,8 +781,8 @@ subevalvar(ShellContext &sh, char *start, char *str, int strloc, int startloc,
 
 out:
 	*loc = '\0';
-	amount = loc - sh.expdest;
-	STADJUST(amount, sh.expdest);
+	amount = loc - eb.dest;
+	((eb.dest) += (amount));
 
 	/* Remove any recorded regions beyond start of variable */
 	TRY_SHV(removerecordregions(sh, startloc));
@@ -784,7 +796,7 @@ out:
  * input string.
  */
 static dash::ShellResult<char *>
-evalvar(ShellContext &sh, char *p, int flag)
+evalvar(ShellContext &sh, ExpandBuf &eb, char *p, int flag)
 {
 	int subtype;
 	int varflags;
@@ -801,7 +813,7 @@ evalvar(ShellContext &sh, char *p, int flag)
 
 	quoted = flag & EXP_QUOTED;
 	var = p;
-	startloc = sh.expdest - (char *)stackblock();
+	startloc = eb.dest - eb.base();
 	p = strchr(p, '=') + 1;
 
 	mbchar = 0;
@@ -815,7 +827,7 @@ evalvar(ShellContext &sh, char *p, int flag)
 	}
 
 again:
-	varlen = TRY_SH(varvalue(sh, var, varflags, flag | mbchar));
+	varlen = TRY_SH(varvalue(sh, eb, var, varflags, flag | mbchar));
 	if (varflags & VSNUL)
 		varlen--;
 
@@ -828,13 +840,13 @@ again:
 
 	case 0:
 	case VSMINUS:
-		p = TRY_SH(argstr(sh, p, flag | EXP_TILDE | EXP_WORD |
+		p = TRY_SH(argstr(sh, eb, p, flag | EXP_TILDE | EXP_WORD |
 			      (discard ^ EXP_DISCARD)));
 		goto record;
 
 	case VSASSIGN:
 	case VSQUESTION:
-		p = TRY_SH(subevalvar(sh, p, var, 0, startloc, varflags,
+		p = TRY_SH(subevalvar(sh, eb, p, var, 0, startloc, varflags,
 			       (flag & ~QUOTES_ESC) |
 			       (discard ^ EXP_DISCARD)));
 
@@ -853,7 +865,7 @@ again:
 		p++;
 		if (flag & EXP_DISCARD)
 			return p;
-		cvtnum(sh, varlen > 0 ? varlen : 0, flag);
+		cvtnum(sh, eb, varlen > 0 ? varlen : 0, flag);
 		goto really_record;
 	}
 
@@ -878,11 +890,11 @@ again:
 		 * Terminate the string and start recording the pattern
 		 * right after it
 		 */
-		STPUTC('\0', sh.expdest);
+		((eb.dest) = eb.putc(eb.dest, '\0'));
 	}
 
-	patloc = sh.expdest - (char *)stackblock();
-	p = TRY_SH(subevalvar(sh, p, NULL, patloc, startloc, varflags, flag));
+	patloc = eb.dest - eb.base();
+	p = TRY_SH(subevalvar(sh, eb, p, NULL, patloc, startloc, varflags, flag));
 
 record:
 	if ((flag | discard) & EXP_DISCARD)
@@ -894,7 +906,7 @@ really_record:
 		if (!quoted)
 			return p;
 	}
-	recordregion(sh, startloc, sh.expdest - (char *)stackblock(), quoted);
+	recordregion(sh, startloc, eb.dest - eb.base(), quoted);
 	return p;
 }
 
@@ -902,8 +914,8 @@ static char *
 chtodest(ShellContext &sh, int c, const char *syntax, char *out)
 {
 	if (syntax[c] == CCTL)
-		USTPUTC(CTLESC, out);
-	USTPUTC(c, out);
+		(*(out)++ = (CTLESC));
+	(*(out)++ = (c));
 
 	return out;
 }
@@ -925,15 +937,15 @@ mbtodest(ShellContext &sh, const char *p, char *q, const char *syntax,
 	}
 
 	if (syntax[CTLMBCHAR] == CCTL) {
-		USTPUTC(CTLMBCHAR, q);
-		USTPUTC(ml, q);
+		(*(q)++ = (CTLMBCHAR));
+		(*(q)++ = (ml));
 	}
 
 	q = static_cast<char *>(mempcpy(q, p, ml));
 
 	if (syntax[CTLMBCHAR] == CCTL) {
-		USTPUTC(ml, q);
-		USTPUTC(CTLMBCHAR, q);
+		(*(q)++ = (ml));
+		(*(q)++ = (CTLMBCHAR));
 	}
 
 out:
@@ -947,7 +959,7 @@ out:
  */
 
 static size_t
-memtodest(ShellContext &sh, const char *p, size_t len, int flags)
+memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, int flags)
 {
 	const char *syntax;
 	size_t count = 0;
@@ -958,7 +970,7 @@ memtodest(ShellContext &sh, const char *p, size_t len, int flags)
 		return 0;
 
 	/* CTLMBCHAR, 2, c, c, 2, CTLMBCHAR */
-	q = makestrspace(sh, len * 3, sh.expdest);
+	q = eb.makespace(len * 3, eb.dest);
 
 #if QUOTES_ESC != 0x11 || EXP_MBCHAR != 0x20 || EXP_QUOTED != 0x100
 #error QUOTES_ESC != 0x11 || EXP_MBCHAR != 0x20 || EXP_QUOTED != 0x100
@@ -1011,16 +1023,16 @@ memtodest(ShellContext &sh, const char *p, size_t len, int flags)
 		q = chtodest(sh, c, syntax, q);
 	}
 
-	sh.expdest = q;
+	eb.dest = q;
 	return count;
 }
 
 
 static size_t
-strtodest(ShellContext &sh, const char *p, int flags)
+strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, int flags)
 {
 	size_t len = strlen(p);
-	return memtodest(sh, p, len, flags);
+	return memtodest(sh, eb, p, len, flags);
 }
 
 
@@ -1030,7 +1042,7 @@ strtodest(ShellContext &sh, const char *p, int flags)
  */
 
 static dash::ShellResult<ssize_t>
-varvalue(ShellContext &sh, char *name, int varflags, unsigned flags)
+varvalue(ShellContext &sh, ExpandBuf &eb, char *name, int varflags, unsigned flags)
 {
 	int subtype = varflags & VSTYPE;
 	unsigned long seplen;
@@ -1055,7 +1067,7 @@ varvalue(ShellContext &sh, char *name, int varflags, unsigned flags)
 	flags &= discard ? ~QUOTES_ESC : ~0;
 	seps = nullstr;
 	seplen = flags & EXP_FULL;
-	start = sh.expdest - (char *)stackblock();
+	start = eb.dest - eb.base();
 
 	switch (*name) {
 	case '$':
@@ -1072,17 +1084,17 @@ varvalue(ShellContext &sh, char *name, int varflags, unsigned flags)
 		if (num == 0)
 			return -1;
 numvar:
-		len = cvtnum(sh, num, flags);
+		len = cvtnum(sh, eb, num, flags);
 		break;
 	case '-':
-		p = makestrspace(sh, NOPTS, sh.expdest);
+		p = eb.makespace(NOPTS, eb.dest);
 		for (i = NOPTS - 1; i >= 0; i--) {
 			if (sh.optlist[i] && optletters[i]) {
-				USTPUTC(optletters[i], p);
+				(*(p)++ = (optletters[i]));
 				len++;
 			}
 		}
-		sh.expdest = p;
+		eb.dest = p;
 		break;
 	case '@':
 		if ((flags & (EXP_QUOTED | EXP_FULL)) ==
@@ -1115,10 +1127,10 @@ param:
 			bool first = true;
 			for (const auto &param : sh.shellparam.p) {
 				if (!first)
-					len += memtodest(sh, seps, seplen,
+					len += memtodest(sh, eb, seps, seplen,
 							 flags | EXP_KEEPNUL);
 				first = false;
-				len += strtodest(sh, param.c_str(), flags);
+				len += strtodest(sh, eb, param.c_str(), flags);
 			}
 		}
 		break;
@@ -1145,12 +1157,12 @@ value:
 		if (!p)
 			return -1;
 
-		len = strtodest(sh, p, flags);
+		len = strtodest(sh, eb, p, flags);
 		break;
 	}
 
 	if (discard)
-		sh.expdest = (char *)stackblock() + start;
+		eb.dest = eb.base() + start;
 
 	return len;
 }
@@ -1558,7 +1570,7 @@ addglob(ShellContext &sh, const glob64_t *pglob)
 }
 
 static dash::ShellResult<void>
-expandmeta(ShellContext &sh, ArgList &strs)
+expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &strs)
 {
 	/* TODO - EXP_REDIR */
 
@@ -1580,7 +1592,7 @@ expandmeta(ShellContext &sh, ArgList &strs)
 		len = strlen(p);
 
 		sh.exparg.clear();
-		expmeta(sh, p, len, 0);
+		expmeta(sh, eb, p, len, 0);
 		if (p != s.c_str())
 			ckfree(p);
 		INTON;
@@ -1613,15 +1625,15 @@ addfname_common(ShellContext &sh, char *name)
 }
 
 static char *
-addfnamealt(ShellContext &sh, char *enddir, size_t expdir_len)
+addfnamealt(ShellContext &sh, ExpandBuf &eb, char *enddir, size_t expdir_len)
 {
 	char *name;
 
-	name = grabstackstr(enddir);
+	name = (eb.commit_to(enddir));
 	addfname_common(sh, name);
 
-	STARTSTACKSTR(enddir);
-	return stnputs(sh, name, expdir_len, enddir) - expdir_len;
+	enddir = eb.base();
+	return eb.nputs(name, expdir_len, enddir) - expdir_len;
 }
 
 static char *
@@ -1666,7 +1678,7 @@ memrchr(ShellContext &sh, const void *s, int c, size_t n)
  */
 
 static char *
-expmeta(ShellContext &sh, char *name, unsigned name_len, size_t expdir_len)
+expmeta(ShellContext &sh, ExpandBuf &eb, char *name, unsigned name_len, size_t expdir_len)
 {
 	const char mesc = FNMATCH_IS_ENABLED ? '\\' : CTLESC;
 	struct stat64 statb;
@@ -1685,7 +1697,8 @@ expmeta(ShellContext &sh, char *name, unsigned name_len, size_t expdir_len)
 	int c;
 
 	len = expdir_len + name_len + 1;
-	cp = growstackto(sh, len);
+	eb.ensure_avail(len);
+	cp = eb.base();
 	enddir = cp + expdir_len;
 
 	p = name;
@@ -1702,7 +1715,7 @@ expmeta(ShellContext &sh, char *name, unsigned name_len, size_t expdir_len)
 			goto out_opendir;
 		enddir = expmeta_rmescapes(sh, enddir, name);
 		if (lstat64(cp, &statb) >= 0)
-			cp = addfnamealt(sh, enddir + 1, expdir_len);
+			cp = addfnamealt(sh, eb, enddir + 1, expdir_len);
 		goto out_opendir;
 	}
 	start = static_cast<char *>(memrchr(name, '/', static_cast<size_t>(p - name)));
@@ -1749,20 +1762,20 @@ expmeta(ShellContext &sh, char *name, unsigned name_len, size_t expdir_len)
 		len = strlen(dname) + 1;
 		p = dname;
 		if (!FNMATCH_IS_ENABLED) {
-			sh.expdest = enddir;
-			memtodest(sh, p, len, EXP_MBCHAR | EXP_KEEPNUL);
-			cp = stackblock();
+			eb.dest = enddir;
+			memtodest(sh, eb, p, len, EXP_MBCHAR | EXP_KEEPNUL);
+			cp = eb.base();
 			enddir = cp + expdir_len;
 			p = enddir;
 		}
 		if (pmatch(sh, pat, p)) {
-			enddir = stnputs(sh, dname, len, enddir);
+			enddir = eb.nputs(dname, len, enddir);
 			if (!c)
-				cp = addfnamealt(sh, enddir, expdir_len);
+				cp = addfnamealt(sh, eb, enddir, expdir_len);
 			else {
 				enddir[-1] = '/';
 				len += expdir_len;
-				cp = expmeta(sh, endname, name_len, len);
+				cp = expmeta(sh, eb, endname, name_len, len);
 			}
 			enddir = cp + expdir_len;
 		}
@@ -1797,9 +1810,9 @@ addfname(ShellContext &sh, char *name)
  */
 
 static inline int
-patmatch(ShellContext &sh, char *pattern, const char *string)
+patmatch(ShellContext &sh, char *pattern, const char *string, ExpandBuf *eb)
 {
-	return pmatch(sh, preglob(sh, pattern, 0), string);
+	return pmatch(sh, preglob(sh, pattern, 0, eb), string);
 }
 
 
@@ -1996,7 +2009,7 @@ breakloop:
  */
 
 char *
-_rmescapes(ShellContext &sh, char *str, int flag)
+_rmescapes(ShellContext &sh, char *str, int flag, ExpandBuf *eb)
 {
 	char *p, *q, *r;
 	int notescaped;
@@ -2020,11 +2033,11 @@ _rmescapes(ShellContext &sh, char *str, int flag)
 
 		fulllen += len + 1;
 
-		if (flag & RMESCAPE_GROW) {
-			int strloc = str - (char *)stackblock();
+		if ((flag & RMESCAPE_GROW) && eb) {
+			int strloc = str - eb->base();
 
-			r = makestrspace(sh, fulllen, sh.expdest);
-			str = (char *)stackblock() + strloc;
+			r = eb->makespace(fulllen, eb->dest);
+			str = eb->base() + strloc;
 			p = str + len;
 		} else {
 			r = ckmalloc(sh, fulllen);
@@ -2095,9 +2108,9 @@ setnesc:
 	if (!FNMATCH_IS_ENABLED && (globbing ^ notescaped))
 		q[-1] = '\\';
 	*q = '\0';
-	if (flag & (RMESCAPE_ALLOC | RMESCAPE_GROW)) {
-		sh.expdest = r;
-		STADJUST(q - r + 1, sh.expdest);
+	if ((flag & RMESCAPE_GROW) && eb) {
+		eb->dest = r;
+		eb->dest += (q - r + 1);
 	}
 	return r;
 }
@@ -2111,16 +2124,15 @@ setnesc:
 dash::ShellResult<int>
 casematch(ShellContext &sh, Node *pattern, char *val)
 {
+	ExpandBuf eb;
 	int result;
-	std::size_t su = sh.stackstr.used;
 
 	sh.argbackq = &as<Node::Arg>(pattern)->backquote;
 	sh.argbackq_i = 0;
-	STARTSTACKSTR(sh.expdest);
-	TRY_SHV(argstr(sh, as<Node::Arg>(pattern)->text.data(), EXP_TILDE | EXP_CASE));
+	eb.start();
+	TRY_SHV(argstr(sh, eb, as<Node::Arg>(pattern)->text.data(), EXP_TILDE | EXP_CASE));
 	ifsfree(sh);
-	result = patmatch(sh, stackblock(), val);
-	sh.stackstr.rewind(su);
+	result = patmatch(sh, eb.base(), val, &eb);
 	return result;
 }
 
@@ -2129,10 +2141,10 @@ casematch(ShellContext &sh, Node *pattern, char *val)
  */
 
 static size_t
-cvtnum(ShellContext &sh, intmax_t num, int flags)
+cvtnum(ShellContext &sh, ExpandBuf &eb, intmax_t num, int flags)
 {
 	auto buf = std::format("{}", num);
-	return memtodest(sh, buf.c_str(), buf.size(), flags);
+	return memtodest(sh, eb, buf.c_str(), buf.size(), flags);
 }
 
 static tl::unexpected<dash::ShellErr>

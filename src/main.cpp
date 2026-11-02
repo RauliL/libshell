@@ -81,7 +81,6 @@ run_interactive(ShellContext &sh)
 		try {
 			ParseCmdResult cmd = parsecmd(sh, 1);
 			if (cmd.eof) {
-				clear_stack_temps(sh);
 				if (numeof >= 50)
 					break;
 				if (!stoppedjobs(sh)) {
@@ -102,7 +101,6 @@ run_interactive(ShellContext &sh)
 				auto r = evaltree(sh, n, {});
 				if (!r) {
 					sh.exception = r.error().code;
-					clear_stack_temps(sh);
 					if (r.error().code == EXERROR) {
 						skip = sh.evalskip;
 						if (skip) {
@@ -115,11 +113,9 @@ run_interactive(ShellContext &sh)
 				}
 				if (n)
 					status = *r;
-				clear_stack_temps(sh);
 			}
 		} catch (const dash::ParseError &e) {
 			report_parse_error(sh, e);
-			clear_stack_temps(sh);
 			skip = sh.evalskip;
 			if (skip) {
 				sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
@@ -158,7 +154,6 @@ cmdloop(ShellContext &sh)
 		try {
 			ParseCmdResult cmd = parsecmd(sh, 0);
 			if (cmd.eof) {
-				clear_stack_temps(sh);
 				break;
 			}
 			Node *n = cmd.tree.get();
@@ -166,16 +161,13 @@ cmdloop(ShellContext &sh)
 			auto r = evaltree(sh, n, {});
 			if (!r) {
 				sh.exception = r.error().code;
-				clear_stack_temps(sh);
 				if (r.error().code == EXERROR)
 					return sh.exitstatus;
 				return r;
 			}
 			status = *r;
-			clear_stack_temps(sh);
 		} catch (const dash::ParseError &e) {
 			report_parse_error(sh, e);
-			clear_stack_temps(sh);
 			return sh.exitstatus;
 		}
 
@@ -217,11 +209,11 @@ find_dot_file(ShellContext &sh, char *basename)
 	if (strchr(basename, '/'))
 		return std::string(basename);
 
-	while (padvance(sh, &path, basename) >= 0) {
-		const char *fullname = stackblock();
+	std::string fullname;
+	while (padvance(sh, &path, basename, fullname) >= 0) {
 		if ((!sh.pathopt || *sh.pathopt == 'f') &&
-		    !stat64(fullname, &statb) && S_ISREG(statb.st_mode)) {
-			return std::string(fullname);
+		    !stat64(fullname.c_str(), &statb) && S_ISREG(statb.st_mode)) {
+			return fullname;
 		}
 	}
 

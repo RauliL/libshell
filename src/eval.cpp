@@ -141,25 +141,15 @@ EXITRESET {
 dash::ShellResult<int>
 evalcmd(ShellContext &sh, int argc, char **argv, EvalFlags flags)
 {
-        char *p;
-        char *concat;
-        char **ap;
-
         if (argc > 1) {
-                p = argv[1];
-                if (argc > 2) {
-                        STARTSTACKSTR(concat);
-                        ap = argv + 2;
-                        for (;;) {
-                        	concat = stputs(sh, p, concat);
-                                if ((p = *ap++) == NULL)
-                                        break;
-                                STPUTC(' ', concat);
-                        }
-                        STPUTC('\0', concat);
-                        p = grabstackstr(concat);
+                if (argc == 2)
+                        return sh.eval(argv[1], flags & EvalFlag::tested);
+                std::string concat = argv[1];
+                for (char **ap = argv + 2; *ap; ap++) {
+                        concat.push_back(' ');
+                        concat.append(*ap);
                 }
-                return sh.eval(p, flags & EvalFlag::tested);
+                return sh.eval(concat, flags & EvalFlag::tested);
         }
         return 0;
 }
@@ -198,7 +188,6 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
 			auto r = evaltree(sh, n, child);
 			if (!r) {
 				sh.exception = r.error().code;
-				clear_stack_temps(sh);
 				popfile(sh);
 				if (r.error().code == EXERROR)
 					return sh.exitstatus;
@@ -207,17 +196,14 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
 			i = *r;
 			if (n)
 				status = i;
-			clear_stack_temps(sh);
 
 			if (sh.evalskip)
 				break;
 		}
-		clear_stack_temps(sh);
 		popfile(sh);
 		return status;
 	} catch (const dash::ParseError &e) {
 		report_parse_error(sh, e);
-		clear_stack_temps(sh);
 		popfile(sh);
 		return sh.exitstatus;
 	}
@@ -882,7 +868,7 @@ bail:
 
 		out = &sh.preverrout;
 		sh.inps4 = 1;
-		outstr(sh, expandstr(sh, ps4val()), out);
+		outstr(sh, expandstr(sh, ps4val()).c_str(), out);
 		sh.inps4 = 0;
 		sep = 0;
 		sep = eprintlist(sh, out, vars, sep);

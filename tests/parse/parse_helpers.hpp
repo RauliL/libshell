@@ -12,7 +12,6 @@
 
 #include "init.h"
 #include "input.h"
-#include "memalloc.h"
 #include "nodes.h"
 #include "parse_error.h"
 #include "parser.h"
@@ -68,12 +67,9 @@ inline std::vector<Node::ptr> parse_trees(std::string_view script)
 			if (result.eof)
 				break;
 			trees.push_back(std::move(result.tree));
-			clear_stack_temps(sh);
 		}
-		clear_stack_temps(sh);
 		popfile(sh);
 	} catch (const dash::ParseError &) {
-		clear_stack_temps(sh);
 		popfile(sh);
 		throw;
 	}

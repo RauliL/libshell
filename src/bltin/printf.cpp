@@ -42,12 +42,12 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-static int conv_escape_str(ShellContext &sh, char *, char **);
+static int conv_escape_str(ShellContext &sh, char *, std::string &);
 static int getchr(ShellContext &sh);
 static double getdouble(ShellContext &sh);
 static uintmax_t getuintmax(ShellContext &sh, int);
 static char	* getstr(ShellContext &sh);
-static char	* mklong(ShellContext &sh, const char *, const char *);
+static std::string mklong(const char *, const char *);
 static void check_conversion(ShellContext &sh, const char *, const char *);
 
 
@@ -97,38 +97,32 @@ static void check_conversion(ShellContext &sh, const char *, const char *);
 static dash::ShellResult<int>
 print_escape_str(ShellContext &sh, const char *f, int *param, int *array, char *s)
 {
-	char *p, *q;
 	int done;
-	int len;
 	int total;
-	std::size_t su = sh.stackstr.used;
+	std::string escaped;
 	std::string formatted;
 
-	done = conv_escape_str(sh, s, &q);
-	p = stackblock();
-	len = q - p;
-	total = len - 1;
+	done = conv_escape_str(sh, s, escaped);
+	/* conv_escape_str leaves a trailing NUL as a real byte for width math */
+	if (escaped.empty())
+		escaped.push_back('\0');
+	total = static_cast<int>(escaped.size()) - 1;
 
-	q[-1] = (!!((f[1] - 's') | done) - 1) & f[2];
-	total += !!q[-1];
-	if (f[1] == 's')
-		goto easy;
+	escaped.back() = (!!((f[1] - 's') | done) - 1) & f[2];
+	total += !!escaped.back();
+	if (f[1] == 's') {
+		out1mem(escaped.data(), total);
+		return done;
+	}
 
-	p = makestrspace(sh, len, q);
-	memset(p, 'X', total);
-	p[total] = 0;
+	std::string width(static_cast<size_t>(total), 'X');
+	total = ASPF(formatted, f, width.c_str());
+	char *p = formatted.data();
 
-	q = stackblock();
-	total = ASPF(formatted, f, p);
-	p = formatted.data();
+	int len = strchrnul(p, 'X') - p;
+	memcpy(p + len, escaped.data(), strspn(p + len, "X"));
 
-	len = strchrnul(p, 'X') - p;
-	memcpy(p + len, q, strspn(p + len, "X"));
-
-easy:
 	out1mem(p, total);
-
-	sh.stackstr.rewind(su);
 	return done;
 }
 
@@ -173,10 +167,8 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 
 			if (ch == '\\') {
 				unsigned ret;
-				char *cp;
+				char cp[4];
 
-				STARTSTACKSTR(cp);
-				CHECKSTRSPACE(4, cp);
 				ret = conv_escape(sh, fmt, cp, false);
 				fmt += ret >> 4;
 				out1mem(cp, ret & 15);
@@ -243,8 +235,8 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 			case 'd':
 			case 'i': {
 				uintmax_t p = getuintmax(sh, 1);
-				start = mklong(sh, start, fmt);
-				PF(start, p);
+				std::string longfmt = mklong(start, fmt);
+				PF(longfmt.c_str(), p);
 				break;
 			}
 			case 'o':
@@ -252,8 +244,8 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 			case 'x':
 			case 'X': {
 				uintmax_t p = getuintmax(sh, 0);
-				start = mklong(sh, start, fmt);
-				PF(start, p);
+				std::string longfmt = mklong(start, fmt);
+				PF(longfmt.c_str(), p);
 				break;
 			}
 			case 'a':
@@ -285,24 +277,21 @@ out:
  *	Halts processing string if a \c escape is encountered.
  */
 static int
-conv_escape_str(ShellContext &sh, char *str, char **sp)
+conv_escape_str(ShellContext &sh, char *str, std::string &out)
 {
-	char *cp;
 	int c;
 
-	/* convert string into a temporary buffer... */
-	STARTSTACKSTR(cp);
+	out.clear();
 
 	do {
 		unsigned ret;
 		int ch;
-
-		CHECKSTRSPACE(4, cp);
+		char tmp[4];
 
 		c = *str++;
 		if (c != '\\') {
 putchar:
-			USTPUTC(c, cp);
+			out.push_back(static_cast<char>(c));
 			continue;
 		}
 
@@ -322,12 +311,10 @@ putchar:
 			str++;
 
 		/* Finally test for sequences valid in the format string */
-		ret = conv_escape(sh, str, cp, false);
+		ret = conv_escape(sh, str, tmp, false);
 		str += ret >> 4;
-		cp += ret & 15;
+		out.append(tmp, ret & 15);
 	} while (c & 0xff);
-
-	*sp = cp;
 
 	return c;
 }
@@ -377,7 +364,7 @@ check_value:
 
 	case '\\':
 		if (mbchar)
-			USTPUTC(CTLESC, out);
+			(*(out)++ = (CTLESC));
 		break;
 
 	case 'x':
@@ -439,14 +426,14 @@ hex:
 
 			value = htonl(value << (4 - len) * 8);
 
-			USTPUTC(CTLMBCHAR, out);
-			USTPUTC(len, out);
-			STADJUST(mboff, out);
+			(*(out)++ = (CTLMBCHAR));
+			(*(out)++ = (len));
+			((out) += (mboff));
 			memcpy(out, &value, 4);
-			STADJUST(len, out);
-			USTPUTC(len, out);
-			USTPUTC(CTLMBCHAR, out);
-			STADJUST(mboff, out);
+			((out) += (len));
+			(*(out)++ = (len));
+			(*(out)++ = (CTLMBCHAR));
+			((out) += (mboff));
 		}
 
 		goto out_noput;
@@ -469,15 +456,15 @@ hex:
 	case 'v':	value = '\v';	break;	/* vertical-tab */
 	}
 
-	USTPUTC(value, out);
+	(*(out)++ = (value));
 
 out_noput:
 	str++;
 	return (out - out0) | (str - str0) << 4;
 }
 
-static char *
-mklong(ShellContext &sh, const char *str, const char *ch)
+static std::string
+mklong(const char *str, const char *ch)
 {
 	/*
 	 * Replace a string like "%92.3u" with "%92.3"PRIuMAX.
@@ -488,16 +475,12 @@ mklong(ShellContext &sh, const char *str, const char *ch)
 	 * character.
 	 */
 
-	char *copy;
-	size_t len;	
-
-	len = ch - str + sizeof(PRIdMAX);
-	STARTSTACKSTR(copy);
-	copy = makestrspace(sh, len, copy);
-	memcpy(copy, str, len - sizeof(PRIdMAX));
-	memcpy(copy + len - sizeof(PRIdMAX), PRIdMAX, sizeof(PRIdMAX));
+	size_t len = ch - str + sizeof(PRIdMAX);
+	std::string copy(len, '\0');
+	memcpy(copy.data(), str, len - sizeof(PRIdMAX));
+	memcpy(copy.data() + len - sizeof(PRIdMAX), PRIdMAX, sizeof(PRIdMAX));
 	copy[len - 2] = *ch;
-	return (copy);	
+	return copy;
 }
 
 static int

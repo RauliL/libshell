@@ -172,48 +172,32 @@ is_number(std::string_view text)
 
 /*
  * Produce a possibly single quoted string suitable as input to the shell.
- * The return string is allocated on the stack.
  */
 
-char *
-single_quote(ShellContext &sh, const char *s)
+std::string
+single_quote(const char *s)
 {
-	char *p;
-
-	STARTSTACKSTR(p);
+	std::string out;
 
 	do {
-		char *q;
-		size_t len;
+		size_t len = strchrnul(s, '\'') - s;
 
-		len = strchrnul(s, '\'') - s;
-
-		q = p = makestrspace(sh, len + 3, p);
-
-		*q++ = '\'';
-		q = static_cast<char *>(mempcpy(q, s, len));
-		*q++ = '\'';
+		out.push_back('\'');
+		out.append(s, len);
+		out.push_back('\'');
 		s += len;
-
-		STADJUST(q - p, p);
 
 		len = strspn(s, "'");
 		if (!len)
 			break;
 
-		q = p = makestrspace(sh, len + 3, p);
-
-		*q++ = '"';
-		q = static_cast<char *>(mempcpy(q, s, len));
-		*q++ = '"';
+		out.push_back('"');
+		out.append(s, len);
+		out.push_back('"');
 		s += len;
-
-		STADJUST(q - p, p);
 	} while (*s);
 
-	USTPUTC(0, p);
-
-	return stackblock();
+	return out;
 }
 
 /*

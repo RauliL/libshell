@@ -330,19 +330,19 @@ openhere(ShellContext &sh, Node *redir)
 	size_t len = 0;
 	int pip[2];
 	int memfd;
-	char *p;
 
-	p = as<Node::Arg>(as<Node::Here>(redir)->doc)->text.data();
+	std::string expanded;
+	const char *text = as<Node::Arg>(as<Node::Here>(redir)->doc)->text.data();
 	if (redir->type == Node::Type::XHere) {
-		TRY_SHV(expandarg(sh, as<Node::Here>(redir)->doc.get(), NULL, EXP_QUOTED));
-		p = stackblock();
+		expanded = TRY_SH(expandarg_to_string(sh, as<Node::Here>(redir)->doc.get(), EXP_QUOTED));
+		text = expanded.c_str();
 	}
 
-	len = strlen(p);
+	len = strlen(text);
 	memfd = TRY_SH(sh_pipe(sh, pip, len > PIPESIZE));
 
 	if (memfd || len <= PIPESIZE) {
-		xwrite(sh, pip[1], p, len);
+		xwrite(sh, pip[1], text, len);
 		lseek(pip[1], 0, SEEK_SET);
 		goto out;
 	}
@@ -356,7 +356,7 @@ openhere(ShellContext &sh, Node *redir)
 		signal(SIGTSTP, SIG_IGN);
 #endif
 		signal(SIGPIPE, SIG_DFL);
-		xwrite(sh, pip[1], p, len);
+		xwrite(sh, pip[1], text, len);
 		_exit(0);
 	}
 out:

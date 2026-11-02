@@ -37,6 +37,7 @@
  */
 
 #include <memory>
+#include <string>
 #include <string_view>
 
 #include "nodes.h"
@@ -75,7 +76,8 @@ extern const char *pathopt;	/* set by padvance */
 struct stat64;
 
 void shellexec(ShellContext &, char **, const char *, int);
-int padvance_magic(ShellContext &sh, const char **path, const char *name, int magic);
+int padvance_magic(ShellContext &sh, const char **path, const char *name,
+		   int magic, std::string &out);
 dash::ShellResult<void> find_command(ShellContext &, char *, struct cmdentry *, int, const char *);
 void hashcd(ShellContext &);
 void changepath(ShellContext &, std::string_view);
@@ -88,9 +90,10 @@ dash::ShellResult<int> commandcmd(ShellContext &sh, int, char **);
 int test_file_access(ShellContext &sh, const char *path, int mode);
 int test_access(const struct stat64 *sp, int stmode);
 
-inline int padvance(ShellContext &sh, const char **path, const char *name)
+inline int padvance(ShellContext &sh, const char **path, const char *name,
+		    std::string &out)
 {
-	return padvance_magic(sh, path, name, 1);
+	return padvance_magic(sh, path, name, 1, out);
 }
 
 #endif

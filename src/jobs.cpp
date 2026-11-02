@@ -104,9 +104,9 @@ STATIC int onsigchild();
 #endif
 static int waitproc(ShellContext &sh, int, int *);
 static std::string commandtext(ShellContext &sh, Node *);
-static void cmdtxt(ShellContext &sh, Node *);
-static void cmdlist(ShellContext &sh, Node *, int);
-static void cmdputs(ShellContext &sh, std::string_view);
+static void cmdtxt(ShellContext &sh, Node *, std::string &);
+static void cmdlist(ShellContext &sh, Node *, int, std::string &);
+static void cmdputs(std::string &, std::string_view);
 static void showjob(ShellContext &sh, struct output *, Job *, int);
 
 #if JOBS
@@ -1228,14 +1228,13 @@ out:
 static std::string
 commandtext(ShellContext &sh, Node *n)
 {
-	STARTSTACKSTR(sh.cmdnextc);
-	cmdtxt(sh, n);
-	TRACE(("commandtext: name %p, end %p\n", stackblock(), sh.cmdnextc));
-	return std::string(stackblock());
+	std::string out;
+	cmdtxt(sh, n, out);
+	return out;
 }
 
 static void
-cmdtxt(ShellContext &sh, Node *n)
+cmdtxt(ShellContext &sh, Node *n, std::string &out)
 {
 	Node *np;
 	const char *p;
@@ -1251,8 +1250,8 @@ cmdtxt(ShellContext &sh, Node *n)
 	case Node::Type::Pipe:
 		for (std::size_t i = 0; i < as<Node::Pipe>(n)->cmdlist.size(); i++) {
 			if (i)
-				cmdputs(sh, " | ");
-			cmdtxt(sh, as<Node::Pipe>(n)->cmdlist[i].get());
+				cmdputs(out, " | ");
+			cmdtxt(sh, as<Node::Pipe>(n)->cmdlist[i].get(), out);
 		}
 		break;
 	case Node::Type::Semi:
@@ -1264,8 +1263,8 @@ cmdtxt(ShellContext &sh, Node *n)
 	case Node::Type::Or:
 		p = " || ";
 binop:
-		cmdtxt(sh, as<Node::Binary>(n)->ch1.get());
-		cmdputs(sh, p);
+		cmdtxt(sh, as<Node::Binary>(n)->ch1.get(), out);
+		cmdputs(out, p);
 		n = as<Node::Binary>(n)->ch2.get();
 		goto donode;
 	case Node::Type::Redir:
@@ -1273,18 +1272,18 @@ binop:
 		n = as<Node::Redir>(n)->n.get();
 		goto donode;
 	case Node::Type::Not:
-		cmdputs(sh, "!");
+		cmdputs(out, "!");
 		n = as<Node::Not>(n)->com.get();
 donode:
-		cmdtxt(sh, n);
+		cmdtxt(sh, n, out);
 		break;
 	case Node::Type::If:
-		cmdputs(sh, "if ");
-		cmdtxt(sh, as<Node::If>(n)->test.get());
-		cmdputs(sh, "; then ");
+		cmdputs(out, "if ");
+		cmdtxt(sh, as<Node::If>(n)->test.get(), out);
+		cmdputs(out, "; then ");
 		if (as<Node::If>(n)->elsepart) {
-			cmdtxt(sh, as<Node::If>(n)->ifpart.get());
-			cmdputs(sh, "; else ");
+			cmdtxt(sh, as<Node::If>(n)->ifpart.get(), out);
+			cmdputs(out, "; else ");
 			n = as<Node::If>(n)->elsepart.get();
 		} else {
 			n = as<Node::If>(n)->ifpart.get();
@@ -1292,7 +1291,7 @@ donode:
 		p = "; fi";
 		goto dotail;
 	case Node::Type::Subshell:
-		cmdputs(sh, "(");
+		cmdputs(out, "(");
 		n = as<Node::Redir>(n)->n.get();
 		p = ")";
 		goto dotail;
@@ -1302,49 +1301,49 @@ donode:
 	case Node::Type::Until:
 		p = "until ";
 until:
-		cmdputs(sh, p);
-		cmdtxt(sh, as<Node::Binary>(n)->ch1.get());
+		cmdputs(out, p);
+		cmdtxt(sh, as<Node::Binary>(n)->ch1.get(), out);
 		n = as<Node::Binary>(n)->ch2.get();
 		p = "; done";
 dodo:
-		cmdputs(sh, "; do ");
+		cmdputs(out, "; do ");
 dotail:
-		cmdtxt(sh, n);
+		cmdtxt(sh, n, out);
 		goto dotail2;
 	case Node::Type::For:
-		cmdputs(sh, "for ");
-		cmdputs(sh, as<Node::For>(n)->var);
-		cmdputs(sh, " in ");
-		cmdlist(sh, as<Node::For>(n)->args.get(), 1);
+		cmdputs(out, "for ");
+		cmdputs(out, as<Node::For>(n)->var);
+		cmdputs(out, " in ");
+		cmdlist(sh, as<Node::For>(n)->args.get(), 1, out);
 		n = as<Node::For>(n)->body.get();
 		p = "; done";
 		goto dodo;
 	case Node::Type::Defun:
-		cmdputs(sh, as<Node::Defun>(n)->text);
+		cmdputs(out, as<Node::Defun>(n)->text);
 		p = "() { ... }";
 		goto dotail2;
 	case Node::Type::Cmd:
-		cmdlist(sh, as<Node::Command>(n)->args.get(), 1);
-		cmdlist(sh, as<Node::Command>(n)->redirect.get(), 0);
+		cmdlist(sh, as<Node::Command>(n)->args.get(), 1, out);
+		cmdlist(sh, as<Node::Command>(n)->redirect.get(), 0, out);
 		break;
 	case Node::Type::Arg:
-		cmdputs(sh, as<Node::Arg>(n)->text);
+		cmdputs(out, as<Node::Arg>(n)->text);
 		break;
 	case Node::Type::Here:
 	case Node::Type::XHere:
 		p = "<<...";
 dotail2:
-		cmdputs(sh, p);
+		cmdputs(out, p);
 		break;
 	case Node::Type::Case:
-		cmdputs(sh, "case ");
-		cmdputs(sh, as<Node::Arg>(as<Node::Case>(n)->expr)->text);
-		cmdputs(sh, " in ");
+		cmdputs(out, "case ");
+		cmdputs(out, as<Node::Arg>(as<Node::Case>(n)->expr)->text);
+		cmdputs(out, " in ");
 		for (np = as<Node::Case>(n)->cases.get(); np; np = as<Node::CaseList>(np)->next.get()) {
-			cmdtxt(sh, as<Node::CaseList>(np)->pattern.get());
-			cmdputs(sh, ") ");
-			cmdtxt(sh, as<Node::CaseList>(np)->body.get());
-			cmdputs(sh, ";; ");
+			cmdtxt(sh, as<Node::CaseList>(np)->pattern.get(), out);
+			cmdputs(out, ") ");
+			cmdtxt(sh, as<Node::CaseList>(np)->body.get(), out);
+			cmdputs(out, ";; ");
 		}
 		p = "esac";
 		goto dotail2;
@@ -1371,8 +1370,8 @@ dotail2:
 redir:
 		s[0] = as<Node::RedirList>(n)->fd + '0';
 		s[1] = '\0';
-		cmdputs(sh, s);
-		cmdputs(sh, p);
+		cmdputs(out, s);
+		cmdputs(out, p);
 		if (n->type == Node::Type::ToFd || n->type == Node::Type::FromFd) {
 			s[0] = as<Node::Dup>(n)->dupfd + '0';
 			p = s;
@@ -1385,24 +1384,23 @@ redir:
 }
 
 static void
-cmdlist(ShellContext &sh, Node *np, int sep)
+cmdlist(ShellContext &sh, Node *np, int sep, std::string &out)
 {
 	for (; np; np = as<Node::Arg>(np)->next.get()) {
 		if (!sep)
-			cmdputs(sh, spcstr);
-		cmdtxt(sh, np);
+			cmdputs(out, spcstr);
+		cmdtxt(sh, np, out);
 		if (sep && as<Node::Arg>(np)->next)
-			cmdputs(sh, spcstr);
+			cmdputs(out, spcstr);
 	}
 }
 
 
 static void
-cmdputs(ShellContext &sh, std::string_view s)
+cmdputs(std::string &out, std::string_view s)
 {
 	const char *p, *end, *str;
 	char cc[2] = " ";
-	char *nextc;
 	signed char c;
 	int subtype = 0;
 	int quoted = 0;
@@ -1411,7 +1409,6 @@ cmdputs(ShellContext &sh, std::string_view s)
 		"%", "%%", "#", "##",
 	};
 
-	nextc = makestrspace(sh, (s.size() + 1) * 8, sh.cmdnextc);
 	p = s.data();
 	end = p + s.size();
 	while (p < end) {
@@ -1472,20 +1469,18 @@ cmdputs(ShellContext &sh, std::string_view s)
 		default:
 			break;
 		}
-		USTPUTC(c, nextc);
+		out.push_back(c);
 checkstr:
 		if (!str)
 			continue;
 dostr:
 		while ((c = *str++)) {
-			USTPUTC(c, nextc);
+			out.push_back(c);
 		}
 	}
 	if (quoted & 1) {
-		USTPUTC('"', nextc);
+		out.push_back('"');
 	}
-	*nextc = 0;
-	sh.cmdnextc = nextc;
 }
 
 

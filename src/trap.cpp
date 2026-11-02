@@ -99,7 +99,7 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 		for (signo = 0 ; signo < NSIG ; signo++) {
 			if (sh.trap[signo]) {
 				out1fmt(sh, "trap -- %s %s\n",
-					single_quote(sh, sh.trap[signo]->c_str()),
+					single_quote(sh.trap[signo]->c_str()).c_str(),
                     sh.find_signal_name(signo).value_or("").data()
 				);
 			}

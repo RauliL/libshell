@@ -76,8 +76,11 @@ struct Node;
 struct ShellContext;
 #include "error.h"
 dash::ShellResult<void> expandarg(ShellContext &sh, Node *, ArgList *, int);
-#define rmescapes(p) _rmescapes(sh, (p), 0)
-char *_rmescapes(ShellContext &sh, char *, int);
+/* Expand a single word to an owned string (here-docs, prompts, etc.). */
+dash::ShellResult<std::string> expandarg_to_string(ShellContext &sh, Node *, int);
+struct ExpandBuf;
+#define rmescapes(p) _rmescapes(sh, (p), 0, nullptr)
+char *_rmescapes(ShellContext &sh, char *, int, ExpandBuf *eb = nullptr);
 dash::ShellResult<int> casematch(ShellContext &sh, Node *, char *);
 void recordregion(ShellContext &sh, int, int, int);
 dash::ShellResult<void> removerecordregions(ShellContext &sh, int);

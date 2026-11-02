@@ -39,6 +39,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <string_view>
 
 #ifdef HAVE_FNMATCH
@@ -72,7 +73,7 @@ dash::ShellResult<intmax_t> atomax(ShellContext &sh, std::string_view, int);
 dash::ShellResult<intmax_t> atomax10(ShellContext &sh, std::string_view);
 dash::ShellResult<int> number(ShellContext &sh, std::string_view);
 bool is_number(std::string_view);
-char *single_quote(ShellContext &sh, const char *);
+std::string single_quote(const char *);
 int pstrcmp(const void *, const void *);
 std::string ascii_upper(std::string_view);
 

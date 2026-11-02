@@ -390,9 +390,12 @@ showvars(ShellContext &sh, std::string_view prefix, VarFlags on, VarFlags off)
 		const char *q;
 
 		p = strchrnul(*ep, '=');
+		std::string quoted;
 		q = nullstr;
-		if (*p)
-			q = single_quote(sh, ++p);
+		if (*p) {
+			quoted = single_quote(++p);
+			q = quoted.c_str();
+		}
 
 		out1fmt(sh, "%s%s%.*s%s\n", prefix_str.c_str(), sep,
 			(int)(p - *ep), *ep, q);

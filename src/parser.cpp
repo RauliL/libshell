@@ -47,6 +47,7 @@
 #include <wctype.h>
 
 #include "shell.h"
+#include "expand_buf.h"
 #include "shell_context.h"
 #include "parser.h"
 #include "nodes.h"
@@ -178,9 +179,9 @@ realeofmark(const std::string *eofmark)
 
 
 static void
-grabstackblock(ShellContext &sh, std::size_t len)
+grabstackblock(ExpandBuf &eb, std::size_t len)
 {
-	stackstr_commit(sh, len);
+	eb.commit(len);
 }
 
 
@@ -1072,15 +1073,15 @@ getmbc(ShellContext &sh, int c, char *out, int mode)
 			return 1;
 
 		if ((mode & 3) < 2) {
-			USTPUTC(CTLMBCHAR, out);
+			(*(out)++ = (CTLMBCHAR));
 			if (mode == 1)
-				USTPUTC(CTLESC, out);
-			USTPUTC(ml, out);
+				(*(out)++ = (CTLESC));
+			(*(out)++ = (ml));
 		}
-		STADJUST(ml, out);
+		((out) += (ml));
 		if ((mode & 3) < 2) {
-			USTPUTC(ml, out);
-			USTPUTC(CTLMBCHAR, out);
+			(*(out)++ = (ml));
+			(*(out)++ = (CTLMBCHAR));
 		}
 
 		return out - start;
@@ -1129,7 +1130,7 @@ dollarsq_escape(ShellContext &sh, char *out)
 		p += !((c ^ *p) | (c ^ '\\'));
 
 		conv_ch = (c & ~((c & 0x40) >> 1) & 0x7f) ^ 0x40;
-		USTPUTC(conv_ch, out);
+		(*(out)++ = (conv_ch));
 	}
 
 	pungetn(sh, len - (p - str));
@@ -1158,6 +1159,7 @@ dollarsq_escape(ShellContext &sh, char *out)
 static Token
 readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *eofmark, bool striptabs)
 {
+	ExpandBuf eb;
 	struct synstack synbase = {
 		.syntax = syntax,
 		.dblquote = syntax == DQSYNTAX,
@@ -1174,7 +1176,7 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 	size_t len;
 	char *out;
 
-	STARTSTACKSTR(out);
+	out = eb.base();
 	loop: {	/* for each line, until end of word */
 		CHECKEND();	/* set c to PEOF if at end of here document */
 		/* Until end of line or end of word */
@@ -1183,15 +1185,14 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 			unsigned ml;
 
 			/* Permit max(MB_LEN_MAX, 23) calls to USTPUTC. */
-			CHECKSTRSPACE((MB_LEN_MAX > 16 ? MB_LEN_MAX : 16) + 7,
-				      out);
+			({ char *_q = (out); size_t _l = ((MB_LEN_MAX > 16 ? MB_LEN_MAX : 16) + 7); size_t _m = static_cast<size_t>(eb.cap_ptr() - _q); if (_l > _m) (out) = eb.makespace(_l, _q); 0; });
 			fieldsplitting = synstack->syntax == BASESYNTAX &&
 					 !(synstack->varnest |
 					   synstack->backq) ? 4 : 0;
 			ml = getmbc(sh, c, out, fieldsplitting |
 					    (printesc ? 2 : 0));
 			if (ml == 1) {
-				if (out == stackblock())
+				if (out == eb.base())
 					return Token::Blank;
 				c = pgetc(sh);
 				break;
@@ -1203,12 +1204,12 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 			case CNL:	/* '\n' */
 				if (fieldsplitting)
 					goto endword;	/* exit outer loop */
-				USTPUTC(c, out);
+				(*(out)++ = (c));
 				nlprompt(sh);
 				c = pgetc_top(sh, synstack);
 				goto loop;		/* continue outer loop */
 			case CWORD:
-				USTPUTC(c, out);
+				(*(out)++ = (c));
 				break;
 			case CCTL:
 				if (c == dollarsq) {
@@ -1217,15 +1218,15 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 				}
 				if ((!eofmark) | synstack->dblquote |
 				    synstack->varnest)
-					USTPUTC(CTLESC, out);
-				USTPUTC(c, out);
+					(*(out)++ = (CTLESC));
+				(*(out)++ = (c));
 				break;
 			/* backslash */
 			case CBACK:
 				c = pgetc(sh);
 				if (c == PEOF) {
-					USTPUTC(CTLESC, out);
-					USTPUTC('\\', out);
+					(*(out)++ = (CTLESC));
+					(*(out)++ = ('\\'));
 					pungetc(sh);
 					break;
 				}
@@ -1243,8 +1244,8 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 						!synstack->varnest
 					)
 				) {
-					USTPUTC(CTLESC, out);
-					USTPUTC('\\', out);
+					(*(out)++ = (CTLESC));
+					(*(out)++ = ('\\'));
 				}
 				quotef++;
 
@@ -1253,15 +1254,15 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 				if (ml)
 					break;
 
-				USTPUTC(CTLESC, out);
-				USTPUTC(c, out);
+				(*(out)++ = (CTLESC));
+				(*(out)++ = (c));
 				break;
 			case CSQUOTE:
 csquote:
 				synstack->syntax = SQSYNTAX;
 quotemark:
 				if (eofmark == NULL) {
-					USTPUTC(CTLQUOTEMARK, out);
+					(*(out)++ = (CTLQUOTEMARK));
 				}
 				break;
 			case CDQUOTE:
@@ -1273,13 +1274,13 @@ toggledq:
 				goto quotemark;
 			case CENDQUOTE:
 				if (eofmark && !synstack->varnest) {
-					USTPUTC(c, out);
+					(*(out)++ = (c));
 					break;
 				}
 
 				if (synstack->dqvarnest == 0) {
 					if (likely(dollarsq)) {
-						char *p = stackblock();
+						char *p = eb.base();
 
 						*out = 0;
 						out = p + strlen(p);
@@ -1310,11 +1311,11 @@ toggledq:
 					if (!chkeofmark)
 						c = CTLENDVAR;
 				}
-				USTPUTC(c, out);
+				(*(out)++ = (c));
 				break;
 			case CLP:	/* '(' in arithmetic */
 				synstack->parenlevel++;
-				USTPUTC(c, out);
+				(*(out)++ = (c));
 				break;
 			case CRP:	/* ')' in arithmetic */
 				if (synstack->parenlevel > 0)
@@ -1322,7 +1323,7 @@ toggledq:
 				else if (pgetc_eatbnl(sh) == ')') {
 					synstack_pop(sh, &synstack);
 					if (chkeofmark)
-						USTPUTC(c, out);
+						(*(out)++ = (c));
 					else
 						c = CTLENDARI;
 				} else {
@@ -1332,12 +1333,12 @@ toggledq:
 					 */
 					pungetc(sh);
 				}
-				USTPUTC(c, out);
+				(*(out)++ = (c));
 				break;
 			case CBQUOTE:	/* '`' */
 				if (synstack->backq == 2)
 					goto end_backq;
-				USTPUTC('`', out);
+				(*(out)++ = ('`'));
 				PARSEBACKQOLD();
 				break;
 			case CEOF:
@@ -1349,7 +1350,7 @@ end_backq:
 					printesc = 0;
 				} else if (fieldsplitting)
 					goto endword;	/* exit outer loop */
-				USTPUTC(c, out);
+				(*(out)++ = (c));
 			}
 		}
 	}
@@ -1363,9 +1364,9 @@ endword:
 		/* { */
 		synerror(sh, "Missing '}'");
 	}
-	USTPUTC('\0', out);
-	len = out - (char *)stackblock();
-	out = stackblock();
+	(*(out)++ = ('\0'));
+	len = out - eb.base();
+	out = eb.base();
 	if (eofmark == NULL) {
 		if ((c == '>' || c == '<')
 		 && quotef == 0
@@ -1379,7 +1380,7 @@ endword:
 	}
 	sh.quoteflag = quotef;
 	sh.backquotelist = std::move(bqlist);
-	grabstackblock(sh, len);
+	grabstackblock(eb, len);
 	sh.wordtext = out;
 	return sh.lasttoken = Token::Word;
 /* end of readtoken routine */
@@ -1403,8 +1404,8 @@ checkend: {
 				c = pgetc(sh);
 		}
 
-		markloc = out - (char *)stackblock();
-		for (ep = eofmark->c_str(); STPUTC(c, out), *ep; ep++) {
+		markloc = out - eb.base();
+		for (ep = eofmark->c_str(); ((out) = eb.putc(out, c)), *ep; ep++) {
 			if (c != (signed char)*ep)
 				goto more_heredoc;
 
@@ -1418,7 +1419,7 @@ checkend: {
 			int len;
 
 more_heredoc:
-			p = (char *)stackblock() + markloc + 1;
+			p = eb.base() + markloc + 1;
 			len = out - p;
 
 			if (len) {
@@ -1436,7 +1437,7 @@ more_heredoc:
 			}
 		}
 
-		STADJUST((char *)stackblock() + markloc - out, out);
+		((out) += (eb.base() + markloc - out));
 	}
 	goto checkend_return;
 }
@@ -1523,11 +1524,11 @@ parsesub: {
 	int subtype;
 	const char *p;
 
-	USTPUTC('$', out);
+	(*(out)++ = ('$'));
 
 	c = pgetc_eatbnl(sh);
 	if (c == '(') {		/* $(command) or $((arith)) */
-		USTPUTC(c, out);
+		(*(out)++ = (c));
 		if (pgetc_eatbnl(sh) == '(') {
 			PARSEARITH();
 		} else {
@@ -1535,29 +1536,29 @@ parsesub: {
 			PARSEBACKQNEW();
 		}
 	} else if (c == '\'' && newsyn['&']) {
-		STADJUST(-1, out);
+		((out) += (-1));
 		dollarsq = '\\';
 		goto csquote;
 	} else if (c == '{' || is_name(c) || is_special(c)) {
-		int typeloc = out - (char *)stackblock();
+		int typeloc = out - eb.base();
 
-		STADJUST(!chkeofmark, out);
+		((out) += (!chkeofmark));
 		subtype = VSNORMAL;
 		if (likely(c == '{')) {
 			if (chkeofmark)
-				USTPUTC('{', out);
+				(*(out)++ = ('{'));
 			c = pgetc_eatbnl(sh);
 			subtype = 0;
 		}
 varname:
 		if (is_name(c)) {
 			do {
-				STPUTC(c, out);
+				((out) = eb.putc(out, c));
 				c = pgetc_eatbnl(sh);
 			} while (is_in_name(c));
 		} else if (is_digit(c)) {
 			do {
-				STPUTC(c, out);
+				((out) = eb.putc(out, c));
 				c = pgetc_eatbnl(sh);
 			} while ((subtype <= 0 || subtype >= VSLENGTH) &&
 				 is_digit(c));
@@ -1571,7 +1572,7 @@ varname:
 
 				if (c == '_' || isalnum(c)) {
 					if (chkeofmark)
-						USTPUTC('#', out);
+						(*(out)++ = ('#'));
 					goto varname;
 				}
 
@@ -1583,7 +1584,7 @@ varname:
 					c = cc;
 					cc = '#';
 				} else if (chkeofmark)
-					USTPUTC('#', out);
+					(*(out)++ = ('#'));
 			}
 
 			if (!is_special(cc)) {
@@ -1592,7 +1593,7 @@ varname:
 				goto badsub;
 			}
 
-			USTPUTC(cc, out);
+			(*(out)++ = (cc));
 		} else
 			goto badsub;
 
@@ -1600,14 +1601,14 @@ varname:
 			int cc = c;
 
 			if (chkeofmark)
-				STPUTC(c, out);
+				((out) = eb.putc(out, c));
 
 			switch (c) {
 			case ':':
 				subtype = VSNUL;
 				c = pgetc_eatbnl(sh);
 				if (chkeofmark)
-					STPUTC(c, out);
+					((out) = eb.putc(out, c));
 				/*FALLTHROUGH*/
 			default:
 				p = std::strchr(types, c);
@@ -1622,7 +1623,7 @@ varname:
 				c = pgetc_eatbnl(sh);
 				if (c == cc) {
 					if (chkeofmark)
-						STPUTC(c, out);
+						((out) = eb.putc(out, c));
 					subtype++;
 				} else
 					pungetc(sh);
@@ -1657,11 +1658,11 @@ badsub:
 				synstack->dqvarnest++;
 		}
 		if (!chkeofmark) {
-			char *p = stackblock();
+			char *p = eb.base();
 
 			p[typeloc - 1] = CTLVAR;
 			p[typeloc] = subtype | VSBIT;
-			STPUTC('=', out);
+			((out) = eb.putc(out, '='));
 		}
 	} else
 		pungetc(sh);
@@ -1694,12 +1695,12 @@ parsebackq: {
 		printesc = 1;
 		goto parsebackq_out;
 	}
-	STADJUST(oldstyle - 1, out);
+	((out) += (oldstyle - 1));
 	out[-1] = CTLBACKQ;
-	str = stackblock();
-	savelen = out - (char *)stackblock();
-	grabstackblock(sh, savelen);
-	STARTSTACKSTR(out);
+	str = eb.base();
+	savelen = out - eb.base();
+	grabstackblock(eb, savelen);
+	out = eb.base();
         if (oldstyle) {
                 /* We must read until the closing backquote, giving special
                    treatment to some slashes, and then push the string and
@@ -1709,7 +1710,7 @@ parsebackq: {
                 int pc;
 
 		while (!done) {
-			CHECKSTRSPACE(MB_LEN_MAX + 1, pout);
+			({ char *_q = (pout); size_t _l = (MB_LEN_MAX + 1); size_t _m = static_cast<size_t>(eb.cap_ptr() - _q); if (_l > _m) (pout) = eb.makespace(_l, _q); 0; });
 			if (sh.needprompt) {
 				setprompt(sh, 2);
 			}
@@ -1722,7 +1723,7 @@ parsebackq: {
                                 pc = pgetc(sh);
                                 if (pc != '\\' && pc != '`' && pc != '$'
                                     && (!synstack->dblquote || pc != '"'))
-                                        USTPUTC('\\', pout);
+                                        (*(pout)++ = ('\\'));
 				ml = getmbc(sh, pc, pout, 2);
 				pout += ml;
 				if (ml)
@@ -1739,10 +1740,10 @@ parsebackq: {
 			default:
 				break;
 			}
-			USTPUTC(pc, pout);
+			(*(pout)++ = (pc));
                 }
 		pout[-1] = 0;
-		pstr = grabstackstr(pout);
+		pstr = (eb.commit_to(pout));
 		setinputstring(sh, pstr);
         }
 	saveheredoclist = sh.heredoclist;
@@ -1770,7 +1771,7 @@ parsebackq: {
 	/* Start reading from old file again. */
 	popfile(sh);
 
-	out = stnputs(sh, str, savelen, stackblock());
+	out = eb.nputs(str, savelen, eb.base());
 
 parsebackq_out:
 	if (oldstyle) {
@@ -1794,9 +1795,9 @@ parsearith: {
 		      ARISYNTAX);
 	synstack->dblquote = 1;
 	if (chkeofmark)
-		USTPUTC(c, out);
+		(*(out)++ = (c));
 	else {
-		STADJUST(-1, out);
+		((out) += (-1));
 		out[-1] = CTLARI;
 	}
 	goto parsearith_return;
@@ -1879,15 +1880,12 @@ try_parse_string(ShellContext &sh, std::string_view s)
 			ParseCmdResult result = parsecmd(sh, 0);
 			if (result.eof)
 				break;
-			clear_stack_temps(sh);
 		}
-		clear_stack_temps(sh);
 		popfile(sh);
 		nflag = save_nflag;
 		return {};
 	} catch (const dash::ParseError &e) {
 		sh.errlinno = e.lineno();
-		clear_stack_temps(sh);
 		popfile(sh);
 		nflag = save_nflag;
 		return tl::unexpected(std::string(e.what()));
@@ -1900,20 +1898,16 @@ setprompt(ShellContext &sh, int which)
 	sh.needprompt = 0;
 	sh.whichprompt = which;
 
-	if (!sh.input.current->nleft) {
-		std::size_t su = sh.stackstr.used;
-		sh.stackstr.commit(stackblocksize());
-		out2str(getprompt(sh, NULL));
-		sh.stackstr.rewind(su);
-	}
+	if (!sh.input.current->nleft)
+		out2str(getprompt(sh, NULL).c_str());
 }
 
-const char *
+std::string
 expandstr(ShellContext &sh, const char *ps)
 {
 	struct parsefile *file_stop;
 	struct heredoc *saveheredoclist;
-	const char *result;
+	std::string result = ps;
 	int saveprompt;
 	struct Node::Arg n{};
 	int err = 0;
@@ -1928,7 +1922,6 @@ expandstr(ShellContext &sh, const char *ps)
 	saveprompt = sh.doprompt;
 	sh.doprompt = 0;
 	sh.needprompt = 0;
-	result = ps;
 	try {
 		readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, FAKEEOFMARK, 0);
 
@@ -1937,11 +1930,11 @@ expandstr(ShellContext &sh, const char *ps)
 		n.text = sh.wordtext;
 		n.backquote = std::move(sh.backquotelist);
 
-		if (auto r = expandarg(sh, reinterpret_cast<Node *>(&n), NULL, EXP_QUOTED); !r) {
+		if (auto r = expandarg_to_string(sh, reinterpret_cast<Node *>(&n), EXP_QUOTED); !r) {
 			sh.exception = r.error().code;
 			err = 1;
 		} else {
-			result = stackblock();
+			result = std::move(*r);
 		}
 	} catch (const dash::ParseError &) {
 		err = 1;
@@ -1960,7 +1953,7 @@ expandstr(ShellContext &sh, const char *ps)
  * called by editline -- any expansions to the prompt
  *    should be added here.
  */
-const char *
+std::string
 getprompt(ShellContext &sh, void *unused)
 {
 	const char *prompt;

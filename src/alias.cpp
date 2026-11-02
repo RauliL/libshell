@@ -204,7 +204,7 @@ printalias(ShellContext &sh, const struct alias *ap)
 	std::string def = ap->name;
 	def.push_back('=');
 	def += ap->val;
-	out1fmt(sh, snlfmt, single_quote(sh, def.c_str()));
+	out1fmt(sh, snlfmt, single_quote(def.c_str()).c_str());
 }
 
 static struct alias **

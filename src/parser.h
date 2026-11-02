@@ -37,6 +37,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #include "nodes.h"
@@ -96,11 +97,11 @@ bool isassignment(std::string_view p);
 bool issimplecmd(Node *n, std::string_view name);
 ParseCmdResult parsecmd(ShellContext &sh, int);
 void fixredir(ShellContext &sh, Node *, const char *, int);
-const char *getprompt(ShellContext &, void *);
+std::string getprompt(ShellContext &, void *);
 std::optional<Token> findkwd(std::string_view);
 /* Length of a leading legal variable name; 0 if none. */
 std::size_t endofname(std::string_view name);
-const char *expandstr(ShellContext &sh, const char *);
+std::string expandstr(ShellContext &sh, const char *);
 unsigned getmbc(ShellContext &sh, int c, char *out, int mode);
 void report_parse_error(ShellContext &sh, const dash::ParseError &e);
 dash::Result<void> try_parse_string(ShellContext &sh, std::string_view s);

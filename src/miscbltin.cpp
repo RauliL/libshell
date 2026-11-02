@@ -58,6 +58,7 @@
 #include "output.h"
 #include "parser.h"
 #include "shell.h"
+#include "expand_buf.h"
 #include "shell_context.h"
 #include "syntax.h"
 #include "trap.h"
@@ -76,12 +77,12 @@
  *  @param len length of line including trailing '\0'
  */
 static dash::ShellResult<void>
-readcmd_handle_line(ShellContext &sh, char *s, int ac, char **ap)
+readcmd_handle_line(ShellContext &sh, ExpandBuf &eb, char *s, int ac, char **ap)
 {
 	ArgList fields;
 	size_t i = 0;
 
-	s = grabstackstr(s);
+	s = eb.commit_to(s);
 
 	ifsbreakup(sh, s, ac, &fields);
 	ifsfree(sh);
@@ -142,7 +143,8 @@ readcmd(ShellContext &sh, int argc, char **argv)
 		return sh_error(sh, "arg count");
 
 	status = 0;
-	STARTSTACKSTR(p);
+	ExpandBuf eb;
+	p = eb.base();
 
 	pushstdin(sh);
 
@@ -152,7 +154,7 @@ readcmd(ShellContext &sh, int argc, char **argv)
 		unsigned ml;
 		int c;
 
-		CHECKSTRSPACE((MB_LEN_MAX > 16 ? MB_LEN_MAX : 16) + 4, p);
+		({ char *_q = (p); size_t _l = ((MB_LEN_MAX > 16 ? MB_LEN_MAX : 16) + 4); size_t _m = static_cast<size_t>(eb.cap_ptr() - _q); if (_l > _m) (p) = eb.makespace(_l, _q); 0; });
 		c = pgetc(sh);
 		if (c == PEOF) {
 			status = 1;
@@ -171,28 +173,28 @@ readcmd(ShellContext &sh, int argc, char **argv)
 			goto put;
 		}
 		if (!rflag && c == '\\') {
-			newloc = p - (char *)stackblock();
+			newloc = p - (char *)eb.base();
 			continue;
 		}
 		if (c == '\n')
 			break;
 put:
 		if (strchr(qchars, c))
-			USTPUTC(CTLESC, p);
-		USTPUTC(c, p);
+			(*(p)++ = (CTLESC));
+		(*(p)++ = (c));
 
 record:
 		if (newloc >= startloc) {
 			recordregion(sh, startloc, newloc, 0);
 start:
-			startloc = p - (char *)stackblock();
+			startloc = p - (char *)eb.base();
 			newloc = startloc - 1;
 		}
 	}
 	popfile(sh);
-	recordregion(sh, startloc, p - (char *)stackblock(), 0);
-	STACKSTRNUL(p);
-	TRY_SHV(readcmd_handle_line(sh, p + 1, argc - (ap - argv), ap));
+	recordregion(sh, startloc, p - (char *)eb.base(), 0);
+	eb.putc_nul(p);
+	TRY_SHV(readcmd_handle_line(sh, eb, p + 1, argc - (ap - argv), ap));
 	return status;
 }
 

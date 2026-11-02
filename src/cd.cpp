@@ -129,9 +129,8 @@ dotdot:
 	if (!*dest)
 		dest = dotdir;
 	path = bltinlookup(sh, "CDPATH");
-	while (p = path, (len = padvance_magic(sh, &path, dest, 0)) >= 0) {
+	while (p = path, (len = padvance_magic(sh, &path, dest, 0, candidate)) >= 0) {
 		c = *p;
-		candidate.assign(stackblock());
 		p = candidate.c_str();
 
 		if (stat64(p, &statb) >= 0 && S_ISDIR(statb.st_mode)) {

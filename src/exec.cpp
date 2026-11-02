@@ -110,7 +110,6 @@ static dash::ShellResult<int> describe_command(ShellContext &sh, struct output *
 void
 shellexec(ShellContext &sh, char **argv, const char *path, int idx)
 {
-	char *cmdname;
 	int e;
 	std::vector<char *> env = environment(sh);
 	char **envp = env.data();
@@ -121,10 +120,10 @@ shellexec(ShellContext &sh, char **argv, const char *path, int idx)
 		e = errno;
 	} else {
 		e = ENOENT;
-		while (padvance(sh, &path, argv[0]) >= 0) {
-			cmdname = stackblock();
+		std::string candidate;
+		while (padvance(sh, &path, argv[0], candidate) >= 0) {
 			if (--idx < 0 && sh.pathopt == NULL) {
-				tryexec(sh, cmdname, argv, envp);
+				tryexec(sh, candidate.data(), argv, envp);
 				if (errno != ENOENT && errno != ENOTDIR)
 					e = errno;
 			}
@@ -211,14 +210,13 @@ legal_pathopt(ShellContext &sh, const char *opt, const char *term, int magic)
 
 
 int
-padvance_magic(ShellContext &sh, const char **path, const char *name, int magic)
+padvance_magic(ShellContext &sh, const char **path, const char *name, int magic,
+	       std::string &out)
 {
 	const char *term = "%:";
 	const char *lpathopt;
 	const char *p;
-	char *q;
 	const char *start;
-	size_t qlen;
 	size_t len;
 
 	if (*path == NULL)
@@ -250,17 +248,14 @@ padvance_magic(ShellContext &sh, const char **path, const char *name, int magic)
 	sh.pathopt = lpathopt;
 	*path = *p == ':' ? p + 1 : NULL;
 
-	/* "2" is for '/' and '\0' */
-	qlen = len + strlen(name) + 2;
-	q = growstackto(sh, qlen);
-
+	out.clear();
 	if (likely(len)) {
-		q = static_cast<char *>(mempcpy(q, start, len));
-		*q++ = '/';
+		out.assign(start, len);
+		out.push_back('/');
 	}
-	strcpy(q, name);
+	out.append(name);
 
-	return qlen;
+	return static_cast<int>(out.size());
 }
 
 
@@ -317,15 +312,14 @@ printentry(ShellContext &sh, struct tblentry *cmdp)
 {
 	int idx;
 	const char *path;
-	char *name;
+	std::string name;
 
 	idx = cmdp->param.index;
 	path = pathval();
 	do {
-		padvance(sh, &path, cmdp->cmdname.c_str());
+		padvance(sh, &path, cmdp->cmdname.c_str(), name);
 	} while (--idx >= 0);
-	name = stackblock();
-	out1str(name);
+	out1str(name.c_str());
 	out1fmt(sh, snlfmt, cmdp->rehash ? "*" : nullstr);
 }
 
@@ -358,12 +352,11 @@ find_command(ShellContext &sh, char *name, struct cmdentry *entry, int act, cons
 	struct tblentry *cmdp;
 	int idx;
 	int prev;
-	char *fullname;
+	std::string fullname;
 	struct stat64 statb;
 	int e;
 	int updatetbl;
 	const builtincmd *bcmd;
-	int len;
 
 	/* If name contains a slash, don't use PATH or hash table */
 	if (strchr(name, '/') != NULL) {
@@ -441,10 +434,9 @@ absfail:
 	e = ENOENT;
 	idx = -1;
 loop:
-	while ((len = padvance(sh, &path, name)) >= 0) {
+	while (padvance(sh, &path, name, fullname) >= 0) {
 		const char *lpathopt = sh.pathopt;
 
-		fullname = stackblock();
 		idx++;
 		if (lpathopt) {
 			if (*lpathopt == 'b') {
@@ -465,7 +457,7 @@ loop:
 			TRACE(("searchexec \"%s\": no change\n", name));
 			goto success;
 		}
-		while (stat64(fullname, &statb) < 0) {
+		while (stat64(fullname.c_str(), &statb) < 0) {
 #ifdef SYSV
 			if (errno == EINTR)
 				continue;
@@ -484,9 +476,9 @@ loop:
 			goto success;
 		}
 		e = EACCES;	/* if we fail, this will be the error */
-		if (!test_exec(sh, fullname, &statb))
+		if (!test_exec(sh, fullname.c_str(), &statb))
 			continue;
-		TRACE(("searchexec \"%s\" returns \"%s\"\n", name, fullname));
+		TRACE(("searchexec \"%s\" returns \"%s\"\n", name, fullname.c_str()));
 		if (!updatetbl) {
 			entry->cmdtype = CMDNORMAL;
 			entry->u.index = idx;
@@ -801,14 +793,15 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 	switch (entry.cmdtype) {
 	case CMDNORMAL: {
 		int j = entry.u.index;
-		char *p;
+		std::string pathbuf;
+		const char *p;
 		if (j == -1) {
 			p = command;
 		} else {
 			do {
-				padvance(sh, &path, command);
+				padvance(sh, &path, command, pathbuf);
 			} while (--j >= 0);
-			p = stackblock();
+			p = pathbuf.c_str();
 		}
 		if (verbose) {
 			outfmt(sh, out, " is%s %s",

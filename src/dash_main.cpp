@@ -44,8 +44,8 @@ static dash::ShellResult<void> read_profile(ShellContext &sh, const char *name);
 static dash::ShellResult<void>
 read_profile(ShellContext &sh, const char *name)
 {
-	name = expandstr(sh, name);
-	if (auto _r = setinputfile(sh, name, INPUT_PUSH_FILE | INPUT_NOFILE_OK); !_r || *_r < 0)
+	std::string expanded = expandstr(sh, name);
+	if (auto _r = setinputfile(sh, expanded.c_str(), INPUT_PUSH_FILE | INPUT_NOFILE_OK); !_r || *_r < 0)
 		return {};
 
 	auto r = cmdloop(sh);
@@ -126,8 +126,6 @@ resume:
 				take(read_profile(sh, shinit));
 			}
 		}
-		if (!failed)
-			clear_stack_temps(sh);
 	}
 	if (!failed && state < 4) {
 		state = 4;
@@ -160,7 +158,6 @@ handle_err:
 			flushout(sh, sh.out2);
 #endif
 		}
-		clear_stack_temps(sh);
 		barrier();
 		sh.suppressint = 0;
 		if (sh.intpending) {

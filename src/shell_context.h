@@ -34,7 +34,6 @@
 #include "options.h"
 #include "output.h"
 #include "parser.h"
-#include "stackstr.h"
 #include "system.h"
 #include "var.h"
 
@@ -60,8 +59,6 @@ void changelocale(ShellContext &sh, std::string_view val);
 
 struct ShellContext {
 	using signal_map_type = std::unordered_map<int, std::string_view>;
-
-	StackStr stackstr;
 
 	struct output output = {
 		nullptr, nullptr, nullptr, BUFSIZ, 1, 0
@@ -94,8 +91,6 @@ struct ShellContext {
 	int vforked = 0;
 	int jobctl = 0;
 	int job_warning = 0;
-	char *cmdnextc = nullptr;
-
 	char defifsvar[sizeof("IFS= \t\n")] = "IFS= \t\n";
 	char defoptindvar[sizeof("OPTIND=1")] = "OPTIND=1";
 	int lineno = 0;
@@ -125,7 +120,6 @@ struct ShellContext {
 	};
 	struct var *vartab[39] = {};
 
-	char *expdest = nullptr;
 	const std::vector<Node::ptr> *argbackq = nullptr;
 	std::size_t argbackq_i = 0;
 	struct ifsregion ifsfirst = {};
