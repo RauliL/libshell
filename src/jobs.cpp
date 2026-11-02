@@ -298,7 +298,6 @@ out:
 dash::ShellResult<int>
 killcmd(ShellContext &sh, int argc, char **argv)
 {
-	extern const char *const signal_names[];
 	int signo = -1;
 	int list = 0;
 	int i;
@@ -354,7 +353,7 @@ usage:
 		if (!*argv) {
 			outstr(sh, "0\n", out);
 			for (i = 1; i < NSIG; i++) {
-				outfmt(sh, out, snlfmt, signal_names[i]);
+				outfmt(sh, out, snlfmt, sh.find_signal_name(i).value_or("").data());
 			}
 			return 0;
 		}
@@ -362,7 +361,7 @@ usage:
 		if (signo > 128)
 			signo -= 128;
 		if (0 < signo && signo < NSIG)
-			outfmt(sh, out, snlfmt, signal_names[signo]);
+			outfmt(sh, out, snlfmt, sh.find_signal_name(signo).value_or("").data());
 		else
 			return sh_error(sh, "invalid signal number or exit status: %s",
 				 *argv);

@@ -242,7 +242,7 @@ dotcmd(ShellContext &sh, int argc, char **argv)
 		if (!fullname_r)
 			return tl::unexpected(fullname_r.error());
 		std::string fullname = *std::move(fullname_r);
-		TRY_SHV(setinputfile(sh, fullname.c_str(), INPUT_PUSH_FILE));
+		TRY_SHV(setinputfile(sh, fullname, INPUT_PUSH_FILE));
 		sh.commandname = fullname;
 		auto r = cmdloop(sh);
 		popfile(sh);

@@ -225,3 +225,16 @@ pstrcmp(const void *a, const void *b)
 	return std::strcmp(*static_cast<const char *const *>(a),
 			   *static_cast<const char *const *>(b));
 }
+
+std::string
+ascii_upper(std::string_view s)
+{
+	std::string out(s);
+
+	for (auto &c : out)
+	{
+		c = std::toupper(c);
+	}
+
+	return out;
+}

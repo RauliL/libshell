@@ -3,9 +3,6 @@ dash
 init.c
 init.cpp
 mkinit
-mksignames
 mksyntax
-signames.c
-signames.cpp
 syntax.[ch]
 syntax.cpp

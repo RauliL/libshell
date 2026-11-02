@@ -74,6 +74,7 @@ dash::ShellResult<int> number(ShellContext &sh, std::string_view);
 bool is_number(std::string_view);
 char *single_quote(ShellContext &sh, const char *);
 int pstrcmp(const void *, const void *);
+std::string ascii_upper(std::string_view);
 
 inline bool equal(const char *s1, const char *s2)
 {

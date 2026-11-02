@@ -1,5 +1,4 @@
-#ifndef SHELL_CONTEXT_H
-#define SHELL_CONTEXT_H
+#pragma once
 
 /*
  * One shell. Mutable shell state lives here so the program can be used as a
@@ -60,6 +59,8 @@ void getoptsreset(ShellContext &sh, std::string_view val);
 void changelocale(ShellContext &sh, std::string_view val);
 
 struct ShellContext {
+	using signal_map_type = std::unordered_map<int, std::string_view>;
+
 	StackStr stackstr;
 
 	struct output output = {
@@ -197,6 +198,8 @@ struct ShellContext {
 	FILE *tracefile = nullptr;
 #endif
 
+	signal_map_type signal_map;
+
 	inline static ShellContext *signaled = nullptr;
 
 	ShellContext()
@@ -214,19 +217,20 @@ struct ShellContext {
 	 * Parse and execute a shell script from a string. One-shot entry
 	 * point for embedding and for -c / eval / traps.
 	 */
-	dash::ShellResult<int> eval(const std::string &script,
-				    EvalFlags flags = {});
+	dash::ShellResult<int> eval(const std::string &script, EvalFlags flags = {});
 
 	/*
 	 * Interactive parse/eval loop over the current input (prompting,
 	 * ignoreeof). Used by the dash executable's main loop.
 	 */
 	dash::ShellResult<int> run_interactive();
+
+	std::optional<std::string_view> find_signal_name(int signal) const;
+
+	std::optional<int> find_signal_number(std::string_view name, int minsig) const;
 };
 
 inline char *bltinlookup(ShellContext &sh, std::string_view name)
 {
 	return lookupvar(sh, name);
 }
-
-#endif

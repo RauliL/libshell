@@ -209,6 +209,7 @@ set(DASH_SOURCES
   src/parser.cpp
   src/redir.cpp
   src/show.cpp
+  src/signames.cpp
   src/system.cpp
   src/trap.cpp
   src/var.cpp
@@ -224,10 +225,8 @@ endforeach()
 
 add_executable(mkinit src/mkinit.cpp)
 add_executable(mksyntax src/mksyntax.cpp)
-add_executable(mksignames src/mksignames.cpp)
 dash_configure_tool(mkinit)
 dash_configure_tool(mksyntax)
-dash_configure_tool(mksignames)
 
 add_custom_command(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
@@ -246,24 +245,15 @@ add_custom_command(
   COMMENT "Generating syntax tables"
 )
 
-add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/signames.cpp"
-  COMMAND mksignames "${CMAKE_CURRENT_BINARY_DIR}/signames.cpp"
-  DEPENDS mksignames
-  COMMENT "Generating signal names"
-)
-
 set_source_files_properties(
   ${DASH_SOURCES}
   "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
-  "${CMAKE_CURRENT_BINARY_DIR}/signames.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
   PROPERTIES OBJECT_DEPENDS
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.h")
 
 set(DASH_GENERATED_SOURCES
   "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
-  "${CMAKE_CURRENT_BINARY_DIR}/signames.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
 )
 

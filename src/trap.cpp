@@ -63,8 +63,6 @@
 #define S_HARD_IGN 4		/* signal is ignored permenantly */
 #define S_RESET 5		/* temporary - to reset a hard ignored sig */
 
-extern const char *const signal_names[];
-
 static void signal_entry(int signo)
 {
 	if (ShellContext::signaled)
@@ -102,7 +100,7 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 			if (sh.trap[signo]) {
 				out1fmt(sh, "trap -- %s %s\n",
 					single_quote(sh, sh.trap[signo]->c_str()),
-					signal_names[signo]
+                    sh.find_signal_name(signo).value_or("").data()
 				);
 			}
 		}
@@ -355,20 +353,12 @@ decode_signum(ShellContext &sh, std::string_view string)
 int
 decode_signal(ShellContext &sh, std::string_view string, int minsig)
 {
-	int signo;
+	int signo = decode_signum(sh, string);
 
-	signo = decode_signum(sh, string);
 	if (signo >= 0)
 		return signo;
 
-	std::string tmp(string);
-	for (signo = minsig; signo < NSIG; signo++) {
-		if (!strcasecmp(tmp.c_str(), signal_names[signo])) {
-			return signo;
-		}
-	}
-
-	return -1;
+	return sh.find_signal_number(string, minsig).value_or(-1);
 }
 
 void
