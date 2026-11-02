@@ -71,10 +71,6 @@
  * Shell command parser.
  */
 
-/* values returned by readtoken */
-#include "token_vars.h"
-
-
 
 /* Used by expandstr to get here-doc like behaviour (address only). */
 static const std::string fake_eofmark;
@@ -86,7 +82,8 @@ struct heredoc {
 	struct heredoc *next = nullptr;	/* next here document in list */
 	Node *here = nullptr;	/* redirection Node */
 	std::string eofmark;		/* string indicating end of input */
-	int striptabs = 0;		/* if set, strip leading tabs */
+	/** If set, strip leading tabs. */
+	bool striptabs = false;
 };
 
 struct synstack {
@@ -103,18 +100,24 @@ struct synstack {
 };
 
 
-
-	/* list of here documents to read */
-			/* if set, prompt the user */
-			/* true if interactive and at start of line */
-			/* last token read */
-		/* last token pushed back */
-			/* text of last word returned by readtoken */
-
-
-
-
-			/* set if (part of) last token was quoted */
+static const std::unordered_map<std::string_view, Token> keyword_map = {
+	{ "!", Token::Not },
+	{ "case", Token::Case },
+	{ "do", Token::Do },
+	{ "done", Token::Done },
+	{ "elif", Token::Elif },
+	{ "else", Token::Else },
+	{ "esac", Token::Esac },
+	{ "fi", Token::Fi },
+	{ "for", Token::For },
+	{ "if", Token::If },
+	{ "in", Token::In },
+	{ "then", Token::Then },
+	{ "until", Token::Until },
+	{ "while", Token::While },
+	{ "{", Token::Begin },
+	{ "}", Token::End },
+};
 
 
 static Node::ptr list(ShellContext &sh, int nlflag, bool *eof_out = nullptr);
@@ -128,7 +131,7 @@ static void parseheredoc(ShellContext &sh);
 static Token readtoken(ShellContext &sh);
 static Token xxreadtoken(ShellContext &sh);
 static int pgetc_eatbnl(ShellContext &sh);
-static Token readtoken1(ShellContext &sh, int, char const *, const std::string *, int);
+static Token readtoken1(ShellContext &sh, int, char const *, const std::string *, bool);
 static void synexpect(ShellContext &sh, std::optional<Token> = std::nullopt) __attribute__((__noreturn__));
 static void synerror(ShellContext &sh, const char *) __attribute__((__noreturn__));
 static void setprompt(ShellContext &sh, int);
@@ -157,6 +160,7 @@ isassignment(std::string_view p)
 	return n < p.size() && p[n] == '=';
 }
 
+
 bool
 issimplecmd(Node *n, std::string_view name)
 {
@@ -164,16 +168,148 @@ issimplecmd(Node *n, std::string_view name)
 	       as<Node::Arg>(as<Node::Command>(n)->args.get())->text == name;
 }
 
+
 static inline bool
 realeofmark(const std::string *eofmark)
 {
 	return eofmark && eofmark != FAKEEOFMARK;
 }
 
+
 static void
 grabstackblock(ShellContext &sh, std::size_t len)
 {
 	stackstr_commit(sh, len);
+}
+
+
+/**
+ * Returns textual description of token.
+ */
+static const char*
+token_name(Token t)
+{
+	switch (t)
+	{
+		case Token::Eof:
+			return "end of file";
+
+		case Token::Blank:
+			return "blank";
+
+		case Token::Nl:
+			return "newline";
+
+		case Token::Semi:
+			return "\";\"";
+
+		case Token::Backgnd:
+			return "\"&\"";
+
+		case Token::And:
+			return "\"&&\"";
+
+		case Token::Or:
+			return "\"||\"";
+
+		case Token::Pipe:
+			return "\"|\"";
+
+		case Token::Lp:
+			return "\"(\"";
+
+		case Token::Rp:
+			return "\")\"";
+
+		case Token::Endcase:
+			return "\";;\"";
+
+		case Token::Endbquote:
+			return "\"`\"";
+
+		case Token::Redir:
+			return "redirection";
+
+		case Token::Word:
+			return "word";
+
+		case Token::Not:
+			return "\"!\"";
+
+		case Token::Case:
+			return "\"case\"";
+
+		case Token::Do:
+			return "\"do\"";
+
+		case Token::Done:
+			return "\"done\"";
+
+		case Token::Elif:
+			return "\"elif\"";
+
+		case Token::Else:
+			return "\"else\"";
+
+		case Token::Esac:
+			return "\"esac\"";
+
+		case Token::Fi:
+			return "\"fi\"";
+
+		case Token::For:
+			return "\"for\"";
+
+		case Token::If:
+			return "\"if\"";
+
+		case Token::In:
+			return "\"in\"";
+
+		case Token::Then:
+			return "\"then\"";
+
+		case Token::Until:
+			return "\"until\"";
+
+		case Token::While:
+			return "\"while\"";
+
+		case Token::Begin:
+			return "\"{\"";
+
+		case Token::End:
+			return "\"}\"";
+	}
+
+	return "unknown";
+}
+
+
+/**
+ * Tests whether given token is considered to mark end of a list.
+ */
+static bool is_end_of_list_token(Token t)
+{
+	switch (t)
+	{
+		case Token::Eof:
+		case Token::Rp:
+		case Token::Endcase:
+		case Token::Endbquote:
+		case Token::Do:
+		case Token::Done:
+		case Token::Elif:
+		case Token::Else:
+		case Token::Esac:
+		case Token::Fi:
+		case Token::Then:
+		case Token::End:
+			return true;
+
+		default:
+			return false;
+	}
 }
 
 
@@ -226,7 +362,7 @@ out_eof:
 		}
 
 		sh.tokpushback++;
-		if (nlflag == 2 && tokendlist[to_int(tok)])
+		if (nlflag == 2 && is_end_of_list_token(tok))
 			return n1;
 		nlflag |= 2;
 
@@ -394,7 +530,7 @@ command(ShellContext &sh)
 		n1->type = (sh.lasttoken == Token::While)? Node::Type::While : Node::Type::Until;
 		as<Node::Binary>(n1)->ch1 = list(sh, 0);
 		if ((got=readtoken(sh)) != Token::Do) {
-TRACE(("expecting DO got %s %s\n", tokname[to_int(got)], got == Token::Word ? sh.wordtext.c_str() : ""));
+TRACE(("expecting DO got %s %s\n", token_name(got), got == Token::Word ? sh.wordtext.c_str() : ""));
 			synexpect(sh, Token::Do);
 		}
 		as<Node::Binary>(n1)->ch2 = list(sh, 0);
@@ -753,7 +889,7 @@ top:
 		if (const auto pp = findkwd(sh.wordtext)) {
 			t = *pp;
 			sh.lasttoken = t;
-			TRACE(("keyword %s recognized\n", tokname[to_int(t)]));
+			TRACE(("keyword %s recognized\n", token_name(t)));
 			goto out;
 		}
 	}
@@ -770,9 +906,9 @@ top:
 out:
 #ifdef DEBUG
 	if (!alreadyseen)
-	    TRACE(("token %s %s\n", tokname[to_int(t)], t == Token::Word ? sh.wordtext.c_str() : ""));
+	    TRACE(("token %s %s\n", token_name(t), t == Token::Word ? sh.wordtext.c_str() : ""));
 	else
-	    TRACE(("reread token %s %s\n", tokname[to_int(t)], t == Token::Word ? sh.wordtext.c_str() : ""));
+	    TRACE(("reread token %s %s\n", token_name(t), t == Token::Word ? sh.wordtext.c_str() : ""));
 #endif
 	return (t);
 }
@@ -1019,7 +1155,7 @@ dollarsq_escape(ShellContext &sh, char *out)
 #define	PARSEARITH()	{goto parsearith; parsearith_return:;}
 
 static Token
-readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *eofmark, int striptabs)
+readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *eofmark, bool striptabs)
 {
 	struct synstack synbase = {
 		.syntax = syntax,
@@ -1316,7 +1452,7 @@ parseredir: {
 	Node::ptr np;
 	Node::Type redir_type;
 	int default_fd;
-	int striptabs = 0;
+	bool striptabs = false;
 
 	if (c == '>') {
 		default_fd = 1;
@@ -1337,7 +1473,7 @@ parseredir: {
 		case '<':
 			redir_type = Node::Type::Here;
 			if ((c = pgetc_eatbnl(sh)) == '-') {
-				striptabs = 1;
+				striptabs = true;
 			} else {
 				pungetc(sh);
 			}
@@ -1704,9 +1840,9 @@ synexpect(ShellContext &sh, std::optional<Token> token)
 
 	if (token) {
 		fmtstr(sh, msg, 64, "%s unexpected (expecting %s)",
-			tokname[to_int(sh.lasttoken)], tokname[to_int(*token)]);
+			token_name(sh.lasttoken), token_name(*token));
 	} else {
-		fmtstr(sh, msg, 64, "%s unexpected", tokname[to_int(sh.lasttoken)]);
+		fmtstr(sh, msg, 64, "%s unexpected", token_name(sh.lasttoken));
 	}
 	synerror(sh, msg);
 	/* NOTREACHED */
@@ -1849,9 +1985,9 @@ getprompt(ShellContext &sh, void *unused)
 std::optional<Token>
 findkwd(std::string_view s)
 {
-	const auto it = parsekwd.find(s);
+	const auto it = keyword_map.find(s);
 
-	if (it != std::end(parsekwd)) {
+	if (it != std::end(keyword_map)) {
 		return it->second;
 	}
 

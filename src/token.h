@@ -39,8 +39,3 @@ enum class Token : std::uint8_t {
 	Begin = 28,
 	End = 29,
 };
-
-constexpr std::underlying_type_t<Token> to_int(Token t) noexcept
-{
-	return static_cast<std::underlying_type_t<Token>>(t);
-}
