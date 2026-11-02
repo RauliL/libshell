@@ -192,7 +192,7 @@ struct localvar {
 struct localvar_list;
 
 
-/* varinit / defifsvar / linenovar live on ShellContext; macros require &sh. */
+/* varinit / defifsvar live on ShellContext; macros require &sh. */
 
 #define vifs (sh.varinit[0])
 #define vpath (&vifs)[1]

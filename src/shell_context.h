@@ -99,8 +99,6 @@ struct ShellContext {
 	char defifsvar[sizeof("IFS= \t\n")] = "IFS= \t\n";
 	char defoptindvar[sizeof("OPTIND=1")] = "OPTIND=1";
 	int lineno = 0;
-	char linenovar[sizeof("LINENO=") + sizeof(int) * CHAR_BIT / 3 + 1] = "LINENO=";
-	char ppidbuf[32] = "PPID=";
 	struct localvar_list *localvar_stack = nullptr;
 
 	static constexpr int varinit_len =
@@ -117,7 +115,7 @@ struct ShellContext {
 		{ nullptr, VarFlag::str_fixed, "PS4=+ ", nullptr },
 		{ nullptr, VarFlag::str_fixed | VarFlag::nofunc, defoptindvar, getoptsreset },
 #ifdef WITH_LINENO
-		{ nullptr, VarFlag::str_fixed, linenovar, nullptr },
+		{ nullptr, VarFlag::str_fixed, "LINENO=", nullptr },
 #endif
 		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_ALL=", changelocale },
 		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_COLLATE=", changelocale },

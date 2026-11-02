@@ -36,6 +36,7 @@
 #include <alloca.h>
 #endif
 
+#include <format>
 #include <limits.h>
 #include <optional>
 #include <type_traits>
@@ -1836,15 +1837,15 @@ endofname(std::string_view name)
 static void
 synexpect(ShellContext &sh, std::optional<Token> token)
 {
-	char msg[64];
+	std::string msg;
 
 	if (token) {
-		fmtstr(sh, msg, 64, "%s unexpected (expecting %s)",
+		msg = std::format("{} unexpected (expecting {})",
 			token_name(sh.lasttoken), token_name(*token));
 	} else {
-		fmtstr(sh, msg, 64, "%s unexpected", token_name(sh.lasttoken));
+		msg = std::format("{} unexpected", token_name(sh.lasttoken));
 	}
-	synerror(sh, msg);
+	synerror(sh, msg.c_str());
 	/* NOTREACHED */
 }
 

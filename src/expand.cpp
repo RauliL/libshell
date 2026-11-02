@@ -40,6 +40,7 @@
 #ifdef HAVE_GLOB
 #include <glob.h>
 #endif
+#include <format>
 #include <inttypes.h>
 #include <limits.h>
 #ifdef HAVE_GETPWNAM
@@ -2130,11 +2131,8 @@ casematch(ShellContext &sh, Node *pattern, char *val)
 static size_t
 cvtnum(ShellContext &sh, intmax_t num, int flags)
 {
-	int len = max_int_length(sizeof(num));
-	char buf[len];
-
-	len = fmtstr(sh, buf, len, "%" PRIdMAX, num);
-	return memtodest(sh, buf, len, flags);
+	auto buf = std::format("{}", num);
+	return memtodest(sh, buf.c_str(), buf.size(), flags);
 }
 
 static tl::unexpected<dash::ShellErr>

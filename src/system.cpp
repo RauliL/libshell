@@ -54,11 +54,11 @@
 #undef isxdigit
 #endif
 
+#include <format>
 #include <signal.h>
 #include <string.h>
 
 #include "error.h"
-#include "output.h"
 #include "system.h"
 
 #ifndef HAVE_MEMPCPY
@@ -94,7 +94,8 @@ char *strsignal(int sig)
 
 	if ((unsigned)sig < NSIG && sys_siglist[sig])
 		return (char *)sys_siglist[sig];
-	fmtstr(buf, sizeof(buf), "Signal %d", sig); 
+	auto r = std::format_to_n(buf, sizeof(buf) - 1, "Signal {}", sig);
+	*r.out = '\0';
 	return buf;
 }
 #endif

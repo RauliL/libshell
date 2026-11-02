@@ -33,6 +33,7 @@
  */
 
 #include <cstring>
+#include <format>
 #include <locale.h>
 #include <string>
 #include <vector>
@@ -121,8 +122,8 @@ static struct var ** findvar(ShellContext &sh, std::string_view);
 INCLUDE <unistd.h>
 INCLUDE <sys/types.h>
 INCLUDE <sys/stat.h>
+INCLUDE <format>
 INCLUDE "cd.h"
-INCLUDE "output.h"
 INCLUDE "var.h"
 
 INIT {
@@ -142,8 +143,7 @@ INIT {
 	setvareq(sh, sh.defifsvar);
 	setvareq(sh, sh.defoptindvar);
 
-	fmtstr(sh, sh.ppidbuf + 5, sizeof(sh.ppidbuf) - 5, "%ld", (long) getppid());
-	setvareq(sh, sh.ppidbuf);
+	setvareq(sh, std::format("PPID={}", getppid()));
 
 	p = lookupvar(sh, "PWD");
 	if (p)
@@ -246,11 +246,7 @@ setvar(ShellContext &sh, const std::string &name, std::optional<std::string> val
 dash::ShellResult<intmax_t>
 setvarint(ShellContext &sh, const std::string &name, intmax_t val, VarFlags flags)
 {
-	int len = max_int_length(sizeof(val));
-	char buf[len];
-
-	fmtstr(sh, buf, len, "%" PRIdMAX, val);
-	TRY_SHV(setvar(sh, name, buf, flags));
+	TRY_SHV(setvar(sh, name, std::format("{}", val), flags));
 	return val;
 }
 
@@ -327,9 +323,7 @@ lookupvar(ShellContext &sh, std::string_view name)
 	if ((v = *findvar(sh, name)) && !v->flags.test(VarFlag::unset)) {
 #ifdef WITH_LINENO
 		if (v == &vlineno) {
-			fmtstr(sh, sh.linenovar + 7, sizeof(sh.linenovar) - 7,
-			       "%d", sh.lineno);
-			v->text = sh.linenovar;
+			v->text = std::format("LINENO={}", sh.lineno);
 		}
 #endif
 		return const_cast<char *>(strchrnul(v->text.c_str(), '=')) + 1;

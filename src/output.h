@@ -60,8 +60,6 @@ void outfmt(ShellContext &sh, struct output *, const char *, ...)
     __attribute__((__format__(__printf__,3,4)));
 void out1fmt(ShellContext &sh, const char *, ...)
     __attribute__((__format__(__printf__,2,3)));
-int fmtstr(ShellContext &sh, char *, size_t, const char *, ...)
-    __attribute__((__format__(__printf__,4,5)));
 dash::ShellResult<int> xasprintf(ShellContext &sh, std::string &, const char *, ...);
 void doformat(ShellContext &sh, struct output *, const char *, va_list);
 int xwrite(ShellContext &sh, int, const void *, size_t);

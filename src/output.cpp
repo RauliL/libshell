@@ -175,19 +175,6 @@ out1fmt(ShellContext &sh, const char *fmt, ...)
 }
 
 
-int
-fmtstr(ShellContext &sh, char *outbuf, size_t length, const char *fmt, ...)
-{
-	va_list ap;
-	int ret;
-
-	va_start(ap, fmt);
-	ret = xvsnprintf(sh, outbuf, length, fmt, ap);
-	va_end(ap);
-	return ret > (int)length ? length : ret;
-}
-
-
 static dash::ShellResult<int>
 xvasprintf(ShellContext &sh, char **sp, size_t size, std::string &overflow,
 	   const char *f, va_list ap)

@@ -49,7 +49,10 @@
 #include <sys/ioctl.h>
 
 #include <algorithm>
+#include <cstring>
+#include <format>
 #include <memory>
+#include <string>
 #include <string_view>
 
 #include "shell.h"
@@ -90,7 +93,7 @@
 #define DOWAIT_WAITCMD_ALL 4
 
 static void set_curjob(ShellContext &sh, Job *, unsigned);
-static int sprint_status(ShellContext &sh, char *, int, int);
+static int sprint_status(char *, int, int);
 static void freejob(ShellContext &sh, Job *);
 static dash::ShellResult<Job *> getjob(ShellContext &sh, const char *, int);
 static void forkchild(ShellContext &sh, Job *, Node *, int);
@@ -442,7 +445,7 @@ out:
 }
 #endif
 static int
-sprint_status(ShellContext &sh, char *os, int status, int sigonly)
+sprint_status(char *os, int status, int sigonly)
 {
 	char *s = os;
 	int st;
@@ -470,7 +473,7 @@ sprint_status(ShellContext &sh, char *os, int status, int sigonly)
 #endif
 	} else if (!sigonly) {
 		if (st)
-			s += fmtstr(sh, s, 16, "Done(%d)", st);
+			s = stpcpy(s, std::format("Done({})", st).c_str());
 		else
 			s = stpcpy(s, "Done");
 	}
@@ -496,7 +499,11 @@ showjob(ShellContext &sh, struct output *out, Job *jp, int mode)
 		return;
 	}
 
-	col = fmtstr(sh, s, 16, "[%d]   ", jp->number());
+	{
+		auto t = std::format("[{}]   ", jp->number());
+		col = static_cast<int>(t.size());
+		memcpy(s, t.c_str(), t.size() + 1);
+	}
 	indent = col;
 
 	if (!sh.job_order.empty() && jp == sh.job_order.front())
@@ -504,8 +511,11 @@ showjob(ShellContext &sh, struct output *out, Job *jp, int mode)
 	else if (sh.job_order.size() > 1 && jp == sh.job_order[1])
 		s[col - 2] = '-';
 
-	if (mode & SHOW_PID)
-		col += fmtstr(sh, s + col, 16, "%d ", jp->procs[0].pid);
+	if (mode & SHOW_PID) {
+		auto t = std::format("{} ", jp->procs[0].pid);
+		memcpy(s + col, t.c_str(), t.size() + 1);
+		col += static_cast<int>(t.size());
+	}
 
 	if (jp->state == Job::State::Running) {
 		scopy("Running", s + col);
@@ -516,15 +526,19 @@ showjob(ShellContext &sh, struct output *out, Job *jp, int mode)
 		if (jp->state == Job::State::Stopped)
 			status = jp->stopstatus;
 #endif
-		col += sprint_status(sh, s + col, status, 0);
+		col += sprint_status(s + col, status, 0);
 	}
 
 	goto start;
 
 	do {
 		/* for each process */
-		col = fmtstr(sh, s, 48, " |\n%*c%d ", indent, ' ',
-			jp->procs[pi].pid) - 3;
+		{
+			auto t = std::format(" |\n{:{}c}{} ", ' ', indent,
+				jp->procs[pi].pid);
+			memcpy(s, t.c_str(), t.size() + 1);
+			col = static_cast<int>(t.size()) - 3;
+		}
 
 start:
 		outfmt(sh, out, "%s%*c%s",
@@ -1091,7 +1105,7 @@ out:
 		char s[48 + 1];
 		int len;
 
-		len = sprint_status(sh, s, status, 1);
+		len = sprint_status(s, status, 1);
 		if (len) {
 			s[len] = '\n';
 			s[len + 1] = 0;
