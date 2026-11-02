@@ -37,11 +37,11 @@ short profile_buf[16384];
 extern int etext();
 #endif
 
-dash::ShellResult<int> run_interactive(ShellContext &sh);
+shell::Result<int> run_interactive(ShellContext &sh);
 
-static dash::ShellResult<void> read_profile(ShellContext &sh, const char *name);
+static shell::Result<void> read_profile(ShellContext &sh, const char *name);
 
-static dash::ShellResult<void>
+static shell::Result<void>
 read_profile(ShellContext &sh, const char *name)
 {
 	std::string expanded = expandstr(sh, name);
@@ -58,7 +58,7 @@ read_profile(ShellContext &sh, const char *name)
 /*
  * Executable entry.  ShellResult replaces setjmp for interactive recovery:
  * abort the current stage and continue (profiles → ENV → main loop), or
- * exit when non-interactive / EXEXIT / EXEND.
+ * exit when non-interactive / shell::Error::Exit / shell::Error::End.
  */
 static int
 run(ShellContext &sh, int argc, char **argv)
@@ -83,7 +83,7 @@ run(ShellContext &sh, int argc, char **argv)
 	init(sh);
 
 resume:
-	dash::ShellErr err{};
+	shell::Error err{};
 	bool failed = false;
 
 	if (state == 0) {
@@ -141,18 +141,18 @@ resume:
 	}
 
 	if (failed) {
-		int ecode = err.code;
+		shell::Error ecode = err;
 
 handle_err:
 		exitreset(sh);
 		sh.exception = ecode;
-		if (ecode == EXEND || ecode == EXEXIT || state == 0 ||
+		if (ecode == shell::Error::End || ecode == shell::Error::Exit || state == 0 ||
 		    iflag == 0 || sh.shlvl)
 			goto exit;
 
 		reset(sh);
 
-		if (ecode == EXINT) {
+		if (ecode == shell::Error::Interrupt) {
 			out2c('\n');
 #ifdef FLUSHERR
 			flushout(sh, sh.out2);
@@ -162,7 +162,7 @@ handle_err:
 		sh.suppressint = 0;
 		if (sh.intpending) {
 			auto u = onint(sh);
-			ecode = u.value().code; /* tl::unexpected<ShellErr>::value */
+			ecode = u.value(); /* tl::unexpected<ShellErr>::value */
 			goto handle_err;
 		}
 		goto resume;

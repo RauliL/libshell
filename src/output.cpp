@@ -175,7 +175,7 @@ out1fmt(ShellContext &sh, const char *fmt, ...)
 }
 
 
-static dash::ShellResult<int>
+static shell::Result<int>
 xvasprintf(ShellContext &sh, char **sp, size_t size, std::string &overflow,
 	   const char *f, va_list ap)
 {
@@ -197,7 +197,7 @@ xvasprintf(ShellContext &sh, char **sp, size_t size, std::string &overflow,
 }
 
 
-dash::ShellResult<int>
+shell::Result<int>
 xasprintf(ShellContext &sh, std::string &out, const char *f, ...)
 {
 	va_list ap;

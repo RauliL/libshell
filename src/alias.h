@@ -1,5 +1,3 @@
-#ifndef ALIAS_H
-#define ALIAS_H
 /*-
  * Copyright (c) 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,9 +33,10 @@
  *
  *	@(#)alias.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
 
 #include <string>
-#include <string_view>
+
 #include "error.h"
 
 #define ALIASINUSE	1
@@ -52,8 +51,7 @@ struct alias {
 
 struct ShellContext;
 struct alias *lookupalias(ShellContext &sh, std::string_view, int);
-dash::ShellResult<int> aliascmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> unaliascmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> unalias(ShellContext &sh, std::string_view);
+shell::Result<int> aliascmd(ShellContext &sh, int, char **);
+shell::Result<int> unaliascmd(ShellContext &sh, int, char **);
+shell::Result<int> unalias(ShellContext &sh, std::string_view);
 void printalias(ShellContext &sh, const struct alias *);
-#endif

@@ -1,5 +1,3 @@
-#ifndef REDIR_H
-#define REDIR_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,6 +33,8 @@
  *
  *	@(#)redir.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
+
 #include <filesystem>
 
 #include "error.h"
@@ -46,13 +46,11 @@
 struct redirtab;
 struct Node;
 struct ShellContext;
-dash::ShellResult<void> redirect(ShellContext &sh, Node *, int);
-dash::ShellResult<void> popredir(ShellContext &sh, int);
-dash::ShellResult<int> savefd(ShellContext &sh, int, int);
-dash::ShellResult<int> redirectsafe(ShellContext &sh, Node *, int);
-dash::ShellResult<void> unwindredir(ShellContext &sh, struct redirtab *stop);
+shell::Result<void> redirect(ShellContext &sh, Node *, int);
+shell::Result<void> popredir(ShellContext &sh, int);
+shell::Result<int> savefd(ShellContext &sh, int, int);
+shell::Result<int> redirectsafe(ShellContext &sh, Node *, int);
+shell::Result<void> unwindredir(ShellContext &sh, struct redirtab *stop);
 struct redirtab *pushredir(ShellContext &sh, Node *redir);
-dash::ShellResult<int> sh_open(ShellContext &sh, const std::filesystem::path &pathname, int flags, int mayfail);
-dash::ShellResult<int> sh_pipe(ShellContext &sh, int pip[2], int memfd);
-
-#endif
+shell::Result<int> sh_open(ShellContext &sh, const std::filesystem::path &pathname, int flags, int mayfail);
+shell::Result<int> sh_pipe(ShellContext &sh, int pip[2], int memfd);

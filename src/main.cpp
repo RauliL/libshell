@@ -60,13 +60,13 @@ int *dash_errno;
 #include "parse_error.h"
 #include "show.h"
 
-static dash::ShellResult<std::string> find_dot_file(ShellContext &sh, char *);
+static shell::Result<std::string> find_dot_file(ShellContext &sh, char *);
 
 /*
  * Top-level interactive parse/eval loop: prompting, ignoreeof, and
  * recovering from parse errors at the prompt.
  */
-dash::ShellResult<int>
+shell::Result<int>
 run_interactive(ShellContext &sh)
 {
 	int status = 0;
@@ -100,8 +100,8 @@ run_interactive(ShellContext &sh)
 				numeof = 0;
 				auto r = evaltree(sh, n, {});
 				if (!r) {
-					sh.exception = r.error().code;
-					if (r.error().code == EXERROR) {
+					sh.exception = r.error();
+					if (r.error() == shell::Error::Generic) {
 						skip = sh.evalskip;
 						if (skip) {
 							sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
@@ -137,10 +137,10 @@ run_interactive(ShellContext &sh)
 /*
  * Read and execute commands until EOF.  No prompting or other interactive
  * behaviour — used for scripts, -c companions, `.`, and sourced files.
- * EXERROR is converted to an exit status at this boundary; EXEXIT/EXEND/EXINT
+ * shell::Error::Generic is converted to an exit status at this boundary; shell::Error::Exit/EXEND/EXINT
  * propagate as ShellResult errors to the driver.
  */
-dash::ShellResult<int>
+shell::Result<int>
 cmdloop(ShellContext &sh)
 {
 	int status = 0;
@@ -160,8 +160,8 @@ cmdloop(ShellContext &sh)
 			sh.job_warning = (sh.job_warning == 2) ? 1 : 0;
 			auto r = evaltree(sh, n, {});
 			if (!r) {
-				sh.exception = r.error().code;
-				if (r.error().code == EXERROR)
+				sh.exception = r.error();
+				if (r.error() == shell::Error::Generic)
 					return sh.exitstatus;
 				return r;
 			}
@@ -184,7 +184,7 @@ cmdloop(ShellContext &sh)
 /*
  * Read a file containing shell functions / commands.
  */
-dash::ShellResult<void>
+shell::Result<void>
 readcmdfile(ShellContext &sh, std::string_view name)
 {
 	TRY_SHV(setinputfile(sh, name, INPUT_PUSH_FILE));
@@ -199,7 +199,7 @@ readcmdfile(ShellContext &sh, std::string_view name)
  * Take commands from a file.  To be compatible we should do a path
  * search for the file, which is necessary to find sub-commands.
  */
-static dash::ShellResult<std::string>
+static shell::Result<std::string>
 find_dot_file(ShellContext &sh, char *basename)
 {
 	const char *path = pathval();
@@ -221,7 +221,7 @@ find_dot_file(ShellContext &sh, char *basename)
 	return sh_error(sh, "%s: not found", basename);
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 dotcmd(ShellContext &sh, int argc, char **argv)
 {
 	int status = 0;
@@ -246,7 +246,7 @@ dotcmd(ShellContext &sh, int argc, char **argv)
 	return status;
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 exitcmd(ShellContext &sh, int argc, char **argv)
 {
 	if (stoppedjobs(sh))
@@ -255,5 +255,5 @@ exitcmd(ShellContext &sh, int argc, char **argv)
 	if (argc > 1)
 		sh.savestatus = TRY_SH(number(sh, argv[1]));
 
-	return exraise(sh, EXEXIT);
+	return exraise(sh, shell::Error::Exit);
 }

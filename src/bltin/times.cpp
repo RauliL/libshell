@@ -8,7 +8,7 @@
 #include "system.h"
 #include "bltin.h"
 
-dash::ShellResult<int>
+shell::Result<int>
 timescmd(ShellContext &sh, int argc, char *argv[])
 {
 	struct tms buf;

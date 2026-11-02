@@ -70,7 +70,7 @@ static void signal_entry(int signo)
 }
 
 static int decode_signum(ShellContext &sh, std::string_view);
-MKINIT dash::ShellResult<void> clear_traps(ShellContext &sh, Node *);
+MKINIT shell::Result<void> clear_traps(ShellContext &sh, Node *);
 
 #ifdef mkinit
 INCLUDE "memalloc.h"
@@ -86,7 +86,7 @@ FORKRESET {
 }
 #endif
 
-dash::ShellResult<int>
+shell::Result<int>
 trapcmd(ShellContext &sh, int argc, char **argv)
 {
 	const char *action;
@@ -139,7 +139,7 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 	return 0;
 }
 
-dash::ShellResult<void>
+shell::Result<void>
 clear_traps(ShellContext &sh, Node *n)
 {
 	int simplecmd;
@@ -266,7 +266,7 @@ onsig(ShellContext &sh, int signo)
 	}
 }
 
-dash::ShellResult<void>
+shell::Result<void>
 dotrap(ShellContext &sh)
 {
 	char *q;

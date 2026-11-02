@@ -95,7 +95,7 @@ prefix(const char *string, const char *pfx)
 	return const_cast<char *>(string + head.size());
 }
 
-tl::unexpected<dash::ShellErr>
+tl::unexpected<shell::Error>
 badnum(ShellContext &sh, std::string_view s)
 {
 	std::string tmp(s);
@@ -105,7 +105,7 @@ badnum(ShellContext &sh, std::string_view s)
 /*
  * Convert a string into an integer of type intmax_t.  Alow trailing spaces.
  */
-dash::ShellResult<intmax_t>
+shell::Result<intmax_t>
 atomax(ShellContext &sh, std::string_view s, int base)
 {
 	std::string tmp(s);
@@ -131,7 +131,7 @@ atomax(ShellContext &sh, std::string_view s, int base)
 	return r;
 }
 
-dash::ShellResult<intmax_t>
+shell::Result<intmax_t>
 atomax10(ShellContext &sh, std::string_view s)
 {
 	return atomax(sh, s, 10);
@@ -142,7 +142,7 @@ atomax10(ShellContext &sh, std::string_view s)
  * failure.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 number(ShellContext &sh, std::string_view s)
 {
 	intmax_t n = TRY_SH(atomax10(sh, s));

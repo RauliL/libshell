@@ -17,7 +17,7 @@ constexpr unsigned BUILTIN_ASSIGN = 0x4;
 
 struct builtincmd {
 	const char *name;
-	dash::ShellResult<int> (*builtin)(ShellContext &, int, char **);
+	shell::Result<int> (*builtin)(ShellContext &, int, char **);
 	unsigned flags;
 };
 

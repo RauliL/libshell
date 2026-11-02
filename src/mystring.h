@@ -1,5 +1,3 @@
-#ifndef MYSTRING_H
-#define MYSTRING_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,6 +33,7 @@
  *
  *	@(#)mystring.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -68,10 +67,10 @@ extern const char dotdir[];
 
 struct ShellContext;
 char *prefix(const char *, const char *);
-tl::unexpected<dash::ShellErr> badnum(ShellContext &sh, std::string_view s);
-dash::ShellResult<intmax_t> atomax(ShellContext &sh, std::string_view, int);
-dash::ShellResult<intmax_t> atomax10(ShellContext &sh, std::string_view);
-dash::ShellResult<int> number(ShellContext &sh, std::string_view);
+tl::unexpected<shell::Error> badnum(ShellContext &sh, std::string_view s);
+shell::Result<intmax_t> atomax(ShellContext &sh, std::string_view, int);
+shell::Result<intmax_t> atomax10(ShellContext &sh, std::string_view);
+shell::Result<int> number(ShellContext &sh, std::string_view);
 bool is_number(std::string_view);
 std::string single_quote(const char *);
 int pstrcmp(const void *, const void *);
@@ -86,4 +85,3 @@ inline void scopy(const char *from, char *to)
 {
 	std::strcpy(to, from);
 }
-#endif

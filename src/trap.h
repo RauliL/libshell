@@ -1,5 +1,3 @@
-#ifndef TRAP_H
-#define TRAP_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,9 +33,9 @@
  *
  *	@(#)trap.h	8.3 (Berkeley) 6/5/95
  */
+#pragma once
 
-#include <signal.h>
-#include <string_view>
+#include <csignal>
 
 extern int trapcnt;
 extern char sigmode[];
@@ -45,15 +43,12 @@ extern volatile sig_atomic_t pending_sig;
 extern volatile sig_atomic_t gotsigchld;
 
 struct ShellContext;
-#include "result.h"
 
-dash::ShellResult<int> trapcmd(ShellContext &sh, int, char **);
+shell::Result<int> trapcmd(ShellContext &sh, int, char **);
 void setsignal(ShellContext &sh, int);
 void ignoresig(ShellContext &sh, int);
 void onsig(ShellContext &sh, int);
-dash::ShellResult<void> dotrap(ShellContext &sh);
+shell::Result<void> dotrap(ShellContext &sh);
 void exitshell(ShellContext &sh) __attribute__((__noreturn__));
 int decode_signal(ShellContext &sh, std::string_view, int);
 void sigblockall(ShellContext &sh, sigset_t *oldmask);
-
-#endif

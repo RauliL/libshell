@@ -76,7 +76,7 @@
  *  @param ap argument (variable) list
  *  @param len length of line including trailing '\0'
  */
-static dash::ShellResult<void>
+static shell::Result<void>
 readcmd_handle_line(ShellContext &sh, ExpandBuf &eb, char *s, int ac, char **ap)
 {
 	ArgList fields;
@@ -113,7 +113,7 @@ readcmd_handle_line(ShellContext &sh, ExpandBuf &eb, char *s, int ac, char **ap)
  * This uses unbuffered input, which may be avoidable in some cases.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 readcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *prompt;
@@ -209,7 +209,7 @@ start:
  * Public domain.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 umaskcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *ap;
@@ -405,7 +405,7 @@ printlim(ShellContext &sh, enum limtype how, const struct rlimit *limit,
 	}
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 ulimitcmd(ShellContext &sh, int argc, char **argv)
 {
 	int	c;

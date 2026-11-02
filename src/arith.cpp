@@ -694,7 +694,7 @@ Result<intmax_t> Evaluator::eval(const ExprPtr &expr)
 } /* namespace arith */
 } /* namespace dash */
 
-dash::ShellResult<intmax_t>
+shell::Result<intmax_t>
 arith(ShellContext &sh, std::string_view s)
 {
 	std::string expr(s);

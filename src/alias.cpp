@@ -49,11 +49,11 @@
 
 #define ATABSIZE 39
 
-static dash::ShellResult<void> setalias(ShellContext &sh, const char *, const char *);
+static shell::Result<void> setalias(ShellContext &sh, const char *, const char *);
 static struct alias * freealias(ShellContext &sh, struct alias *);
 static struct alias ** __lookupalias(ShellContext &sh, std::string_view);
 
-static dash::ShellResult<void>
+static shell::Result<void>
 setalias(ShellContext &sh, const char *name, const char *val)
 {
 	struct alias *ap, **app;
@@ -84,7 +84,7 @@ setalias(ShellContext &sh, const char *name, const char *val)
 	return {};
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 unalias(ShellContext &sh, std::string_view name)
 {
 	struct alias **app;
@@ -101,7 +101,7 @@ unalias(ShellContext &sh, std::string_view name)
 	return 1;
 }
 
-static dash::ShellResult<void>
+static shell::Result<void>
 rmaliases(ShellContext &sh)
 {
 	struct alias *ap, **app;
@@ -131,7 +131,7 @@ lookupalias(ShellContext &sh, std::string_view name, int check)
 	return (ap);
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 aliascmd(ShellContext &sh, int argc, char **argv)
 {
 	char *n, *v;
@@ -162,7 +162,7 @@ aliascmd(ShellContext &sh, int argc, char **argv)
 	return ret;
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 unaliascmd(ShellContext &sh, int argc, char **argv)
 {
 	int i;

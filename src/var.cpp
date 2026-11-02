@@ -210,7 +210,7 @@ initvar(ShellContext &sh)
  * flags of the variable.  If val is nullopt, the variable is unset.
  */
 
-dash::ShellResult<struct var *>
+shell::Result<struct var *>
 setvar(ShellContext &sh, const std::string &name, std::optional<std::string> val,
        VarFlags flags)
 {
@@ -243,7 +243,7 @@ setvar(ShellContext &sh, const std::string &name, std::optional<std::string> val
  * ored with the flags of the variable.
  */
 
-dash::ShellResult<intmax_t>
+shell::Result<intmax_t>
 setvarint(ShellContext &sh, const std::string &name, intmax_t val, VarFlags flags)
 {
 	TRY_SHV(setvar(sh, name, std::format("{}", val), flags));
@@ -258,7 +258,7 @@ setvarint(ShellContext &sh, const std::string &name, intmax_t val, VarFlags flag
  * Called with interrupts off.
  */
 
-dash::ShellResult<struct var *>
+shell::Result<struct var *>
 setvareq(ShellContext &sh, std::string s, VarFlags flags)
 {
 	static const VarFlags special =
@@ -331,7 +331,7 @@ lookupvar(ShellContext &sh, std::string_view name)
 	return NULL;
 }
 
-dash::ShellResult<intmax_t>
+shell::Result<intmax_t>
 lookupvarint(ShellContext &sh, std::string_view name)
 {
 	return atomax(sh, lookupvar(sh, name) ?: nullstr, 0);
@@ -372,7 +372,7 @@ listvars(ShellContext &sh, VarFlags on, VarFlags off)
  * For now just roll 'em through qsort for printing...
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 showvars(ShellContext &sh, std::string_view prefix, VarFlags on, VarFlags off)
 {
 	const char *sep;
@@ -410,7 +410,7 @@ showvars(ShellContext &sh, std::string_view prefix, VarFlags on, VarFlags off)
  * The export and readonly commands.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 exportcmd(ShellContext &sh, int argc, char **argv)
 {
 	struct var *vp;
@@ -447,7 +447,7 @@ exportcmd(ShellContext &sh, int argc, char **argv)
  * The "local" command.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 localcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *name;
@@ -470,7 +470,7 @@ localcmd(ShellContext &sh, int argc, char **argv)
  * "-" as a special case.
  */
 
-dash::ShellResult<void>
+shell::Result<void>
 mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
 {
 	struct localvar *lvp;
@@ -514,7 +514,7 @@ mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
  * Interrupts must be off.
  */
 
-static dash::ShellResult<void>
+static shell::Result<void>
 poplocalvars(ShellContext &sh)
 {
 	struct localvar_list *ll;
@@ -554,7 +554,7 @@ poplocalvars(ShellContext &sh)
 /*
  * Create a new localvar environment.
  */
-dash::ShellResult<struct localvar_list *>
+shell::Result<struct localvar_list *>
 pushlocalvars(ShellContext &sh, int push)
 {
 	struct localvar_list *ll;
@@ -576,7 +576,7 @@ out:
 }
 
 
-dash::ShellResult<void>
+shell::Result<void>
 unwindlocalvars(ShellContext &sh, struct localvar_list *stop)
 {
 	while (sh.localvar_stack != stop)
@@ -591,7 +591,7 @@ unwindlocalvars(ShellContext &sh, struct localvar_list *stop)
  * with the same name.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 unsetcmd(ShellContext &sh, int argc, char **argv)
 {
 	char **ap;
@@ -618,7 +618,7 @@ unsetcmd(ShellContext &sh, int argc, char **argv)
  * Unset the specified variable.
  */
 
-dash::ShellResult<void>
+shell::Result<void>
 unsetvar(ShellContext &sh, const std::string &s)
 {
 	TRY_SHV(setvar(sh, s, std::nullopt));

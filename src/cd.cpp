@@ -67,12 +67,12 @@
 #define CD_PHYSICAL 1
 #define CD_PRINT 2
 
-static dash::ShellResult<int> docd(ShellContext &sh, const char *, int);
-static dash::ShellResult<std::optional<std::string>> updatepwd(ShellContext &sh, const char *);
+static shell::Result<int> docd(ShellContext &sh, const char *, int);
+static shell::Result<std::optional<std::string>> updatepwd(ShellContext &sh, const char *);
 static std::string getpwd(ShellContext &sh);
-static dash::ShellResult<int> cdopt(ShellContext &sh);
+static shell::Result<int> cdopt(ShellContext &sh);
 
-static dash::ShellResult<int>
+static shell::Result<int>
 cdopt(ShellContext &sh)
 {
 	int flags = 0;
@@ -89,7 +89,7 @@ cdopt(ShellContext &sh)
 	return flags;
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 cdcmd(ShellContext &sh, int argc, char **argv)
 {
 	const char *dest;
@@ -161,7 +161,7 @@ out:
  * know that the current directory has sh.changed.
  */
 
-static dash::ShellResult<int>
+static shell::Result<int>
 docd(ShellContext &sh, const char *dest, int flags)
 {
 	std::optional<std::string> logical;
@@ -198,7 +198,7 @@ out:
  * cd command.
  */
 
-static dash::ShellResult<std::optional<std::string>>
+static shell::Result<std::optional<std::string>>
 updatepwd(ShellContext &sh, const char *dir)
 {
 	std::string path;
@@ -289,7 +289,7 @@ getpwd(ShellContext &sh)
 	return {};
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 pwdcmd(ShellContext &sh, int argc, char **argv)
 {
 	int flags;
@@ -305,7 +305,7 @@ pwdcmd(ShellContext &sh, int argc, char **argv)
 	return 0;
 }
 
-dash::ShellResult<void>
+shell::Result<void>
 setpwd(ShellContext &sh, std::optional<std::string_view> val, int setold,
        bool refresh_phys)
 {

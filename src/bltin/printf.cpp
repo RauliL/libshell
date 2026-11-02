@@ -76,7 +76,7 @@ static void check_conversion(ShellContext &sh, const char *, const char *);
 }
 
 #define ASPF(out, f, func) ({ \
-	dash::ShellResult<int> ret; \
+	shell::Result<int> ret; \
 	switch ((char *)param - (char *)array) { \
 	default: \
 		ret = xasprintf(sh, out, f, array[0], array[1], func); \
@@ -94,7 +94,7 @@ static void check_conversion(ShellContext &sh, const char *, const char *);
 })
 
 
-static dash::ShellResult<int>
+static shell::Result<int>
 print_escape_str(ShellContext &sh, const char *f, int *param, int *array, char *s)
 {
 	int done;
@@ -127,7 +127,7 @@ print_escape_str(ShellContext &sh, const char *f, int *param, int *array, char *
 }
 
 
-dash::ShellResult<int>
+shell::Result<int>
 printfcmd(ShellContext &sh, int argc, char *argv[])
 {
 	char *fmt;
@@ -152,9 +152,9 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 		/*
 		 * Basic algorithm is to scan the format string for conversion
 		 * specifications -- once one is found, find out if the field
-		 * width or precision is a '*'; if it is, gather up value. 
+		 * width or precision is a '*'; if it is, gather up value.
 		 * Note, format strings are reused as necessary to use up the
-		 * provided arguments, arguments of zero/null string are 
+		 * provided arguments, arguments of zero/null string are
 		 * provided to use up the format string.
 		 */
 
@@ -273,7 +273,7 @@ out:
 
 
 /*
- * Print SysV echo(1) style escape string 
+ * Print SysV echo(1) style escape string
  *	Halts processing string if a \c escape is encountered.
  */
 static int
@@ -302,10 +302,10 @@ putchar:
 			goto putchar;
 		}
 
-		/* 
+		/*
 		 * %b string octal constants are not like those in C.
-		 * They start with a \0, and are followed by 0, 1, 2, 
-		 * or 3 octal digits. 
+		 * They start with a \0, and are followed by 0, 1, 2,
+		 * or 3 octal digits.
 		 */
 		if (ch == '0' && isodigit(str[1]))
 			str++;
@@ -320,7 +320,7 @@ putchar:
 }
 
 /*
- * Print "standard" escape characters 
+ * Print "standard" escape characters
  */
 unsigned
 conv_escape(ShellContext &sh, char *str0, char *out0, bool mbchar)
@@ -560,7 +560,7 @@ check_conversion(ShellContext &sh, const char *s, const char *ep)
 	}
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 echocmd(ShellContext &sh, int argc, char **argv)
 {
 	const char *lastfmt = snlfmt;

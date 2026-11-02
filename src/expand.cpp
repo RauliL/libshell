@@ -46,19 +46,18 @@
 #ifdef HAVE_GETPWNAM
 #include <pwd.h>
 #endif
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 #include <algorithm>
 #include <iterator>
 #include <string>
-#include <string.h>
+#include <cstring>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <wchar.h>
-#include <wctype.h>
+#include <cwchar>
+#include <cwctype>
 
 /*
  * Routines to expand arguments to commands.  We have to deal with
@@ -125,22 +124,22 @@ struct ifs_state {
 
 
 
-static dash::ShellResult<char *> argstr(ShellContext &sh, ExpandBuf &eb, char *p, int flag);
+static shell::Result<char *> argstr(ShellContext &sh, ExpandBuf &eb, char *p, int flag);
 static char * exptilde(ShellContext &sh, ExpandBuf &eb, char *startp, int flag);
-static dash::ShellResult<char *> expari(ShellContext &sh, ExpandBuf &eb, char *start, int flag);
-static dash::ShellResult<void> expbackq(ShellContext &sh, ExpandBuf &eb, Node *, int);
-static dash::ShellResult<char *> evalvar(ShellContext &sh, ExpandBuf &eb, char *, int);
+static shell::Result<char *> expari(ShellContext &sh, ExpandBuf &eb, char *start, int flag);
+static shell::Result<void> expbackq(ShellContext &sh, ExpandBuf &eb, Node *, int);
+static shell::Result<char *> evalvar(ShellContext &sh, ExpandBuf &eb, char *, int);
 static size_t strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, int flags);
 static size_t memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, int flags);
-static dash::ShellResult<ssize_t> varvalue(ShellContext &sh, ExpandBuf &eb, char *, int, unsigned);
-static dash::ShellResult<void> expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &);
+static shell::Result<ssize_t> varvalue(ShellContext &sh, ExpandBuf &eb, char *, int, unsigned);
+static shell::Result<void> expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &);
 static void addglob(ShellContext &sh, const glob64_t *);
 static char * expmeta(ShellContext &sh, ExpandBuf &eb, char *, unsigned, size_t);
 static void addfname(ShellContext &sh, char *);
 static int patmatch(ShellContext &sh, char *, const char *, ExpandBuf *eb = nullptr);
 static int pmatch(ShellContext &sh, char *, const char *);
 static size_t cvtnum(ShellContext &sh, ExpandBuf &eb, intmax_t num, int flags);
-static tl::unexpected<dash::ShellErr> varunset(ShellContext &sh, const char *, const char *, const char *, int);
+static tl::unexpected<shell::Error> varunset(ShellContext &sh, const char *, const char *, const char *, int);
 
 
 /*
@@ -224,7 +223,7 @@ getpwhome(ShellContext &sh, const char *name)
  * here document expansion.
  */
 
-dash::ShellResult<void>
+shell::Result<void>
 expandarg(ShellContext &sh, Node *arg, ArgList *alist, int flag)
 {
 	ExpandBuf eb;
@@ -255,7 +254,7 @@ expandarg(ShellContext &sh, Node *arg, ArgList *alist, int flag)
 	return {};
 }
 
-dash::ShellResult<std::string>
+shell::Result<std::string>
 expandarg_to_string(ShellContext &sh, Node *arg, int flag)
 {
 	ExpandBuf eb;
@@ -278,7 +277,7 @@ expandarg_to_string(ShellContext &sh, Node *arg, int flag)
  * $@ like $* since no splitting will be performed.
  */
 
-static dash::ShellResult<char *>
+static shell::Result<char *>
 argstr(ShellContext &sh, ExpandBuf &eb, char *p, int flag)
 {
 	static const char spclchars[] = {
@@ -458,7 +457,7 @@ lose:
 }
 
 
-dash::ShellResult<void>
+shell::Result<void>
 removerecordregions(ShellContext &sh, int endoff)
 {
 	if (sh.ifslastp == NULL)
@@ -503,7 +502,7 @@ removerecordregions(ShellContext &sh, int endoff)
  * Expand arithmetic expression.  Backup to start of expression,
  * evaluate, place result in (backed up) result, adjust string position.
  */
-static dash::ShellResult<char *>
+static shell::Result<char *>
 expari(ShellContext &sh, ExpandBuf &eb, char *start, int flag)
 {
 	int begoff;
@@ -547,7 +546,7 @@ out:
  * Expand stuff in backwards quotes.
  */
 
-static dash::ShellResult<void>
+static shell::Result<void>
 expbackq(ShellContext &sh, ExpandBuf &eb, Node *cmd, int flag)
 {
 	struct backcmd in;
@@ -693,7 +692,7 @@ scanright(ShellContext &sh, char *startp, char *endp, char *rmesc, char *rmescen
 	return 0;
 }
 
-static dash::ShellResult<char *>
+static shell::Result<char *>
 subevalvar(ShellContext &sh, ExpandBuf &eb, char *start, char *str, int strloc, int startloc,
 			int varflags, int flag)
 {
@@ -795,7 +794,7 @@ out:
  * Expand a variable, and return a pointer to the next character in the
  * input string.
  */
-static dash::ShellResult<char *>
+static shell::Result<char *>
 evalvar(ShellContext &sh, ExpandBuf &eb, char *p, int flag)
 {
 	int subtype;
@@ -1041,7 +1040,7 @@ strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, int flags)
  * Add the value of a specialized variable to the stack string.
  */
 
-static dash::ShellResult<ssize_t>
+static shell::Result<ssize_t>
 varvalue(ShellContext &sh, ExpandBuf &eb, char *name, int varflags, unsigned flags)
 {
 	int subtype = varflags & VSTYPE;
@@ -1495,7 +1494,7 @@ opendir_interruptible(ShellContext &sh, const char *pathname)
 #define GLOB_ALTDIRFUNC 0
 #endif
 
-static dash::ShellResult<void>
+static shell::Result<void>
 expandmeta_glob(ShellContext &sh, ArgList &strs)
 {
 	ArgList out;
@@ -1569,7 +1568,7 @@ addglob(ShellContext &sh, const glob64_t *pglob)
 	} while (*++p);
 }
 
-static dash::ShellResult<void>
+static shell::Result<void>
 expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &strs)
 {
 	/* TODO - EXP_REDIR */
@@ -2121,7 +2120,7 @@ setnesc:
  * See if a pattern matches in a case statement.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 casematch(ShellContext &sh, Node *pattern, char *val)
 {
 	ExpandBuf eb;
@@ -2147,7 +2146,7 @@ cvtnum(ShellContext &sh, ExpandBuf &eb, intmax_t num, int flags)
 	return memtodest(sh, eb, buf.c_str(), buf.size(), flags);
 }
 
-static tl::unexpected<dash::ShellErr>
+static tl::unexpected<shell::Error>
 varunset(ShellContext &sh, const char *end, const char *var, const char *umsg, int varflags)
 {
 	const char *msg;
@@ -2165,12 +2164,12 @@ varunset(ShellContext &sh, const char *end, const char *var, const char *umsg, i
 	return sh_error(sh, "%.*s: %s%s", end - var - 1, var, msg, tail);
 }
 
-dash::ShellResult<void>
+shell::Result<void>
 restore_handler_expandarg(ShellContext &sh, int err)
 {
 	if (err) {
-		if (sh.exception != EXERROR)
-			return exraise(sh, sh.exception);
+		if (sh.exception != shell::Error::Generic)
+			return exraise(sh, sh.exception.value_or(shell::Error::Interrupt));
 		ifsfree(sh);
 	}
 	return {};

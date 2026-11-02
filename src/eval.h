@@ -136,8 +136,8 @@ static_assert(std::is_trivially_destructible_v<EvalFlags>);
 
 struct ShellContext;
 struct Node;	/* BLETCH for ansi C */
-dash::ShellResult<int> evaltree(ShellContext &sh, Node *, EvalFlags);
-dash::ShellResult<void> evalbackcmd(ShellContext &sh, Node *, struct backcmd *);
+shell::Result<int> evaltree(ShellContext &sh, Node *, EvalFlags);
+shell::Result<void> evalbackcmd(ShellContext &sh, Node *, struct backcmd *);
 
 extern int evalskip;
 

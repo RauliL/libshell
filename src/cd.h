@@ -1,5 +1,3 @@
-#ifndef CD_H
-#define CD_H
 /*-
  * Copyright (c) 1995
  *	The Regents of the University of California.  All rights reserved.
@@ -31,14 +29,15 @@
  * SUCH DAMAGE.
  *
  */
+#pragma once
 
 #include <optional>
-#include <string_view>
 
 #include "error.h"
+
 struct ShellContext;
-dash::ShellResult<int> cdcmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> pwdcmd(ShellContext &sh, int, char **);
-dash::ShellResult<void> setpwd(ShellContext &sh, std::optional<std::string_view> val,
+
+shell::Result<int> cdcmd(ShellContext &sh, int, char **);
+shell::Result<int> pwdcmd(ShellContext &sh, int, char **);
+shell::Result<void> setpwd(ShellContext &sh, std::optional<std::string_view> val,
 			       int setold, bool refresh_phys = false);
-#endif

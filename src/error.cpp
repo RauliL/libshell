@@ -55,16 +55,16 @@
 #include "system.h"
 
 
-static tl::unexpected<dash::ShellErr>
-exverror(ShellContext &sh, int, const char *, va_list);
+static tl::unexpected<shell::Error>
+exverror(ShellContext &sh, shell::Error, const char *, va_list);
 
 /*
  * Raise a shell unwind.  Stores the code in sh.exception and returns
  * tl::unexpected for the caller to propagate as ShellResult.
  */
 
-tl::unexpected<dash::ShellErr>
-exraise(ShellContext &sh, int e)
+tl::unexpected<shell::Error>
+exraise(ShellContext &sh, shell::Error e)
 {
 	if (sh.vforked)
 		_exit(sh.exitstatus);
@@ -72,7 +72,8 @@ exraise(ShellContext &sh, int e)
 	INTOFF;
 
 	sh.exception = e;
-	return dash::fail(e);
+
+	return tl::unexpected(e);
 }
 
 
@@ -81,7 +82,7 @@ exraise(ShellContext &sh, int e)
  * default disposition and re-raise so the process exits.
  */
 
-tl::unexpected<dash::ShellErr>
+tl::unexpected<shell::Error>
 onint(ShellContext &sh)
 {
 
@@ -90,7 +91,8 @@ onint(ShellContext &sh)
 	signal(SIGINT, SIG_DFL);
 	::raise(SIGINT);
 	sh.exitstatus = SIGINT + 128;
-	return exraise(sh, EXINT);
+
+	return exraise(sh, shell::Error::Interrupt);
 }
 
 static void
@@ -117,8 +119,8 @@ exvwarning2(ShellContext &sh, const char *msg, va_list ap)
 
 #define exvwarning(a, b, c) exvwarning2(sh, b, c)
 
-static tl::unexpected<dash::ShellErr>
-exverror(ShellContext &sh, int cond, const char *msg, va_list ap)
+static tl::unexpected<shell::Error>
+exverror(ShellContext &sh, shell::Error cond, const char *msg, va_list ap)
 {
 #ifdef DEBUG
 	if (msg) {
@@ -135,11 +137,12 @@ exverror(ShellContext &sh, int cond, const char *msg, va_list ap)
 		exvwarning(-1, msg, ap);
 
 	flushall(sh);
+
 	return exraise(sh, cond);
 }
 
 
-tl::unexpected<dash::ShellErr>
+tl::unexpected<shell::Error>
 sh_error(ShellContext &sh, const char *msg, ...)
 {
 	va_list ap;
@@ -147,14 +150,15 @@ sh_error(ShellContext &sh, const char *msg, ...)
 	sh.exitstatus = 2;
 
 	va_start(ap, msg);
-	auto r = exverror(sh, EXERROR, msg, ap);
+	auto r = exverror(sh, shell::Error::Generic, msg, ap);
 	va_end(ap);
+
 	return r;
 }
 
 
-tl::unexpected<dash::ShellErr>
-exerror(ShellContext &sh, int cond, const char *msg, ...)
+tl::unexpected<shell::Error>
+exerror(ShellContext &sh, shell::Error cond, const char *msg, ...)
 {
 	va_list ap;
 
@@ -191,7 +195,7 @@ errmsg(int e, int action)
 
 
 #ifdef REALLY_SMALL
-dash::ShellResult<void>
+shell::Result<void>
 __inton(ShellContext &sh)
 {
 	if (--sh.suppressint == 0 && sh.intpending)

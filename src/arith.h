@@ -1,27 +1,21 @@
-#ifndef ARITH_H
-#define ARITH_H
+#pragma once
 /*
  * Modern C++ arithmetic-expression parser for $((...)) / let-style eval.
  * Builds an AST, reports errors via tl::expected (dash::Result), and evaluates
  * with short-circuit semantics matching POSIX shell arithmetic.
  */
 
-#include <cstdint>
 #include <memory>
-#include <string>
-#include <string_view>
-#include <utility>
 #include <variant>
 
-#include "result.h"
+#include <libshell.hpp>
 
 struct ShellContext;
 
-namespace dash {
-namespace arith {
+namespace dash::arith {
 
 template <typename T>
-using Result = dash::Result<T>;
+using Result = tl::expected<T, std::string>;
 
 enum class Op {
 	Add,
@@ -114,9 +108,6 @@ private:
 	ShellContext &sh_;
 };
 
-} /* namespace arith */
-} /* namespace dash */
+} /* namespace dash::arith */
 
-dash::ShellResult<intmax_t> arith(ShellContext &sh, std::string_view s);
-
-#endif
+shell::Result<intmax_t> arith(ShellContext &sh, std::string_view s);

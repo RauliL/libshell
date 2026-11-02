@@ -138,7 +138,7 @@ int pgetc_eoa(ShellContext &sh, InputStack &in);
 void pungetc(ShellContext &sh, InputStack &in);
 void pungetn(InputStack &in, int);
 void pushstring(ShellContext &sh, InputStack &in, char *, void *);
-dash::ShellResult<int> setinputfile(ShellContext &sh, InputStack &in,
+shell::Result<int> setinputfile(ShellContext &sh, InputStack &in,
 				    std::string_view, int);
 void setinputstring(ShellContext &sh, InputStack &in, char *);
 void pushstdin(ShellContext &sh, InputStack &in);
@@ -155,7 +155,7 @@ int pgetc_eoa(ShellContext &sh);
 void pungetc(ShellContext &sh);
 void pungetn(ShellContext &sh, int);
 void pushstring(ShellContext &sh, char *, void *);
-dash::ShellResult<int> setinputfile(ShellContext &sh, std::string_view, int);
+shell::Result<int> setinputfile(ShellContext &sh, std::string_view, int);
 void setinputstring(ShellContext &sh, char *);
 void pushstdin(ShellContext &sh);
 void popfile(ShellContext &sh);

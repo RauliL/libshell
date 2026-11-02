@@ -1,5 +1,3 @@
-#ifndef JOBS_H
-#define JOBS_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,14 +33,16 @@
  *
  *	@(#)jobs.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include <sys/types.h>
 #include <vector>
 
-#include "result.h"
+#include <sys/types.h>
+
+#include <libshell.hpp>
 
 #ifndef JOBS
 #define JOBS 1
@@ -99,20 +99,19 @@ struct Job {
 	void show_pipe(ShellContext &sh, struct output *out) const;
 };
 
-dash::ShellResult<void> setjobctl(ShellContext &, int);
-dash::ShellResult<int> killcmd(ShellContext &, int, char **);
-dash::ShellResult<int> fgcmd(ShellContext &, int, char **);
-dash::ShellResult<int> bgcmd(ShellContext &, int, char **);
-dash::ShellResult<int> jobscmd(ShellContext &, int, char **);
+shell::Result<void> setjobctl(ShellContext &, int);
+shell::Result<int> killcmd(ShellContext &, int, char **);
+shell::Result<int> fgcmd(ShellContext &, int, char **);
+shell::Result<int> bgcmd(ShellContext &, int, char **);
+shell::Result<int> jobscmd(ShellContext &, int, char **);
 void showjobs(ShellContext &, struct output *, int);
-dash::ShellResult<int> waitcmd(ShellContext &, int, char **);
+shell::Result<int> waitcmd(ShellContext &, int, char **);
 Job *makejob(ShellContext &, int);
-dash::ShellResult<int> forkshell(ShellContext &, Job *, Node *, int);
-dash::ShellResult<Job *> vforkexec(ShellContext &, Node *, char **, const char *, int);
-dash::ShellResult<int> waitforjob(ShellContext &, Job *);
+shell::Result<int> forkshell(ShellContext &, Job *, Node *, int);
+shell::Result<Job *> vforkexec(ShellContext &, Node *, char **, const char *, int);
+shell::Result<int> waitforjob(ShellContext &, Job *);
 int stoppedjobs(ShellContext &);
 
 #if ! JOBS
 #define setjobctl(sh, on) ((void)(on))	/* do nothing */
-#endif
 #endif

@@ -102,17 +102,17 @@ const char optletters[NOPTS] = {
 
 
 
-static dash::ShellResult<int> options(ShellContext &sh, int);
-static dash::ShellResult<void> minus_o(ShellContext &sh, char *, int);
-static dash::ShellResult<void> setoption(ShellContext &sh, int, int);
-static dash::ShellResult<int> getopts(ShellContext &sh, char *, char *, char **);
+static shell::Result<int> options(ShellContext &sh, int);
+static shell::Result<void> minus_o(ShellContext &sh, char *, int);
+static shell::Result<void> setoption(ShellContext &sh, int, int);
+static shell::Result<int> getopts(ShellContext &sh, char *, char *, char **);
 
 
 /*
  * Process the shell command line arguments.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 procargs(ShellContext &sh, char **xargv)
 {
 	int i;
@@ -185,7 +185,7 @@ optschanged(ShellContext &sh)
  * to the argument list; we advance it past the options.
  */
 
-static dash::ShellResult<int>
+static shell::Result<int>
 options(ShellContext &sh, int cmdline)
 {
 	char *p;
@@ -234,7 +234,7 @@ options(ShellContext &sh, int cmdline)
 	return login;
 }
 
-static dash::ShellResult<void>
+static shell::Result<void>
 minus_o(ShellContext &sh, char *name, int val)
 {
 	int i;
@@ -264,7 +264,7 @@ minus_o(ShellContext &sh, char *name, int val)
 }
 
 
-static dash::ShellResult<void>
+static shell::Result<void>
 setoption(ShellContext &sh, int flag, int val)
 {
 	int i;
@@ -313,7 +313,7 @@ freeparam(ShellContext &sh, struct shparam *param)
  * The shift builtin command.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 shiftcmd(ShellContext &sh, int argc, char **argv)
 {
 	int n;
@@ -338,7 +338,7 @@ shiftcmd(ShellContext &sh, int argc, char **argv)
  * The set command builtin.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 setcmd(ShellContext &sh, int argc, char **argv)
 {
 	if (argc == 1)
@@ -369,7 +369,7 @@ getoptsreset(ShellContext &sh, std::string_view value)
  * then it's the first time getopts has been called.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 getoptscmd(ShellContext &sh, int argc, char **argv)
 {
 	char **optbase;
@@ -402,7 +402,7 @@ getoptscmd(ShellContext &sh, int argc, char **argv)
 	return getopts(sh, argv[1], argv[2], optbase);
 }
 
-static dash::ShellResult<int>
+static shell::Result<int>
 getopts(ShellContext &sh, char *optstr, char *optvar, char **optfirst)
 {
 	char *p, *q;
@@ -498,7 +498,7 @@ out:
  * end of input.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 nextopt(ShellContext &sh, std::string_view optstring)
 {
 	char *p;

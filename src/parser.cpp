@@ -37,37 +37,35 @@
 #endif
 
 #include <format>
-#include <limits.h>
+#include <climits>
 #include <optional>
 #include <type_traits>
-#include <stdbool.h>
-#include <stdlib.h>
+#include <cstdlib>
 #include <string>
 #include <wchar.h>
 #include <wctype.h>
 
-#include "shell.h"
-#include "expand_buf.h"
-#include "shell_context.h"
-#include "parser.h"
-#include "nodes.h"
-#include "expand.h"	/* defines rmescapes() */
+#include "alias.h"
+#include "builtins.h"
+#include "error.h"
 #include "exec.h"
-#include "syntax.h"
-#include "options.h"
+#include "expand.h"	/* defines rmescapes() */
+#include "expand_buf.h"
 #include "input.h"
 #include "jobs.h"
-#include "output.h"
-#include "var.h"
-#include "error.h"
 #include "memalloc.h"
 #include "mystring.h"
-#include "alias.h"
-#include "show.h"
-#include "builtins.h"
-#include "system.h"
+#include "nodes.h"
+#include "options.h"
+#include "output.h"
 #include "parse_error.h"
-#include "result.h"
+#include "parser.h"
+#include "shell.h"
+#include "shell_context.h"
+#include "show.h"
+#include "syntax.h"
+#include "system.h"
+#include "var.h"
 
 /*
  * Shell command parser.
@@ -1866,7 +1864,7 @@ report_parse_error(ShellContext &sh, const dash::ParseError &e)
 	sh_warnx(sh, "%s", e.what());
 }
 
-dash::Result<void>
+tl::expected<void, std::string>
 try_parse_string(ShellContext &sh, std::string_view s)
 {
 	char save_nflag = nflag;
@@ -1888,6 +1886,7 @@ try_parse_string(ShellContext &sh, std::string_view s)
 		sh.errlinno = e.lineno();
 		popfile(sh);
 		nflag = save_nflag;
+
 		return tl::unexpected(std::string(e.what()));
 	}
 }
@@ -1931,7 +1930,7 @@ expandstr(ShellContext &sh, const char *ps)
 		n.backquote = std::move(sh.backquotelist);
 
 		if (auto r = expandarg_to_string(sh, reinterpret_cast<Node *>(&n), EXP_QUOTED); !r) {
-			sh.exception = r.error().code;
+			sh.exception = r.error();
 			err = 1;
 		} else {
 			result = std::move(*r);

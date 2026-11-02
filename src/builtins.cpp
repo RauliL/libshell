@@ -18,22 +18,22 @@
 
 struct ShellContext;
 
-dash::ShellResult<int> echocmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> printfcmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> testcmd(ShellContext &sh, int argc, char **argv);
-dash::ShellResult<int> timescmd(ShellContext &sh, int argc, char *argv[]);
-dash::ShellResult<int> breakcmd(ShellContext &sh, int argc, char **argv);
-dash::ShellResult<int> returncmd(ShellContext &sh, int argc, char **argv);
-dash::ShellResult<int> falsecmd(ShellContext &sh, int argc, char **argv);
-dash::ShellResult<int> truecmd(ShellContext &sh, int argc, char **argv);
-dash::ShellResult<int> execcmd(ShellContext &sh, int argc, char **argv);
-dash::ShellResult<int> hashcmd(ShellContext &sh, int argc, char **argv);
-dash::ShellResult<int> typecmd(ShellContext &sh, int argc, char **argv);
-dash::ShellResult<int> commandcmd(ShellContext &sh, int argc, char **argv);
-dash::ShellResult<int> readcmd(ShellContext &sh, int argc, char **argv);
-dash::ShellResult<int> umaskcmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> echocmd(ShellContext &sh, int, char **);
+shell::Result<int> printfcmd(ShellContext &sh, int, char **);
+shell::Result<int> testcmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> timescmd(ShellContext &sh, int argc, char *argv[]);
+shell::Result<int> breakcmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> returncmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> falsecmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> truecmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> execcmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> hashcmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> typecmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> commandcmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> readcmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> umaskcmd(ShellContext &sh, int argc, char **argv);
 #if HAVE_GETRLIMIT
-dash::ShellResult<int> ulimitcmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> ulimitcmd(ShellContext &sh, int argc, char **argv);
 #endif
 
 namespace {

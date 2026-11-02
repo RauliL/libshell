@@ -165,7 +165,7 @@ struct ShellContext {
 	int mypid = 0;
 	int shlvl = 0;
 
-	int exception = 0;
+	std::optional<shell::Error> exception;
 	int suppressint = 0;
 	volatile sig_atomic_t intpending = 0;
 	int errlinno = 0;
@@ -209,13 +209,7 @@ struct ShellContext {
 	 * Parse and execute a shell script from a string. One-shot entry
 	 * point for embedding and for -c / eval / traps.
 	 */
-	dash::ShellResult<int> eval(const std::string &script, EvalFlags flags = {});
-
-	/*
-	 * Interactive parse/eval loop over the current input (prompting,
-	 * ignoreeof). Used by the dash executable's main loop.
-	 */
-	dash::ShellResult<int> run_interactive();
+	shell::Result<int> eval(const std::string &script, EvalFlags flags = {});
 
 	std::optional<std::string_view> find_signal_name(int signal) const;
 

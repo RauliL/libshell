@@ -95,9 +95,9 @@
 static void set_curjob(ShellContext &sh, Job *, unsigned);
 static int sprint_status(char *, int, int);
 static void freejob(ShellContext &sh, Job *);
-static dash::ShellResult<Job *> getjob(ShellContext &sh, const char *, int);
+static shell::Result<Job *> getjob(ShellContext &sh, const char *, int);
 static void forkchild(ShellContext &sh, Job *, Node *, int);
-static dash::ShellResult<void> forkparent(ShellContext &sh, Job *, Node *, int, pid_t);
+static shell::Result<void> forkparent(ShellContext &sh, Job *, Node *, int, pid_t);
 static int dowait(ShellContext &sh, int, Job *);
 #ifdef SYSV
 STATIC int onsigchild();
@@ -110,8 +110,8 @@ static void cmdputs(std::string &, std::string_view);
 static void showjob(ShellContext &sh, struct output *, Job *, int);
 
 #if JOBS
-static dash::ShellResult<int> restartjob(ShellContext &sh, Job *, int);
-static dash::ShellResult<void> xtcsetpgrp(ShellContext &sh, int, pid_t);
+static shell::Result<int> restartjob(ShellContext &sh, Job *, int);
+static shell::Result<void> xtcsetpgrp(ShellContext &sh, int, pid_t);
 #endif
 
 ProcStat &
@@ -222,7 +222,7 @@ set_curjob(ShellContext &sh, Job *jp, unsigned mode)
 
 
 
-static dash::ShellResult<void>
+static shell::Result<void>
 xxtcsetpgrp(ShellContext &sh, pid_t pgrp)
 {
 	int fd = sh.ttyfd;
@@ -234,7 +234,7 @@ xxtcsetpgrp(ShellContext &sh, pid_t pgrp)
 	return {};
 }
 
-dash::ShellResult<void>
+shell::Result<void>
 setjobctl(ShellContext &sh, int on)
 {
 	int pgrp = -1;
@@ -298,7 +298,7 @@ out:
 #endif
 
 
-dash::ShellResult<int>
+shell::Result<int>
 killcmd(ShellContext &sh, int argc, char **argv)
 {
 	int signo = -1;
@@ -389,7 +389,7 @@ usage:
 }
 
 #if JOBS
-dash::ShellResult<int>
+shell::Result<int>
 fgcmd(ShellContext &sh, int argc, char **argv)
 {
 	Job *jp;
@@ -414,7 +414,7 @@ fgcmd(ShellContext &sh, int argc, char **argv)
 	return retval;
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 bgcmd(ShellContext &sh, int argc, char **argv)
 #ifdef HAVE_ALIAS_ATTRIBUTE
 	__attribute__((__alias__("fgcmd")));
@@ -425,7 +425,7 @@ bgcmd(ShellContext &sh, int argc, char **argv)
 #endif
 
 
-static dash::ShellResult<int>
+static shell::Result<int>
 restartjob(ShellContext &sh, Job *jp, int mode)
 {
 	int status;
@@ -563,7 +563,7 @@ start:
 	}
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 jobscmd(ShellContext &sh, int argc, char **argv)
 {
 	int mode, m;
@@ -629,7 +629,7 @@ freejob(ShellContext &sh, Job *jp)
 
 
 
-dash::ShellResult<int>
+shell::Result<int>
 waitcmd(ShellContext &sh, int argc, char **argv)
 {
 	Job *job;
@@ -695,7 +695,7 @@ sigout:
  * Convert a job name to a job structure.
  */
 
-static dash::ShellResult<Job *>
+static shell::Result<Job *>
 getjob(ShellContext &sh, const char *name, int getctl)
 {
 	Job *jp;
@@ -900,7 +900,7 @@ forkchild(ShellContext &sh, Job *jp, Node *n, int mode)
 		freejob(sh, sh.job_order.front());
 }
 
-static dash::ShellResult<void>
+static shell::Result<void>
 forkparent(ShellContext &sh, Job *jp, Node *n, int mode, pid_t pid)
 {
 	if (pid < 0) {
@@ -938,7 +938,7 @@ forkparent(ShellContext &sh, Job *jp, Node *n, int mode, pid_t pid)
 	return {};
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 forkshell(ShellContext &sh, Job *jp, Node *n, int mode)
 {
 	int pid;
@@ -956,7 +956,7 @@ forkshell(ShellContext &sh, Job *jp, Node *n, int mode)
 	return pid;
 }
 
-dash::ShellResult<Job *>
+shell::Result<Job *>
 vforkexec(ShellContext &sh, Node *n, char **argv, const char *path, int idx)
 {
 	Job *jp;
@@ -1002,7 +1002,7 @@ vforkexec(ShellContext &sh, Node *n, char **argv, const char *path, int idx)
  * Called with interrupts off.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 waitforjob(ShellContext &sh, Job *jp)
 {
 	int st;
@@ -1485,7 +1485,7 @@ dostr:
 
 
 #if JOBS
-static dash::ShellResult<void>
+static shell::Result<void>
 xtcsetpgrp(ShellContext &sh, int fd, pid_t pgrp)
 {
 	int err;

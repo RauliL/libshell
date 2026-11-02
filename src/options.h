@@ -71,13 +71,13 @@ extern const char optletters[NOPTS];
 /* optlist, minusc, arg0, shellparam, argptr, optionarg, optptr: ShellContext fields */
 
 struct ShellContext;
-dash::ShellResult<int> procargs(ShellContext &sh, char **);
+shell::Result<int> procargs(ShellContext &sh, char **);
 void optschanged(ShellContext &sh);
 void setparam(ShellContext &sh, char **);
 void freeparam(ShellContext &sh, struct shparam *);
-dash::ShellResult<int> shiftcmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> setcmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> getoptscmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> nextopt(ShellContext &sh, std::string_view);
+shell::Result<int> shiftcmd(ShellContext &sh, int, char **);
+shell::Result<int> setcmd(ShellContext &sh, int, char **);
+shell::Result<int> getoptscmd(ShellContext &sh, int, char **);
+shell::Result<int> nextopt(ShellContext &sh, std::string_view);
 void getoptsreset(ShellContext &sh, std::string_view);
 #endif

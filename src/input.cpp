@@ -461,7 +461,7 @@ popstring(ShellContext &sh, InputStack &in)
  * old input onto the stack first.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 setinputfile(ShellContext &sh, InputStack &in, std::string_view fname, int flags)
 {
 	int fd;
@@ -648,7 +648,7 @@ pushstring(ShellContext &sh, char *s, void *ap)
 	pushstring(sh, sh.input, s, ap);
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 setinputfile(ShellContext &sh, std::string_view fname, int flags)
 {
 	return setinputfile(sh, sh.input, fname, flags);

@@ -1,7 +1,3 @@
-#ifndef VAR_H
-#define VAR_H
-
-#include "error.h"
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -37,6 +33,7 @@
  *
  *	@(#)var.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
 
 #include <bitset>
 #include <cstddef>
@@ -46,6 +43,8 @@
 #include <string_view>
 #include <type_traits>
 #include <vector>
+
+#include "error.h"
 
 struct ShellContext;
 
@@ -225,30 +224,30 @@ extern const char defpathvar[];
 
 struct ShellContext;
 void initvar(ShellContext &sh);
-dash::ShellResult<struct var *> setvar(ShellContext &sh, const std::string &name,
+shell::Result<struct var *> setvar(ShellContext &sh, const std::string &name,
 				       std::optional<std::string> val,
 				       VarFlags flags = {});
-dash::ShellResult<intmax_t> setvarint(ShellContext &sh, const std::string &,
+shell::Result<intmax_t> setvarint(ShellContext &sh, const std::string &,
 				      intmax_t, VarFlags flags = {});
-dash::ShellResult<struct var *> setvareq(ShellContext &sh, std::string s,
+shell::Result<struct var *> setvareq(ShellContext &sh, std::string s,
 					 VarFlags flags = {});
 char *lookupvar(ShellContext &sh, std::string_view name);
-dash::ShellResult<intmax_t> lookupvarint(ShellContext &sh, std::string_view name);
+shell::Result<intmax_t> lookupvarint(ShellContext &sh, std::string_view name);
 std::vector<char *> listvars(ShellContext &sh, VarFlags on, VarFlags off);
 inline std::vector<char *> environment(ShellContext &sh)
 {
 	return listvars(sh, VarFlag::exported, VarFlag::unset);
 }
-dash::ShellResult<int> showvars(ShellContext &sh, std::string_view prefix,
+shell::Result<int> showvars(ShellContext &sh, std::string_view prefix,
 				VarFlags on, VarFlags off);
-dash::ShellResult<int> exportcmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> localcmd(ShellContext &sh, int, char **);
-dash::ShellResult<void> mklocal(ShellContext &sh, std::string_view name,
+shell::Result<int> exportcmd(ShellContext &sh, int, char **);
+shell::Result<int> localcmd(ShellContext &sh, int, char **);
+shell::Result<void> mklocal(ShellContext &sh, std::string_view name,
 				VarFlags flags = {});
-dash::ShellResult<struct localvar_list *> pushlocalvars(ShellContext &sh, int push);
-dash::ShellResult<void> unwindlocalvars(ShellContext &sh, struct localvar_list *stop);
-dash::ShellResult<int> unsetcmd(ShellContext &sh, int, char **);
-dash::ShellResult<void> unsetvar(ShellContext &sh, const std::string &);
+shell::Result<struct localvar_list *> pushlocalvars(ShellContext &sh, int push);
+shell::Result<void> unwindlocalvars(ShellContext &sh, struct localvar_list *stop);
+shell::Result<int> unsetcmd(ShellContext &sh, int, char **);
+shell::Result<void> unsetvar(ShellContext &sh, const std::string &);
 int varcmp(std::string_view, std::string_view);
 
 static inline unsigned int hashval(std::string_view p)
@@ -270,11 +269,3 @@ static inline int varequal(std::string_view a, std::string_view b)
 {
 	return !varcmp(a, b);
 }
-
-/*
- * Search the environment of a builtin command.
- */
-
-
-
-#endif

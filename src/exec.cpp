@@ -36,8 +36,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <stdbool.h>
-#include <stdlib.h>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #ifdef HAVE_PATHS_H
@@ -99,7 +98,7 @@ static void clearcmdentry(ShellContext &sh);
 static struct tblentry * cmdlookup(ShellContext &sh, const char *, int);
 static void delete_cmd_entry(ShellContext &sh);
 static void addcmdentry(ShellContext &sh, char *, struct cmdentry *);
-static dash::ShellResult<int> describe_command(ShellContext &sh, struct output *, char *, const char *, int);
+static shell::Result<int> describe_command(ShellContext &sh, struct output *, char *, const char *, int);
 
 
 /*
@@ -145,7 +144,7 @@ shellexec(ShellContext &sh, char **argv, const char *path, int idx)
 	sh.exitstatus = exerrno;
 	TRACE(("shellexec failed for %s, errno %d, suppressint %d\n",
 		argv[0], e, sh.suppressint ));
-	exerror(sh, EXEND, "%s: %s", argv[0], errmsg(e, E_EXEC));
+	exerror(sh, shell::Error::End, "%s: %s", argv[0], errmsg(e, E_EXEC));
 	/* NOTREACHED */
 }
 
@@ -263,7 +262,7 @@ padvance_magic(ShellContext &sh, const char **path, const char *name, int magic,
 /*** Command hashing code ***/
 
 
-dash::ShellResult<int>
+shell::Result<int>
 hashcmd(ShellContext &sh, int argc, char **argv)
 {
 	struct tblentry **pp;
@@ -346,7 +345,7 @@ test_exec(ShellContext &sh, const char *fullname, struct stat64 *statb)
  * change the shellexec routine as well.
  */
 
-dash::ShellResult<void>
+shell::Result<void>
 find_command(ShellContext &sh, char *name, struct cmdentry *entry, int act, const char *path)
 {
 	struct tblentry *cmdp;
@@ -730,7 +729,7 @@ unsetfunc(ShellContext &sh, std::string_view name)
  * Locate and print what a word is...
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 typecmd(ShellContext &sh, int argc, char **argv)
 {
 	int err = 0;
@@ -742,7 +741,7 @@ typecmd(ShellContext &sh, int argc, char **argv)
 	return err;
 }
 
-static dash::ShellResult<int>
+static shell::Result<int>
 describe_command(ShellContext &sh, struct output *out, char *command,
                             const char *path, int verbose)
 {
@@ -844,7 +843,7 @@ out:
 	return 0;
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 commandcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *cmd;

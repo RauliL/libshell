@@ -1,5 +1,3 @@
-#ifndef EXEC_H
-#define EXEC_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,10 +33,7 @@
  *
  *	@(#)exec.h	8.3 (Berkeley) 6/8/95
  */
-
-#include <memory>
-#include <string>
-#include <string_view>
+#pragma once
 
 #include "nodes.h"
 
@@ -78,14 +73,14 @@ struct stat64;
 void shellexec(ShellContext &, char **, const char *, int);
 int padvance_magic(ShellContext &sh, const char **path, const char *name,
 		   int magic, std::string &out);
-dash::ShellResult<void> find_command(ShellContext &, char *, struct cmdentry *, int, const char *);
+shell::Result<void> find_command(ShellContext &, char *, struct cmdentry *, int, const char *);
 void hashcd(ShellContext &);
 void changepath(ShellContext &, std::string_view);
 void defun(ShellContext &, Node *);
 void unsetfunc(ShellContext &, std::string_view);
-dash::ShellResult<int> hashcmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> typecmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> commandcmd(ShellContext &sh, int, char **);
+shell::Result<int> hashcmd(ShellContext &sh, int, char **);
+shell::Result<int> typecmd(ShellContext &sh, int, char **);
+shell::Result<int> commandcmd(ShellContext &sh, int, char **);
 
 int test_file_access(ShellContext &sh, const char *path, int mode);
 int test_access(const struct stat64 *sp, int stmode);
@@ -95,5 +90,3 @@ inline int padvance(ShellContext &sh, const char **path, const char *name,
 {
 	return padvance_magic(sh, path, name, 1, out);
 }
-
-#endif

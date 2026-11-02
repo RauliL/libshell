@@ -87,18 +87,18 @@
 
 static void evaltreenr(ShellContext &, Node *, EvalFlags)
 	__attribute__((__noreturn__));
-static dash::ShellResult<int> evalloop(ShellContext &sh, Node *, EvalFlags);
-static dash::ShellResult<int> evalfor(ShellContext &sh, Node *, EvalFlags);
-static dash::ShellResult<int> evalcase(ShellContext &sh, Node *, EvalFlags);
-static dash::ShellResult<int> evalsubshell(ShellContext &sh, Node *, EvalFlags);
-static dash::ShellResult<void> expredir(ShellContext &sh, Node *);
-static dash::ShellResult<int> evalpipe(ShellContext &sh, Node *, EvalFlags);
-static dash::ShellResult<int> evalcommand(ShellContext &sh, Node *, EvalFlags);
-static dash::ShellResult<int> evalbltin(ShellContext &sh, const struct builtincmd *, int, char **, EvalFlags);
-static dash::ShellResult<int> evalfun(ShellContext &sh, const std::shared_ptr<Node> &, int, char **, EvalFlags);
-static dash::ShellResult<void> prehash(ShellContext &sh, Node *);
+static shell::Result<int> evalloop(ShellContext &sh, Node *, EvalFlags);
+static shell::Result<int> evalfor(ShellContext &sh, Node *, EvalFlags);
+static shell::Result<int> evalcase(ShellContext &sh, Node *, EvalFlags);
+static shell::Result<int> evalsubshell(ShellContext &sh, Node *, EvalFlags);
+static shell::Result<void> expredir(ShellContext &sh, Node *);
+static shell::Result<int> evalpipe(ShellContext &sh, Node *, EvalFlags);
+static shell::Result<int> evalcommand(ShellContext &sh, Node *, EvalFlags);
+static shell::Result<int> evalbltin(ShellContext &sh, const struct builtincmd *, int, char **, EvalFlags);
+static shell::Result<int> evalfun(ShellContext &sh, const std::shared_ptr<Node> &, int, char **, EvalFlags);
+static shell::Result<void> prehash(ShellContext &sh, Node *);
 static int eprintlist(ShellContext &sh, struct output *, const ArgList &, int);
-static dash::ShellResult<int> bltincmd(ShellContext &sh, int, char **);
+static shell::Result<int> bltincmd(ShellContext &sh, int, char **);
 
 
 STATIC const struct builtincmd bltin = {
@@ -117,7 +117,7 @@ INCLUDE "eval.h"
 
 EXITRESET {
 	if (sh.savestatus >= 0) {
-		if (sh.exception == EXEXIT || sh.evalskip == SKIPFUNCDEF)
+		if (sh.exception == shell::Error::Exit || sh.evalskip == SKIPFUNCDEF)
 			sh.exitstatus = sh.savestatus;
 		sh.savestatus = -1;
 	}
@@ -138,7 +138,7 @@ EXITRESET {
  * The eval commmand.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 evalcmd(ShellContext &sh, int argc, char **argv, EvalFlags flags)
 {
         if (argc > 1) {
@@ -165,7 +165,7 @@ parser_eof(const ShellContext &sh)
  * Execute a command or commands contained in a string.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 ShellContext::eval(const std::string &script, EvalFlags flags)
 {
 	ShellContext &sh = *this;
@@ -187,9 +187,9 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
 				child.reset(EvalFlag::exit);
 			auto r = evaltree(sh, n, child);
 			if (!r) {
-				sh.exception = r.error().code;
+				sh.exception = r.error();
 				popfile(sh);
-				if (r.error().code == EXERROR)
+				if (r.error() == shell::Error::Generic)
 					return sh.exitstatus;
 				return r;
 			}
@@ -215,11 +215,11 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
  * sh.exitstatus.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 evaltree(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	bool checkexit = false;
-	dash::ShellResult<int> (*evalfn)(ShellContext &, Node *, EvalFlags);
+	shell::Result<int> (*evalfn)(ShellContext &, Node *, EvalFlags);
 	unsigned isor;
 	int status = 0;
 
@@ -332,7 +332,7 @@ out:
 
 	if (flags.test(EvalFlag::exit)) {
 exexit:
-		return exraise(sh, EXEND);
+		return exraise(sh, shell::Error::End);
 	}
 
 	return sh.exitstatus;
@@ -371,7 +371,7 @@ skiploop(ShellContext &sh)
 }
 
 
-static dash::ShellResult<int>
+static shell::Result<int>
 evalloop(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	int skip;
@@ -403,7 +403,7 @@ evalloop(ShellContext &sh, Node *n, EvalFlags flags)
 
 
 
-static dash::ShellResult<int>
+static shell::Result<int>
 evalfor(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	ArgList args;
@@ -434,7 +434,7 @@ evalfor(ShellContext &sh, Node *n, EvalFlags flags)
 
 
 
-static dash::ShellResult<int>
+static shell::Result<int>
 evalcase(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	Node *cp;
@@ -480,7 +480,7 @@ have_traps(const ShellContext& sh)
  * Kick off a subshell to evaluate a tree.
  */
 
-static dash::ShellResult<int>
+static shell::Result<int>
 evalsubshell(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	Job *jp;
@@ -521,7 +521,7 @@ nofork:
  * Compute the names of the files in a redirection list.
  */
 
-static dash::ShellResult<void>
+static shell::Result<void>
 expredir(ShellContext &sh, Node *n)
 {
 	Node *redir;
@@ -560,7 +560,7 @@ expredir(ShellContext &sh, Node *n)
  * of all the rest.)
  */
 
-static dash::ShellResult<int>
+static shell::Result<int>
 evalpipe(ShellContext &sh, Node *n, EvalFlags flags)
 {
 	Job *jp;
@@ -625,7 +625,7 @@ evalpipe(ShellContext &sh, Node *n, EvalFlags flags)
  * Should be called with interrupts off.
  */
 
-dash::ShellResult<void>
+shell::Result<void>
 evalbackcmd(ShellContext &sh, Node *n, struct backcmd *result)
 {
 	Job *jp;
@@ -665,7 +665,7 @@ out:
 }
 
 /* Expand at least one more word into ArgList; return false if none. */
-static dash::ShellResult<bool>
+static shell::Result<bool>
 fill_arglist(ShellContext &sh, ArgList *alist, Node **argpp)
 {
 	size_t before = alist->size();
@@ -682,7 +682,7 @@ fill_arglist(ShellContext &sh, ArgList *alist, Node **argpp)
 }
 
 /* Skip `command [-p] [--]` words; set *arg0 to the real command index. */
-static dash::ShellResult<int>
+static shell::Result<int>
 parse_command_args(ShellContext &sh, ArgList *alist, Node **argpp,
 			      const char **path, size_t *arg0)
 {
@@ -726,7 +726,7 @@ parse_command_args(ShellContext &sh, ArgList *alist, Node **argpp,
  * Execute a simple command.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 evalcommand(ShellContext &sh, Node *cmd, EvalFlags flags)
 {
 	struct localvar_list *localvar_stop;
@@ -845,7 +845,7 @@ bail:
 
 		/* We have a redirection error. */
 		if (spclbltin > 0)
-			return exraise(sh, EXERROR);
+			return exraise(sh, shell::Error::Generic);
 
 		goto out;
 	}
@@ -917,8 +917,8 @@ bail:
 		auto br = evalbltin(sh, cmdentry.u.cmd, argc, argv, flags);
 		if (!br)
 			return br;
-		if (*br && !(sh.exception == EXERROR && spclbltin <= 0))
-			return exraise(sh, sh.exception);
+		if (*br && !(sh.exception == shell::Error::Generic && spclbltin <= 0))
+			return exraise(sh, sh.exception.value_or(shell::Error::Interrupt));
 		break;
 	}
 
@@ -949,7 +949,7 @@ freestdout(ShellContext &sh)
 	sh.output.flags = 0;
 }
 
-static dash::ShellResult<int>
+static shell::Result<int>
 evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv, EvalFlags flags)
 {
 	std::string savecmdname = std::move(sh.commandname);
@@ -959,16 +959,16 @@ evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv,
 	sh.argptr = argv + 1;
 	sh.optptr = NULL;			/* initialize nextopt */
 
-	dash::ShellResult<int> r;
+	shell::Result<int> r;
 	if (cmd == &builtin_eval)
 		r = evalcmd(sh, argc, argv, flags);
 	else
 		r = cmd->builtin(sh, argc, argv);
 
 	if (!r) {
-		sh.exception = r.error().code;
+		sh.exception = r.error();
 		i = 1;
-		if (r.error().code != EXERROR) {
+		if (r.error() != shell::Error::Generic) {
 			freestdout(sh);
 			sh.commandname = std::move(savecmdname);
 			return r;
@@ -987,14 +987,14 @@ evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv,
 	return i;
 }
 
-static dash::ShellResult<int>
+static shell::Result<int>
 evalfun(ShellContext &sh, const std::shared_ptr<Node> &func, int argc, char **argv, EvalFlags flags)
 {
 	struct shparam saveparam = std::move(sh.shellparam);
 	int savefuncline = sh.funcline;
 	int saveloopnest = sh.loopnest;
 	bool failed = false;
-	dash::ShellErr fail_err{};
+	shell::Error fail_err;
 
 	INTOFF;
 	sh.funcline = as<Node::Defun>(func)->linno;
@@ -1014,7 +1014,7 @@ evalfun(ShellContext &sh, const std::shared_ptr<Node> &func, int argc, char **ar
 				  flags & EvalFlag::tested);
 		if (!r) {
 			fail_err = r.error();
-			sh.exception = fail_err.code;
+			sh.exception = fail_err;
 			failed = true;
 		}
 	}
@@ -1025,7 +1025,8 @@ evalfun(ShellContext &sh, const std::shared_ptr<Node> &func, int argc, char **ar
 	INTON;
 	sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
 	if (failed)
-		return dash::fail(fail_err.code);
+		return tl::unexpected(fail_err);
+
 	return 0;
 }
 
@@ -1037,7 +1038,7 @@ evalfun(ShellContext &sh, const std::shared_ptr<Node> &func, int argc, char **ar
  * check that the name will not be subject to expansion.
  */
 
-dash::ShellResult<void>
+shell::Result<void>
 prehash(ShellContext &sh, Node *n)
 {
 	struct cmdentry entry;
@@ -1061,7 +1062,7 @@ prehash(ShellContext &sh, Node *n)
  * No command given.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 bltincmd(ShellContext &sh, int argc, char **argv)
 {
 	/*
@@ -1083,7 +1084,7 @@ bltincmd(ShellContext &sh, int argc, char **argv)
  * in the standard shell so we don't make it one here.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 breakcmd(ShellContext &sh, int argc, char **argv)
 {
 	int n = argc > 1 ? TRY_SH(number(sh, argv[1])) : 1;
@@ -1104,7 +1105,7 @@ breakcmd(ShellContext &sh, int argc, char **argv)
  * The return command.
  */
 
-dash::ShellResult<int>
+shell::Result<int>
 returncmd(ShellContext &sh, int argc, char **argv)
 {
 	int skip;
@@ -1127,21 +1128,21 @@ returncmd(ShellContext &sh, int argc, char **argv)
 }
 
 
-dash::ShellResult<int>
+shell::Result<int>
 falsecmd(ShellContext &sh, int argc, char **argv)
 {
 	return 1;
 }
 
 
-dash::ShellResult<int>
+shell::Result<int>
 truecmd(ShellContext &sh, int argc, char **argv)
 {
 	return 0;
 }
 
 
-dash::ShellResult<int>
+shell::Result<int>
 execcmd(ShellContext &sh, int argc, char **argv)
 {
 	if (argc > 1) {

@@ -35,14 +35,12 @@
  */
 #pragma once
 
-#include <cstddef>
 #include <optional>
-#include <string>
-#include <string_view>
+
+#include <tl/expected.hpp>
 
 #include "nodes.h"
 #include "token.h"
-#include "result.h"
 
 namespace dash { class ParseError; }
 
@@ -104,4 +102,4 @@ std::size_t endofname(std::string_view name);
 std::string expandstr(ShellContext &sh, const char *);
 unsigned getmbc(ShellContext &sh, int c, char *out, int mode);
 void report_parse_error(ShellContext &sh, const dash::ParseError &e);
-dash::Result<void> try_parse_string(ShellContext &sh, std::string_view s);
+tl::expected<void, std::string> try_parse_string(ShellContext &sh, std::string_view s);

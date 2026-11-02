@@ -1,5 +1,3 @@
-#ifndef ERROR_H
-#define ERROR_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,10 +33,11 @@
  *
  *	@(#)error.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
 
-#include <signal.h>
+#include <csignal>
 
-#include "result.h"
+#include <libshell.hpp>
 
 /*
  * Types of operations (passed to the errmsg routine).
@@ -48,19 +47,13 @@
 #define E_CREAT 02	/* creating a file */
 #define E_EXEC 04	/* executing a program */
 
-/* Shell unwind codes (dash::ShellErr::code). */
-#define EXINT 0		/* SIGINT received */
-#define EXERROR 1	/* a generic error */
-#define EXEND 3		/* exit the shell */
-#define EXEXIT 4	/* exit the shell via exitcmd */
-
 /*
  * Interrupt deferral macros require ShellContext &sh in scope.
  * INTON/FORCEINTON/RESTOREINT return from the enclosing ShellResult
  * function when a deferred SIGINT must unwind (via onint → exraise).
  */
 struct ShellContext;
-tl::unexpected<dash::ShellErr> onint(ShellContext &sh);
+tl::unexpected<shell::Error> onint(ShellContext &sh);
 
 #define barrier() ({ __asm__ __volatile__ ("": : :"memory"); })
 #define INTOFF \
@@ -70,7 +63,7 @@ tl::unexpected<dash::ShellErr> onint(ShellContext &sh);
 		0; \
 	})
 #ifdef REALLY_SMALL
-dash::ShellResult<void> __inton(ShellContext &sh);
+shell::Result<void> __inton(ShellContext &sh);
 #define INTON \
 	do { \
 		if (auto _r = __inton(sh); !_r) \
@@ -107,8 +100,8 @@ dash::ShellResult<void> __inton(ShellContext &sh);
 
 /* Avoid `.error()` in macros: bltin.h `#define error(...)` would rewrite it. */
 template <typename T>
-inline tl::unexpected<dash::ShellErr>
-shell_fail_of(const dash::ShellResult<T> &r)
+inline tl::unexpected<shell::Error>
+shell_fail_of(const shell::Result<T> &r)
 {
 	return tl::unexpected(r.error());
 }
@@ -128,11 +121,10 @@ shell_fail_of(const dash::ShellResult<T> &r)
 			return shell_fail_of(_try_sh_r); \
 	} while (0)
 
-tl::unexpected<dash::ShellErr> exraise(ShellContext &sh, int);
-tl::unexpected<dash::ShellErr> sh_error(ShellContext &sh, const char *, ...);
-tl::unexpected<dash::ShellErr> exerror(ShellContext &sh, int, const char *, ...);
+tl::unexpected<shell::Error> exraise(ShellContext &sh, shell::Error);
+tl::unexpected<shell::Error> sh_error(ShellContext &sh, const char *, ...);
+tl::unexpected<shell::Error> exerror(ShellContext &sh, shell::Error, const char *, ...);
 
 const char *errmsg(int, int);
 
 void sh_warnx(ShellContext &sh, const char *, ...);
-#endif

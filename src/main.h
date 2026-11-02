@@ -1,5 +1,3 @@
-#ifndef MAIN_H
-#define MAIN_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,11 +33,11 @@
  *
  *	@(#)main.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
 
-#include <errno.h>
-#include <string_view>
+#include <cerrno>
 
-#include "result.h"
+#include <libshell.hpp>
 
 struct ShellContext;
 
@@ -53,11 +51,7 @@ extern int *dash_errno;
 #define errno (*dash_errno)
 #endif
 
-dash::ShellResult<int> cmdloop(ShellContext &sh);
-dash::ShellResult<void> readcmdfile(ShellContext &sh, std::string_view);
-dash::ShellResult<int> dotcmd(ShellContext &sh, int, char **);
-dash::ShellResult<int> exitcmd(ShellContext &sh, int, char **);
-#endif
-
-
-
+shell::Result<int> cmdloop(ShellContext &sh);
+shell::Result<void> readcmdfile(ShellContext &sh, std::string_view);
+shell::Result<int> dotcmd(ShellContext &sh, int, char **);
+shell::Result<int> exitcmd(ShellContext &sh, int, char **);

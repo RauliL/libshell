@@ -33,11 +33,10 @@
  *
  *	@(#)output.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
 
-#ifndef OUTPUT_INCL
-
-#include <stdarg.h>
-#include <string>
+#include <cstdarg>
+#include <cstring>
 #include <sys/types.h>
 
 struct output {
@@ -60,7 +59,7 @@ void outfmt(ShellContext &sh, struct output *, const char *, ...)
     __attribute__((__format__(__printf__,3,4)));
 void out1fmt(ShellContext &sh, const char *, ...)
     __attribute__((__format__(__printf__,2,3)));
-dash::ShellResult<int> xasprintf(ShellContext &sh, std::string &, const char *, ...);
+shell::Result<int> xasprintf(ShellContext &sh, std::string &, const char *, ...);
 void doformat(ShellContext &sh, struct output *, const char *, va_list);
 int xwrite(ShellContext &sh, int, const void *, size_t);
 
@@ -82,6 +81,3 @@ inline void outc(ShellContext &sh, int ch, struct output *file)
 #define out1str(s)	outstr(sh, (s), sh.out1)
 #define out2str(s)	outstr(sh, (s), sh.out2)
 #define outerr(f)	(f)->flags
-
-#define OUTPUT_INCL
-#endif

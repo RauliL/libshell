@@ -12,10 +12,9 @@
 
 #include <fcntl.h>
 #include <inttypes.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdarg>
+#include <cstdlib>
+#include <cstring>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -142,12 +141,12 @@ static const struct t_op ops[] = {
 
 
 
-static tl::unexpected<dash::ShellErr> syntax(ShellContext &sh, const char *, const char *);
-static dash::ShellResult<int> oexpr(ShellContext &sh, enum token);
-static dash::ShellResult<int> aexpr(ShellContext &sh, enum token);
-static dash::ShellResult<int> nexpr(ShellContext &sh, enum token);
-static dash::ShellResult<int> primary(ShellContext &sh, enum token);
-static dash::ShellResult<int> binop(ShellContext &sh);
+static tl::unexpected<shell::Error> syntax(ShellContext &sh, const char *, const char *);
+static shell::Result<int> oexpr(ShellContext &sh, enum token);
+static shell::Result<int> aexpr(ShellContext &sh, enum token);
+static shell::Result<int> nexpr(ShellContext &sh, enum token);
+static shell::Result<int> primary(ShellContext &sh, enum token);
+static shell::Result<int> binop(ShellContext &sh);
 static int filstat(ShellContext &sh, char *, enum token);
 static enum token t_lex(ShellContext &sh, char **);
 static int isoperand(ShellContext &sh, char **);
@@ -167,7 +166,7 @@ faccessat_confused_about_superuser(ShellContext &sh)
 # endif
 #endif
 
-static inline dash::ShellResult<intmax_t>
+static inline shell::Result<intmax_t>
 getn(ShellContext &sh, const char *s)
 {
 	return atomax10(sh, s);
@@ -186,7 +185,7 @@ getop(ShellContext &sh, const char *s)
 	return NULL;
 }
 
-dash::ShellResult<int>
+shell::Result<int>
 testcmd(ShellContext &sh, int argc, char **argv)
 {
 	const struct t_op *op;
@@ -245,7 +244,7 @@ eval:
 	return res;
 }
 
-static tl::unexpected<dash::ShellErr>
+static tl::unexpected<shell::Error>
 syntax(ShellContext &sh, const char *op, const char *msg)
 {
 	if (op && *op)
@@ -254,7 +253,7 @@ syntax(ShellContext &sh, const char *op, const char *msg)
 		return error("%s", msg);
 }
 
-static dash::ShellResult<int>
+static shell::Result<int>
 oexpr(ShellContext &sh, enum token n)
 {
 	int res = 0;
@@ -271,7 +270,7 @@ oexpr(ShellContext &sh, enum token n)
 	return res;
 }
 
-static dash::ShellResult<int>
+static shell::Result<int>
 aexpr(ShellContext &sh, enum token n)
 {
 	int res = 1;
@@ -289,7 +288,7 @@ aexpr(ShellContext &sh, enum token n)
 	return res;
 }
 
-static dash::ShellResult<int>
+static shell::Result<int>
 nexpr(ShellContext &sh, enum token n)
 {
 	if (n != UNOT)
@@ -301,7 +300,7 @@ nexpr(ShellContext &sh, enum token n)
 	return !TRY_SH(nexpr(sh, n));
 }
 
-static dash::ShellResult<int>
+static shell::Result<int>
 primary(ShellContext &sh, enum token n)
 {
 	enum token nn;
@@ -348,7 +347,7 @@ primary(ShellContext &sh, enum token n)
 	return strlen(*sh.t_wp) > 0;
 }
 
-static dash::ShellResult<int>
+static shell::Result<int>
 binop(ShellContext &sh)
 {
 	const char *opnd1, *opnd2;

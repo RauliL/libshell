@@ -75,18 +75,18 @@ struct Node;
 
 struct ShellContext;
 #include "error.h"
-dash::ShellResult<void> expandarg(ShellContext &sh, Node *, ArgList *, int);
+shell::Result<void> expandarg(ShellContext &sh, Node *, ArgList *, int);
 /* Expand a single word to an owned string (here-docs, prompts, etc.). */
-dash::ShellResult<std::string> expandarg_to_string(ShellContext &sh, Node *, int);
+shell::Result<std::string> expandarg_to_string(ShellContext &sh, Node *, int);
 struct ExpandBuf;
 #define rmescapes(p) _rmescapes(sh, (p), 0, nullptr)
 char *_rmescapes(ShellContext &sh, char *, int, ExpandBuf *eb = nullptr);
-dash::ShellResult<int> casematch(ShellContext &sh, Node *, char *);
+shell::Result<int> casematch(ShellContext &sh, Node *, char *);
 void recordregion(ShellContext &sh, int, int, int);
-dash::ShellResult<void> removerecordregions(ShellContext &sh, int);
+shell::Result<void> removerecordregions(ShellContext &sh, int);
 void ifsbreakup(ShellContext &sh, char *, int, ArgList *);
 void ifsfree(ShellContext &sh);
-dash::ShellResult<void> restore_handler_expandarg(ShellContext &sh, int err);
+shell::Result<void> restore_handler_expandarg(ShellContext &sh, int err);
 void changeifs(ShellContext &sh, std::string_view);
 
 #endif
