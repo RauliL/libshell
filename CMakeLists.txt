@@ -294,7 +294,14 @@ if(BUILD_TESTING)
   target_link_libraries(parse_tests PRIVATE dash_lib Catch2::Catch2WithMain)
   dash_configure_tool(parse_tests)
 
+  add_executable(arith_tests
+    tests/arith/arith_eval_tests.cpp
+  )
+  target_link_libraries(arith_tests PRIVATE dash_lib Catch2::Catch2WithMain)
+  dash_configure_tool(arith_tests)
+
   list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")
   include(Catch)
   catch_discover_tests(parse_tests)
+  catch_discover_tests(arith_tests)
 endif()

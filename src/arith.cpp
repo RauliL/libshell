@@ -1,27 +1,16 @@
 /*
  * Arithmetic expression lexer, recursive-descent parser, and evaluator.
  */
+#include <cinttypes>
+#include <memory>
+#include <variant>
 
-#include "arith.h"
-
-#include <cctype>
-#include <climits>
-#include <cstdlib>
-#include <type_traits>
-#include <utility>
-
-#include "shell.h"
 #include "shell_context.h"
+#include "var.h"
 
-namespace dash {
-namespace arith {
 namespace {
 
-enum class TokenKind {
-	Eof,
-	Bad,
-	Num,
-	Var,
+enum class Op {
 	Add,
 	Sub,
 	Mul,
@@ -42,6 +31,7 @@ enum class TokenKind {
 	LogOr,
 	Not,
 	BitNot,
+	Neg,
 	Assign,
 	AddAssign,
 	SubAssign,
@@ -53,500 +43,117 @@ enum class TokenKind {
 	BitAndAssign,
 	BitXorAssign,
 	BitOrAssign,
-	LParen,
-	RParen,
-	QMark,
-	Colon,
+};
+
+struct AssignExpr;
+struct BinaryExpr;
+struct CondExpr;
+struct NumExpr;
+struct UnaryExpr;
+struct VarExpr;
+
+using Expr = std::variant<
+	AssignExpr,
+	BinaryExpr,
+	CondExpr,
+	NumExpr,
+	UnaryExpr,
+	VarExpr
+>;
+using ExprPtr = std::unique_ptr<Expr>;
+
+struct NumExpr {
+	std::intmax_t value;
+};
+
+struct VarExpr {
+	std::string name;
+};
+
+struct UnaryExpr {
+	Op op;
+	ExprPtr operand;
+};
+
+struct BinaryExpr {
+	Op op;
+	ExprPtr lhs;
+	ExprPtr rhs;
+};
+
+struct CondExpr {
+	ExprPtr cond;
+	ExprPtr then_expr;
+	ExprPtr else_expr;
+};
+
+struct AssignExpr {
+	Op op; /* Assign or a compound assignment */
+	std::string name;
+	ExprPtr value;
 };
 
 struct Token {
-	TokenKind kind = TokenKind::Eof;
+	enum class Type {
+		Eof,
+		Bad,
+		Num,
+		Var,
+		Add,
+		Sub,
+		Mul,
+		Div,
+		Rem,
+		LShift,
+		RShift,
+		Lt,
+		Le,
+		Gt,
+		Ge,
+		Eq,
+		Ne,
+		BitAnd,
+		BitXor,
+		BitOr,
+		LogAnd,
+		LogOr,
+		Not,
+		BitNot,
+		Assign,
+		AddAssign,
+		SubAssign,
+		MulAssign,
+		DivAssign,
+		RemAssign,
+		LShiftAssign,
+		RShiftAssign,
+		BitAndAssign,
+		BitXorAssign,
+		BitOrAssign,
+		LParen,
+		RParen,
+		QMark,
+		Colon,
+	};
+
+	Type type = Type::Eof;
 	intmax_t num = 0;
 	std::string name;
 };
 
-bool is_name_start(unsigned char c)
-{
-	return std::isalpha(c) || c == '_';
 }
 
-bool is_name_char(unsigned char c)
-{
-	return std::isalnum(c) || c == '_';
-}
+using EvalResult = tl::expected<std::intmax_t, std::string>;
+using ParseResult = tl::expected<ExprPtr, std::string>;
 
-class Lexer {
-public:
-	explicit Lexer(std::string_view input) : cur_(input.data()), end_(input.data() + input.size())
-	{
-	}
-
-	Token next()
-	{
-		while (cur_ < end_ && (*cur_ == ' ' || *cur_ == '\t' || *cur_ == '\n'))
-			++cur_;
-
-		if (cur_ >= end_ || *cur_ == '\0')
-			return Token{TokenKind::Eof};
-
-		unsigned char c = static_cast<unsigned char>(*cur_);
-
-		if (std::isdigit(c)) {
-			char *after = nullptr;
-			intmax_t val = strtoimax(cur_, &after, 0);
-			cur_ = after;
-			return Token{TokenKind::Num, val};
-		}
-
-		if (is_name_start(c)) {
-			const char *start = cur_;
-			do {
-				++cur_;
-			} while (cur_ < end_ && is_name_char(static_cast<unsigned char>(*cur_)));
-			Token tok;
-			tok.kind = TokenKind::Var;
-			tok.name.assign(start, cur_);
-			return tok;
-		}
-
-		++cur_;
-		switch (c) {
-		case '(':
-			return Token{TokenKind::LParen};
-		case ')':
-			return Token{TokenKind::RParen};
-		case '?':
-			return Token{TokenKind::QMark};
-		case ':':
-			return Token{TokenKind::Colon};
-		case '~':
-			return Token{TokenKind::BitNot};
-		case '+':
-			return Token{match('=') ? TokenKind::AddAssign : TokenKind::Add};
-		case '-':
-			return Token{match('=') ? TokenKind::SubAssign : TokenKind::Sub};
-		case '*':
-			return Token{match('=') ? TokenKind::MulAssign : TokenKind::Mul};
-		case '/':
-			return Token{match('=') ? TokenKind::DivAssign : TokenKind::Div};
-		case '%':
-			return Token{match('=') ? TokenKind::RemAssign : TokenKind::Rem};
-		case '^':
-			return Token{match('=') ? TokenKind::BitXorAssign : TokenKind::BitXor};
-		case '!':
-			return Token{match('=') ? TokenKind::Ne : TokenKind::Not};
-		case '=':
-			return Token{match('=') ? TokenKind::Eq : TokenKind::Assign};
-		case '|':
-			if (match('|'))
-				return Token{TokenKind::LogOr};
-			return Token{match('=') ? TokenKind::BitOrAssign : TokenKind::BitOr};
-		case '&':
-			if (match('&'))
-				return Token{TokenKind::LogAnd};
-			return Token{match('=') ? TokenKind::BitAndAssign : TokenKind::BitAnd};
-		case '<':
-			if (match('<'))
-				return Token{match('=') ? TokenKind::LShiftAssign : TokenKind::LShift};
-			return Token{match('=') ? TokenKind::Le : TokenKind::Lt};
-		case '>':
-			if (match('>'))
-				return Token{match('=') ? TokenKind::RShiftAssign : TokenKind::RShift};
-			return Token{match('=') ? TokenKind::Ge : TokenKind::Gt};
-		default:
-			return Token{TokenKind::Bad};
-		}
-	}
-
-private:
-	bool match(char expected)
-	{
-		if (cur_ < end_ && *cur_ == expected) {
-			++cur_;
-			return true;
-		}
-		return false;
-	}
-
-	const char *cur_;
-	const char *end_;
-};
-
-int binop_prec(TokenKind kind)
-{
-	switch (kind) {
-	case TokenKind::Mul:
-	case TokenKind::Div:
-	case TokenKind::Rem:
-		return 0;
-	case TokenKind::Add:
-	case TokenKind::Sub:
-		return 1;
-	case TokenKind::LShift:
-	case TokenKind::RShift:
-		return 2;
-	case TokenKind::Lt:
-	case TokenKind::Le:
-	case TokenKind::Gt:
-	case TokenKind::Ge:
-		return 3;
-	case TokenKind::Eq:
-	case TokenKind::Ne:
-		return 4;
-	case TokenKind::BitAnd:
-		return 5;
-	case TokenKind::BitXor:
-		return 6;
-	case TokenKind::BitOr:
-		return 7;
-	default:
-		return -1;
-	}
-}
-
-Op token_to_binop(TokenKind kind)
-{
-	switch (kind) {
-	case TokenKind::Add:
-		return Op::Add;
-	case TokenKind::Sub:
-		return Op::Sub;
-	case TokenKind::Mul:
-		return Op::Mul;
-	case TokenKind::Div:
-		return Op::Div;
-	case TokenKind::Rem:
-		return Op::Rem;
-	case TokenKind::LShift:
-		return Op::LShift;
-	case TokenKind::RShift:
-		return Op::RShift;
-	case TokenKind::Lt:
-		return Op::Lt;
-	case TokenKind::Le:
-		return Op::Le;
-	case TokenKind::Gt:
-		return Op::Gt;
-	case TokenKind::Ge:
-		return Op::Ge;
-	case TokenKind::Eq:
-		return Op::Eq;
-	case TokenKind::Ne:
-		return Op::Ne;
-	case TokenKind::BitAnd:
-		return Op::BitAnd;
-	case TokenKind::BitXor:
-		return Op::BitXor;
-	case TokenKind::BitOr:
-		return Op::BitOr;
-	default:
-		return Op::Add;
-	}
-}
-
-bool is_assign_op(TokenKind kind)
-{
-	switch (kind) {
-	case TokenKind::Assign:
-	case TokenKind::AddAssign:
-	case TokenKind::SubAssign:
-	case TokenKind::MulAssign:
-	case TokenKind::DivAssign:
-	case TokenKind::RemAssign:
-	case TokenKind::LShiftAssign:
-	case TokenKind::RShiftAssign:
-	case TokenKind::BitAndAssign:
-	case TokenKind::BitXorAssign:
-	case TokenKind::BitOrAssign:
-		return true;
-	default:
-		return false;
-	}
-}
-
-Op token_to_assign(TokenKind kind)
-{
-	switch (kind) {
-	case TokenKind::Assign:
-		return Op::Assign;
-	case TokenKind::AddAssign:
-		return Op::AddAssign;
-	case TokenKind::SubAssign:
-		return Op::SubAssign;
-	case TokenKind::MulAssign:
-		return Op::MulAssign;
-	case TokenKind::DivAssign:
-		return Op::DivAssign;
-	case TokenKind::RemAssign:
-		return Op::RemAssign;
-	case TokenKind::LShiftAssign:
-		return Op::LShiftAssign;
-	case TokenKind::RShiftAssign:
-		return Op::RShiftAssign;
-	case TokenKind::BitAndAssign:
-		return Op::BitAndAssign;
-	case TokenKind::BitXorAssign:
-		return Op::BitXorAssign;
-	case TokenKind::BitOrAssign:
-		return Op::BitOrAssign;
-	default:
-		return Op::Assign;
-	}
-}
-
-ExprPtr make_num(intmax_t value)
-{
-	return std::make_shared<Expr>(Expr{NumExpr{value}});
-}
-
-ExprPtr make_var(std::string name)
-{
-	return std::make_shared<Expr>(Expr{VarExpr{std::move(name)}});
-}
-
-ExprPtr make_unary(Op op, ExprPtr operand)
-{
-	return std::make_shared<Expr>(Expr{UnaryExpr{op, std::move(operand)}});
-}
-
-ExprPtr make_binary(Op op, ExprPtr lhs, ExprPtr rhs)
-{
-	return std::make_shared<Expr>(
-		Expr{BinaryExpr{op, std::move(lhs), std::move(rhs)}});
-}
-
-ExprPtr make_cond(ExprPtr cond, ExprPtr then_expr, ExprPtr else_expr)
-{
-	return std::make_shared<Expr>(
-		Expr{CondExpr{std::move(cond), std::move(then_expr), std::move(else_expr)}});
-}
-
-ExprPtr make_assign(Op op, std::string name, ExprPtr value)
-{
-	return std::make_shared<Expr>(
-		Expr{AssignExpr{op, std::move(name), std::move(value)}});
-}
-
-class Parser {
-public:
-	explicit Parser(std::string_view input) : lexer_(input)
-	{
-		advance();
-	}
-
-	Result<ExprPtr> parse()
-	{
-		auto expr = parse_assignment();
-		if (!expr)
-			return expr;
-		if (tok_.kind != TokenKind::Eof)
-			return tl::unexpected(std::string("expecting EOF"));
-		return expr;
-	}
-
-private:
-	void advance()
-	{
-		if (has_pending_) {
-			tok_ = std::move(pending_);
-			has_pending_ = false;
-			return;
-		}
-		tok_ = lexer_.next();
-	}
-
-	Result<ExprPtr> fail(const char *msg)
-	{
-		return tl::unexpected(std::string(msg));
-	}
-
-	Result<ExprPtr> parse_assignment()
-	{
-		if (tok_.kind == TokenKind::Var) {
-			Token var = std::move(tok_);
-			advance();
-			if (is_assign_op(tok_.kind)) {
-				Op op = token_to_assign(tok_.kind);
-				advance();
-				auto rhs = parse_assignment();
-				if (!rhs)
-					return rhs;
-				return make_assign(op, std::move(var.name), std::move(*rhs));
-			}
-			/* Not an assignment — put the variable back and parse a
-			 * normal expression starting at that primary. */
-			pending_ = std::move(tok_);
-			has_pending_ = true;
-			tok_ = std::move(var);
-		}
-		return parse_cond();
-	}
-
-	Result<ExprPtr> parse_cond()
-	{
-		auto cond = parse_or();
-		if (!cond)
-			return cond;
-		if (tok_.kind != TokenKind::QMark)
-			return cond;
-
-		advance();
-		auto then_expr = parse_assignment();
-		if (!then_expr)
-			return then_expr;
-		if (tok_.kind != TokenKind::Colon)
-			return fail("expecting ':'");
-		advance();
-		auto else_expr = parse_cond();
-		if (!else_expr)
-			return else_expr;
-		return make_cond(std::move(*cond), std::move(*then_expr), std::move(*else_expr));
-	}
-
-	Result<ExprPtr> parse_or()
-	{
-		auto lhs = parse_and();
-		if (!lhs)
-			return lhs;
-		while (tok_.kind == TokenKind::LogOr) {
-			advance();
-			auto rhs = parse_and();
-			if (!rhs)
-				return rhs;
-			lhs = make_binary(Op::LogOr, std::move(*lhs), std::move(*rhs));
-		}
-		return lhs;
-	}
-
-	Result<ExprPtr> parse_and()
-	{
-		auto lhs = parse_binop(7);
-		if (!lhs)
-			return lhs;
-		while (tok_.kind == TokenKind::LogAnd) {
-			advance();
-			auto rhs = parse_binop(7);
-			if (!rhs)
-				return rhs;
-			lhs = make_binary(Op::LogAnd, std::move(*lhs), std::move(*rhs));
-		}
-		return lhs;
-	}
-
-	/* Pratt-style binary ops for precedence levels 0..max_prec inclusive. */
-	Result<ExprPtr> parse_binop(int max_prec)
-	{
-		auto lhs = parse_primary();
-		if (!lhs)
-			return lhs;
-
-		for (;;) {
-			int prec = binop_prec(tok_.kind);
-			if (prec < 0 || prec > max_prec)
-				return lhs;
-
-			Op op = token_to_binop(tok_.kind);
-			advance();
-			auto rhs = parse_binop(prec - 1);
-			if (!rhs)
-				return rhs;
-			lhs = make_binary(op, std::move(*lhs), std::move(*rhs));
-		}
-	}
-
-	Result<ExprPtr> parse_primary()
-	{
-		Token cur = tok_;
-		advance();
-
-		switch (cur.kind) {
-		case TokenKind::LParen: {
-			auto inner = parse_assignment();
-			if (!inner)
-				return inner;
-			if (tok_.kind != TokenKind::RParen)
-				return fail("expecting ')'");
-			advance();
-			return inner;
-		}
-		case TokenKind::Num:
-			return make_num(cur.num);
-		case TokenKind::Var:
-			return make_var(std::move(cur.name));
-		case TokenKind::Add:
-			return parse_primary();
-		case TokenKind::Sub: {
-			auto operand = parse_primary();
-			if (!operand)
-				return operand;
-			return make_unary(Op::Neg, std::move(*operand));
-		}
-		case TokenKind::Not: {
-			auto operand = parse_primary();
-			if (!operand)
-				return operand;
-			return make_unary(Op::Not, std::move(*operand));
-		}
-		case TokenKind::BitNot: {
-			auto operand = parse_primary();
-			if (!operand)
-				return operand;
-			return make_unary(Op::BitNot, std::move(*operand));
-		}
-		default:
-			return fail("expecting primary");
-		}
-	}
-
-	Lexer lexer_;
-	Token tok_;
-	Token pending_;
-	bool has_pending_ = false;
-};
-
-} /* namespace */
-
-Result<ExprPtr> parse(std::string_view input)
-{
-	Parser parser(input);
-	return parser.parse();
-}
-
-Op Evaluator::assign_to_binop(Op op)
-{
-	switch (op) {
-	case Op::AddAssign:
-		return Op::Add;
-	case Op::SubAssign:
-		return Op::Sub;
-	case Op::MulAssign:
-		return Op::Mul;
-	case Op::DivAssign:
-		return Op::Div;
-	case Op::RemAssign:
-		return Op::Rem;
-	case Op::LShiftAssign:
-		return Op::LShift;
-	case Op::RShiftAssign:
-		return Op::RShift;
-	case Op::BitAndAssign:
-		return Op::BitAnd;
-	case Op::BitXorAssign:
-		return Op::BitXor;
-	case Op::BitOrAssign:
-		return Op::BitOr;
-	default:
-		return Op::Add;
-	}
-}
-
-Result<intmax_t> Evaluator::do_binop(Op op, intmax_t a, intmax_t b)
+static EvalResult
+do_binop(Op op, std::intmax_t a, std::intmax_t b)
 {
 	switch (op) {
 	case Op::Rem:
 	case Op::Div:
 		if (!b || (a == INTMAX_MIN && b == -1))
-			return tl::unexpected(std::string("division error"));
+			return tl::unexpected<std::string>("division error");
 		return op == Op::Rem ? a % b : a / b;
 	case Op::Mul:
 		return a * b;
@@ -581,133 +188,730 @@ Result<intmax_t> Evaluator::do_binop(Op op, intmax_t a, intmax_t b)
 	case Op::LogOr:
 		return a || b;
 	default:
-		return tl::unexpected(std::string("bad binary operator"));
+		return tl::unexpected<std::string>("bad binary operator");
 	}
 }
 
-Result<intmax_t> Evaluator::eval_node(const Expr &expr, bool noeval)
+static inline bool
+is_name_start(unsigned char c)
+{
+	return std::isalpha(c) || c == '_';
+}
+
+static inline bool
+is_name_char(unsigned char c)
+{
+	return std::isalnum(c) || c == '_';
+}
+
+namespace {
+
+class Lexer {
+public:
+	explicit Lexer(std::string_view input)
+		: cur_(input.data())
+		, end_(input.data() + input.size()) {}
+
+	Token next()
+	{
+		while (cur_ < end_ && (*cur_ == ' ' || *cur_ == '\t' || *cur_ == '\n'))
+			++cur_;
+
+		if (cur_ >= end_ || *cur_ == '\0')
+			return Token{Token::Type::Eof};
+
+		unsigned char c = static_cast<unsigned char>(*cur_);
+
+		if (std::isdigit(c)) {
+			char *after = nullptr;
+			intmax_t val = strtoimax(cur_, &after, 0);
+			cur_ = after;
+			return Token{Token::Type::Num, val};
+		}
+
+		if (is_name_start(c)) {
+			const char *start = cur_;
+			do {
+				++cur_;
+			} while (cur_ < end_ && is_name_char(*cur_));
+			Token tok;
+			tok.type = Token::Type::Var;
+			tok.name.assign(start, cur_);
+			return tok;
+		}
+
+		++cur_;
+		switch (c) {
+			case '(':
+				return Token{Token::Type::LParen};
+
+			case ')':
+				return Token{Token::Type::RParen};
+
+			case '?':
+				return Token{Token::Type::QMark};
+
+			case ':':
+				return Token{Token::Type::Colon};
+
+			case '~':
+				return Token{Token::Type::BitNot};
+
+			case '+':
+				return Token{
+					match('=')
+						? Token::Type::AddAssign
+						: Token::Type::Add
+				};
+
+			case '-':
+				return Token{
+					match('=')
+						? Token::Type::SubAssign
+						: Token::Type::Sub
+				};
+
+			case '*':
+				return Token{
+					match('=')
+						? Token::Type::MulAssign
+						: Token::Type::Mul
+				};
+
+			case '/':
+				return Token{
+					match('=')
+						? Token::Type::DivAssign
+						: Token::Type::Div
+				};
+
+			case '%':
+				return Token{
+					match('=')
+						? Token::Type::RemAssign
+						: Token::Type::Rem
+				};
+
+			case '^':
+				return Token{
+					match('=')
+						? Token::Type::BitXorAssign
+						: Token::Type::BitXor
+				};
+
+			case '!':
+				return Token{
+					match('=')
+						? Token::Type::Ne
+						: Token::Type::Not
+				};
+
+			case '=':
+				return Token{
+					match('=')
+						? Token::Type::Eq
+						: Token::Type::Assign
+				};
+
+			case '|':
+				if (match('|'))
+					return Token{Token::Type::LogOr};
+
+				return Token{
+					match('=')
+						? Token::Type::BitOrAssign
+						: Token::Type::BitOr
+				};
+
+			case '&':
+				if (match('&'))
+					return Token{Token::Type::LogAnd};
+
+				return Token{
+					match('=')
+						? Token::Type::BitAndAssign
+						: Token::Type::BitAnd
+				};
+
+			case '<':
+				if (match('<'))
+					return Token{
+						match('=')
+							? Token::Type::LShiftAssign
+							: Token::Type::LShift
+					};
+
+				return Token{match('=') ? Token::Type::Le : Token::Type::Lt};
+
+			case '>':
+				if (match('>'))
+					return Token{
+						match('=')
+							? Token::Type::RShiftAssign
+							: Token::Type::RShift
+					};
+
+				return Token{match('=') ? Token::Type::Ge : Token::Type::Gt};
+
+			default:
+				return Token{Token::Type::Bad};
+		}
+	}
+
+private:
+	bool match(char expected)
+	{
+		if (cur_ < end_ && *cur_ == expected) {
+			++cur_;
+			return true;
+		}
+		return false;
+	}
+
+	const char *cur_;
+	const char *end_;
+};
+
+static inline ExprPtr
+make_num(std::intmax_t value)
+{
+	return std::make_unique<Expr>(NumExpr{value});
+}
+
+static inline ExprPtr
+make_var(std::string name)
+{
+	return std::make_unique<Expr>(VarExpr{std::move(name)});
+}
+
+static inline ExprPtr
+make_unary(Op op, ExprPtr operand)
+{
+	return std::make_unique<Expr>(UnaryExpr{op, std::move(operand)});
+}
+
+static inline ExprPtr
+make_binary(Op op, ExprPtr lhs, ExprPtr rhs)
+{
+	return std::make_unique<Expr>(BinaryExpr{
+		op,
+		std::move(lhs),
+		std::move(rhs)
+	});
+}
+
+static inline ExprPtr
+make_cond(ExprPtr cond, ExprPtr then_expr, ExprPtr else_expr)
+{
+	return std::make_unique<Expr>(CondExpr{
+		std::move(cond),
+		std::move(then_expr),
+		std::move(else_expr)
+	});
+}
+
+static inline ExprPtr
+make_assign(Op op, std::string name, ExprPtr value)
+{
+	return std::make_unique<Expr>(AssignExpr{
+		op,
+		std::move(name),
+		std::move(value)
+	});
+}
+
+class Parser {
+public:
+	explicit Parser(std::string_view input) : lexer_(input)
+	{
+		advance();
+	}
+
+	ParseResult parse()
+	{
+		auto expr = parse_assignment();
+		if (!expr)
+			return expr;
+		if (tok_.type != Token::Type::Eof)
+			return tl::unexpected<std::string>("expecting EOF");
+		return expr;
+	}
+
+private:
+	void advance()
+	{
+		if (has_pending_) {
+			tok_ = std::move(pending_);
+			has_pending_ = false;
+			return;
+		}
+		tok_ = lexer_.next();
+	}
+
+	ParseResult parse_assignment()
+	{
+		if (tok_.type == Token::Type::Var) {
+			Token var = std::move(tok_);
+			advance();
+			if (is_assign_op(tok_.type)) {
+				Op op = token_to_assign(tok_.type);
+				advance();
+				auto rhs = parse_assignment();
+				if (!rhs)
+					return rhs;
+				return make_assign(op, std::move(var.name), std::move(*rhs));
+			}
+			/* Not an assignment — put the variable back and parse a
+			 * normal expression starting at that primary. */
+			pending_ = std::move(tok_);
+			has_pending_ = true;
+			tok_ = std::move(var);
+		}
+		return parse_cond();
+	}
+
+	ParseResult parse_cond()
+	{
+		auto cond = parse_or();
+		if (!cond)
+			return cond;
+		if (tok_.type != Token::Type::QMark)
+			return cond;
+
+		advance();
+		auto then_expr = parse_assignment();
+		if (!then_expr)
+			return then_expr;
+		if (tok_.type != Token::Type::Colon)
+			return tl::unexpected<std::string>("expecting ':'");
+		advance();
+		auto else_expr = parse_cond();
+		if (!else_expr)
+			return else_expr;
+		return make_cond(std::move(*cond), std::move(*then_expr), std::move(*else_expr));
+	}
+
+	ParseResult parse_or()
+	{
+		auto lhs = parse_and();
+		if (!lhs)
+			return lhs;
+		while (tok_.type == Token::Type::LogOr) {
+			advance();
+			auto rhs = parse_and();
+			if (!rhs)
+				return rhs;
+			lhs = make_binary(Op::LogOr, std::move(*lhs), std::move(*rhs));
+		}
+		return lhs;
+	}
+
+	ParseResult parse_and()
+	{
+		auto lhs = parse_binop(7);
+		if (!lhs)
+			return lhs;
+		while (tok_.type == Token::Type::LogAnd) {
+			advance();
+			auto rhs = parse_binop(7);
+			if (!rhs)
+				return rhs;
+			lhs = make_binary(Op::LogAnd, std::move(*lhs), std::move(*rhs));
+		}
+		return lhs;
+	}
+
+	// Pratt-style binary ops for precedence levels 0..max_prec inclusive.
+	ParseResult parse_binop(int max_prec)
+	{
+		auto lhs = parse_primary();
+		if (!lhs)
+			return lhs;
+
+		for (;;) {
+			int prec = binop_prec(tok_.type);
+			if (prec < 0 || prec > max_prec)
+				return lhs;
+
+			Op op = token_to_binop(tok_.type);
+			advance();
+			auto rhs = parse_binop(prec - 1);
+			if (!rhs)
+				return rhs;
+			lhs = make_binary(op, std::move(*lhs), std::move(*rhs));
+		}
+	}
+
+	ParseResult parse_primary()
+	{
+		Token cur = tok_;
+
+		advance();
+
+		switch (cur.type) {
+			case Token::Type::LParen: {
+				auto inner = parse_assignment();
+				if (!inner)
+					return inner;
+				if (tok_.type != Token::Type::RParen)
+					return tl::unexpected<std::string>("expecting ')'");
+				advance();
+				return inner;
+			}
+
+			case Token::Type::Num:
+				return make_num(cur.num);
+
+			case Token::Type::Var:
+				return make_var(std::move(cur.name));
+
+			case Token::Type::Add:
+				return parse_primary();
+
+			case Token::Type::Sub: {
+				auto operand = parse_primary();
+				if (!operand)
+					return operand;
+				return make_unary(Op::Neg, std::move(*operand));
+			}
+
+			case Token::Type::Not: {
+				auto operand = parse_primary();
+				if (!operand)
+					return operand;
+				return make_unary(Op::Not, std::move(*operand));
+			}
+
+			case Token::Type::BitNot: {
+				auto operand = parse_primary();
+				if (!operand)
+					return operand;
+				return make_unary(Op::BitNot, std::move(*operand));
+			}
+
+			default:
+				return tl::unexpected<std::string>("expecting primary");
+		}
+	}
+
+	static int binop_prec(Token::Type kind)
+	{
+		switch (kind) {
+			case Token::Type::Mul:
+			case Token::Type::Div:
+			case Token::Type::Rem:
+				return 0;
+			case Token::Type::Add:
+			case Token::Type::Sub:
+				return 1;
+			case Token::Type::LShift:
+			case Token::Type::RShift:
+				return 2;
+			case Token::Type::Lt:
+			case Token::Type::Le:
+			case Token::Type::Gt:
+			case Token::Type::Ge:
+				return 3;
+			case Token::Type::Eq:
+			case Token::Type::Ne:
+				return 4;
+			case Token::Type::BitAnd:
+				return 5;
+			case Token::Type::BitXor:
+				return 6;
+			case Token::Type::BitOr:
+				return 7;
+			default:
+				return -1;
+		}
+	}
+
+	static bool is_assign_op(Token::Type kind)
+	{
+		switch (kind) {
+			case Token::Type::Assign:
+			case Token::Type::AddAssign:
+			case Token::Type::SubAssign:
+			case Token::Type::MulAssign:
+			case Token::Type::DivAssign:
+			case Token::Type::RemAssign:
+			case Token::Type::LShiftAssign:
+			case Token::Type::RShiftAssign:
+			case Token::Type::BitAndAssign:
+			case Token::Type::BitXorAssign:
+			case Token::Type::BitOrAssign:
+				return true;
+
+			default:
+				return false;
+		}
+	}
+
+	static Op token_to_assign(Token::Type kind)
+	{
+		switch (kind) {
+			case Token::Type::Assign:
+				return Op::Assign;
+			case Token::Type::AddAssign:
+				return Op::AddAssign;
+			case Token::Type::SubAssign:
+				return Op::SubAssign;
+			case Token::Type::MulAssign:
+				return Op::MulAssign;
+			case Token::Type::DivAssign:
+				return Op::DivAssign;
+			case Token::Type::RemAssign:
+				return Op::RemAssign;
+			case Token::Type::LShiftAssign:
+				return Op::LShiftAssign;
+			case Token::Type::RShiftAssign:
+				return Op::RShiftAssign;
+			case Token::Type::BitAndAssign:
+				return Op::BitAndAssign;
+			case Token::Type::BitXorAssign:
+				return Op::BitXorAssign;
+			case Token::Type::BitOrAssign:
+				return Op::BitOrAssign;
+			default:
+				return Op::Assign;
+		}
+	}
+
+	static Op token_to_binop(Token::Type kind)
+	{
+		switch (kind) {
+			case Token::Type::Add:
+				return Op::Add;
+			case Token::Type::Sub:
+				return Op::Sub;
+			case Token::Type::Mul:
+				return Op::Mul;
+			case Token::Type::Div:
+				return Op::Div;
+			case Token::Type::Rem:
+				return Op::Rem;
+			case Token::Type::LShift:
+				return Op::LShift;
+			case Token::Type::RShift:
+				return Op::RShift;
+			case Token::Type::Lt:
+				return Op::Lt;
+			case Token::Type::Le:
+				return Op::Le;
+			case Token::Type::Gt:
+				return Op::Gt;
+			case Token::Type::Ge:
+				return Op::Ge;
+			case Token::Type::Eq:
+				return Op::Eq;
+			case Token::Type::Ne:
+				return Op::Ne;
+			case Token::Type::BitAnd:
+				return Op::BitAnd;
+			case Token::Type::BitXor:
+				return Op::BitXor;
+			case Token::Type::BitOr:
+				return Op::BitOr;
+			default:
+				return Op::Add;
+		}
+	}
+
+	Lexer lexer_;
+	Token tok_;
+	Token pending_;
+	bool has_pending_ = false;
+};
+
+
+} /* namespace */
+
+static Op
+assign_to_binop(Op op)
+{
+	switch (op) {
+		case Op::AddAssign:
+			return Op::Add;
+		case Op::SubAssign:
+			return Op::Sub;
+		case Op::MulAssign:
+			return Op::Mul;
+		case Op::DivAssign:
+			return Op::Div;
+		case Op::RemAssign:
+			return Op::Rem;
+		case Op::LShiftAssign:
+			return Op::LShift;
+		case Op::RShiftAssign:
+			return Op::RShift;
+		case Op::BitAndAssign:
+			return Op::BitAnd;
+		case Op::BitXorAssign:
+			return Op::BitXor;
+		case Op::BitOrAssign:
+			return Op::BitOr;
+		default:
+			return Op::Add;
+	}
+}
+
+namespace {
+
+template<class... Ts>
+struct overloaded : Ts... {
+	using Ts::operator()...;
+};
+
+}
+
+static EvalResult
+eval(ShellContext &context, const Expr &expr, bool noeval)
 {
 	return std::visit(
-		[&](const auto &node) -> Result<intmax_t> {
-			using T = std::decay_t<decltype(node)>;
-
-			if constexpr (std::is_same_v<T, NumExpr>) {
+		overloaded{
+			[](const NumExpr &node) -> EvalResult {
 				return node.value;
-			} else if constexpr (std::is_same_v<T, VarExpr>) {
+			},
+
+			[&](const VarExpr &node) -> EvalResult {
 				if (noeval)
 					return 0;
-				{
-					auto v = lookupvarint(sh_, node.name);
-					if (!v)
-						return tl::unexpected(
-							std::string("variable lookup failed"));
-					return *v;
-				}
-			} else if constexpr (std::is_same_v<T, UnaryExpr>) {
-				auto v = eval_node(*node.operand, noeval);
+
+				const auto v = lookupvarint(context, node.name);
+
+				if (!v)
+					return tl::unexpected<std::string>("variable lookup failed");
+
+				return *v;
+			},
+
+			[&](const UnaryExpr &node) -> EvalResult {
+				const auto v = eval(context, *node.operand, noeval);
+
 				if (!v || noeval)
 					return v;
+
 				switch (node.op) {
-				case Op::Neg:
-					return -*v;
-				case Op::Not:
-					return !*v;
-				case Op::BitNot:
-					return ~*v;
-				default:
-					return tl::unexpected(std::string("bad unary operator"));
+					case Op::Neg:
+						return -*v;
+					case Op::Not:
+						return !*v;
+					case Op::BitNot:
+						return ~*v;
+					default:
+						return tl::unexpected<std::string>("bad unary operator");
 				}
-			} else if constexpr (std::is_same_v<T, BinaryExpr>) {
+			},
+
+			[&](const BinaryExpr &node) -> EvalResult {
 				if (node.op == Op::LogAnd) {
-					auto a = eval_node(*node.lhs, noeval);
+					const auto a = eval(context, *node.lhs, noeval);
 					if (!a)
 						return a;
-					auto b = eval_node(*node.rhs, noeval || !*a);
+
+					const auto b = eval(context, *node.rhs, noeval || !*a);
 					if (!b)
 						return b;
+
 					return *a && *b;
 				}
 				if (node.op == Op::LogOr) {
-					auto a = eval_node(*node.lhs, noeval);
+					const auto a = eval(context, *node.lhs, noeval);
 					if (!a)
 						return a;
-					auto b = eval_node(*node.rhs, noeval || !!*a);
+
+					const auto b = eval(context, *node.rhs, noeval || !!*a);
 					if (!b)
 						return b;
+
 					return *a || *b;
 				}
 
-				auto a = eval_node(*node.lhs, noeval);
+				const auto a = eval(context, *node.lhs, noeval);
 				if (!a)
 					return a;
-				auto b = eval_node(*node.rhs, noeval);
-				if (!b)
+
+				const auto b = eval(context, *node.rhs, noeval);
+				if (!b || noeval)
 					return b;
-				if (noeval)
-					return b;
+
 				return do_binop(node.op, *a, *b);
-			} else if constexpr (std::is_same_v<T, CondExpr>) {
-				auto c = eval_node(*node.cond, noeval);
+			},
+
+			[&](const CondExpr &node) -> EvalResult {
+				const auto c = eval(context, *node.cond, noeval);
 				if (!c)
 					return c;
-				auto t = eval_node(*node.then_expr, noeval || !*c);
+
+				const auto t = eval(context, *node.then_expr, noeval || !*c);
 				if (!t)
 					return t;
-				auto e = eval_node(*node.else_expr, noeval || !!*c);
+
+				const auto e = eval(context, *node.else_expr, noeval || !!*c);
 				if (!e)
 					return e;
+
 				return *c ? *t : *e;
-			} else if constexpr (std::is_same_v<T, AssignExpr>) {
-				auto rhs = eval_node(*node.value, noeval);
-				if (!rhs)
-					return rhs;
-				if (noeval)
+			},
+
+			[&](const AssignExpr &node) -> EvalResult {
+				const auto rhs = eval(context, *node.value, noeval);
+				if (!rhs || noeval)
 					return rhs;
 
-				intmax_t result = *rhs;
+				std::intmax_t result = *rhs;
+
 				if (node.op != Op::Assign) {
-					auto cur = lookupvarint(sh_, node.name);
+					const auto cur = lookupvarint(context, node.name);
 					if (!cur)
-						return tl::unexpected(
-							std::string("variable lookup failed"));
-					auto combined = do_binop(assign_to_binop(node.op), *cur, result);
+						return tl::unexpected<std::string>("variable lookup failed");
+
+					const auto combined = do_binop(assign_to_binop(node.op), *cur, result);
 					if (!combined)
 						return combined;
+
 					result = *combined;
 				}
-				if (auto r = setvarint(sh_, node.name, result); !r)
-					return tl::unexpected(
-						std::string("variable assignment failed"));
+
+				if (const auto r = setvarint(context, node.name, result); !r)
+					return tl::unexpected<std::string>("variable assignment failed");
+
 				return result;
-			}
+			},
 		},
-		expr.node);
+		expr
+	);
 }
 
-Result<intmax_t> Evaluator::eval(const ExprPtr &expr)
+static EvalResult
+eval(ShellContext &context, const ExprPtr &expr)
 {
 	if (!expr)
-		return tl::unexpected(std::string("expecting primary"));
-	return eval_node(*expr, false);
+		return tl::unexpected<std::string>("expecting primary");
+
+	return eval(context, *expr, false);
 }
 
-} /* namespace arith */
-} /* namespace dash */
-
-shell::Result<intmax_t>
-arith(ShellContext &sh, std::string_view s)
+shell::Result<std::intmax_t>
+ShellContext::arith(std::string_view expr)
 {
-	std::string expr(s);
-	auto ast = dash::arith::parse(expr);
+	const auto ast = Parser(expr).parse();
 	if (!ast)
-		return sh_error(sh, "arithmetic expression: {}: \"{}\"",
-				ast.error(), expr);
+		return sh_error(
+			*this,
+			"arithmetic expression: {}: \"{}\"",
+			ast.error(),
+			expr
+		);
 
-	dash::arith::Evaluator evaluator(*&sh);
-	auto result = evaluator.eval(*ast);
+	const auto result = ::eval(*this, *ast);
 	if (!result)
-		return sh_error(sh, "arithmetic expression: {}: \"{}\"",
-				result.error(), expr);
+		return sh_error(
+			*this,
+			"arithmetic expression: {}: \"{}\"",
+			result.error(),
+			expr
+		);
 
 	return *result;
 }

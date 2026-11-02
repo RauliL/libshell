@@ -7,6 +7,8 @@
  * POSIX handler is only passed the signal number.
  */
 
+#include <cinttypes>
+#include <climits>
 #include <climits>
 #include <csignal>
 #include <cstdarg>
@@ -15,8 +17,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cwchar>
-#include <inttypes.h>
-#include <limits.h>
 #include <memory>
 #include <optional>
 #include <string>
@@ -210,6 +210,12 @@ struct ShellContext {
 	 * point for embedding and for -c / eval / traps.
 	 */
 	shell::Result<int> eval(const std::string &script, EvalFlags flags = {});
+
+	/**
+	 * Parses and evaluates an arithmetic expression. Meant for `$((...))`
+	 * style shell expressions.
+	 */
+	shell::Result<std::intmax_t> arith(std::string_view expr);
 
 	std::optional<std::string_view> find_signal_name(int signal) const;
 

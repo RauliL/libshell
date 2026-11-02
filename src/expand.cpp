@@ -32,7 +32,7 @@
  * SUCH DAMAGE.
  */
 
-#include <ctype.h>
+#include <cctype>
 #include <dirent.h>
 #ifdef HAVE_FNMATCH
 #include <fnmatch.h>
@@ -41,8 +41,8 @@
 #include <glob.h>
 #endif
 #include <format>
-#include <inttypes.h>
-#include <limits.h>
+#include <cinttypes>
+#include <climits>
 #ifdef HAVE_GETPWNAM
 #include <pwd.h>
 #endif
@@ -65,7 +65,6 @@
  * backquotes, shell variables, and file metacharacters.
  */
 
-#include "arith.h"
 #include "error.h"
 #include "eval.h"
 #include "expand.h"
@@ -529,7 +528,7 @@ expari(ShellContext &sh, ExpandBuf &eb, char *start, int flag)
 	{
 		std::size_t su = eb.used;
 		eb.commit(endoff);
-		result = TRY_SH(arith(sh, start));
+		result = TRY_SH(sh.arith(start));
 		eb.rewind(su);
 	}
 
