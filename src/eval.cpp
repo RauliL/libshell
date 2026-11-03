@@ -238,8 +238,8 @@ evaltree(ShellContext &sh, Node *n, EvalFlags flags)
 	switch (n->type) {
 	default:
 #ifdef DEBUG
-		out1fmt("Node type = %d\n", n->type);
-		flushout(sh, sh.out1);
+		out1str(std::format("Node type = {}\n", n->type));
+		sh.out1->flush(sh);
 		break;
 #endif
 	case Node::Type::Not:
@@ -868,7 +868,7 @@ bail:
 
 		out = &sh.preverrout;
 		sh.inps4 = 1;
-		outstr(sh, expandstr(sh, ps4val()).c_str(), out);
+		out->write(sh, expandstr(sh, ps4val()));
 		sh.inps4 = 0;
 		sep = 0;
 		sep = eprintlist(sh, out, vars, sep);
@@ -879,7 +879,7 @@ bail:
 		}
 		outcslow(sh, '\n', out);
 #ifdef FLUSHERR
-		flushout(sh, out);
+		out->flush(sh);
 #endif
 	}
 
@@ -897,7 +897,7 @@ bail:
 	case CMDUNKNOWN:
 		status = 127;
 #ifdef FLUSHERR
-		flushout(sh, &sh.errout);
+		sh.errout.flush(sh);
 #endif
 		goto bail;
 
@@ -945,8 +945,7 @@ out:
 static void
 freestdout(ShellContext &sh)
 {
-	sh.output.nextc = sh.output.buf;
-	sh.output.flags = 0;
+	sh.output.discard();
 }
 
 static shell::Result<int>

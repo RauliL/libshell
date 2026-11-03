@@ -150,7 +150,7 @@ aliascmd(ShellContext &sh, int argc, char **argv)
 	while ((n = *++argv) != NULL) {
 		if (!*n || !(v = strchr(n + 1, '='))) {
 			if ((ap = *__lookupalias(sh, n)) == NULL) {
-				outfmt(sh, sh.out2, "%s: %s not found\n", "alias", n);
+                sh.out2->write(sh, std::format("{}: {} not found\n", "alias", n));
 				ret = 1;
 			} else
 				printalias(sh, ap);
@@ -175,7 +175,7 @@ unaliascmd(ShellContext &sh, int argc, char **argv)
 	}
 	for (i = 0; *sh.argptr; sh.argptr++) {
 		if (TRY_SH(unalias(sh, *sh.argptr))) {
-			outfmt(sh, sh.out2, "%s: %s not found\n", "unalias", *sh.argptr);
+            sh.out2->write(sh, std::format("{}: {} not found\n", "unalias", *sh.argptr));
 			i = 1;
 		}
 	}
@@ -199,12 +199,9 @@ freealias(ShellContext &sh, struct alias *ap)
 }
 
 void __attribute__((noinline))
-printalias(ShellContext &sh, const struct alias *ap)
+printalias(ShellContext &sh, const alias *ap)
 {
-	std::string def = ap->name;
-	def.push_back('=');
-	def += ap->val;
-	out1fmt(sh, snlfmt, single_quote(def).c_str());
+	out1str(std::format("{}={}\n", ap->name, single_quote(ap->val)));
 }
 
 static struct alias **

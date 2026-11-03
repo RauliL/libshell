@@ -318,8 +318,7 @@ printentry(ShellContext &sh, struct tblentry *cmdp)
 	do {
 		padvance(sh, &path, cmdp->cmdname.c_str(), name);
 	} while (--idx >= 0);
-	out1str(name.c_str());
-	out1fmt(sh, snlfmt, cmdp->rehash ? "*" : nullstr);
+	out1str(std::format("{}{}\n", name, cmdp->rehash ? "*" : ""));
 }
 
 static int
@@ -750,21 +749,21 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 	const struct alias *ap;
 
 	if (verbose) {
-		outstr(sh, command, out);
+		out->write(sh, command);
 	}
 
 	/* First look at the keywords */
 	if (findkwd(command)) {
-		outstr(sh, verbose ? " is a shell keyword" : command, out);
+		out->write(sh, verbose ? " is a shell keyword" : command);
 		goto out;
 	}
 
 	/* Then look at the aliases */
 	if ((ap = lookupalias(sh, command, 0)) != NULL) {
 		if (verbose) {
-			outfmt(sh, out, " is an alias for %s", ap->val.c_str());
+			out->write(sh, std::format(" is an alias for {}", ap->val));
 		} else {
-			outstr(sh, "alias ", out);
+			out->write(sh, "alias ");
 			printalias(sh, ap);
 			return 0;
 		}
@@ -803,37 +802,45 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 			p = pathbuf.c_str();
 		}
 		if (verbose) {
-			outfmt(sh, out, " is%s %s",
-				cmdp ? " a tracked alias for" : nullstr, p
+			out->write(
+				sh,
+				std::format(
+					" is{} {}",
+					cmdp ? " a tracked alias for" : "",
+					p
+				)
 			);
 		} else {
-			outstr(sh, p, out);
+			out->write(sh, p);
 		}
 		break;
 	}
 
 	case CMDFUNCTION:
 		if (verbose) {
-			outstr(sh, " is a shell function", out);
+			out->write(sh, " is a shell function");
 		} else {
-			outstr(sh, command, out);
+			out->write(sh, command);
 		}
 		break;
 
 	case CMDBUILTIN:
 		if (verbose) {
-			outfmt(sh, out, " is a %sshell builtin",
-				entry.u.cmd->flags & BUILTIN_SPECIAL ?
-					"special " : nullstr
+			out->write(
+				sh,
+				std::format(
+					" is a {}shell builtin",
+					entry.u.cmd->flags & BUILTIN_SPECIAL ? "special " : ""
+				)
 			);
 		} else {
-			outstr(sh, command, out);
+			out->write(sh, command);
 		}
 		break;
 
 	default:
 		if (verbose) {
-			outstr(sh, ": not found\n", out);
+			out->write(sh, ": not found\n");
 		}
 		return 127;
 	}

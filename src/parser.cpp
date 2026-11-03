@@ -1898,7 +1898,7 @@ setprompt(ShellContext &sh, int which)
 	sh.whichprompt = which;
 
 	if (!sh.input.current->nleft)
-		out2str(getprompt(sh, NULL).c_str());
+		out2str(getprompt(sh, nullptr));
 }
 
 std::string

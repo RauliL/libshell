@@ -111,7 +111,7 @@ print_escape_str(ShellContext &sh, const char *f, int *param, int *array, char *
 	escaped.back() = (!!((f[1] - 's') | done) - 1) & f[2];
 	total += !!escaped.back();
 	if (f[1] == 's') {
-		out1mem(escaped.data(), total);
+		sh.out1->write(sh, escaped);
 		return done;
 	}
 
@@ -120,9 +120,9 @@ print_escape_str(ShellContext &sh, const char *f, int *param, int *array, char *
 	char *p = formatted.data();
 
 	int len = strchrnul(p, 'X') - p;
-	memcpy(p + len, escaped.data(), strspn(p + len, "X"));
+	std::memcpy(p + len, escaped.data(), strspn(p + len, "X"));
 
-	out1mem(p, total);
+	sh.out1->write(sh, p, total);
 	return done;
 }
 
@@ -171,7 +171,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 
 				ret = conv_escape(sh, fmt, cp, false);
 				fmt += ret >> 4;
-				out1mem(cp, ret & 15);
+				sh.out1->write(sh, cp, ret & 15);
 				continue;
 			}
 			if (ch != '%' || (*fmt == '%' && (++fmt || 1))) {

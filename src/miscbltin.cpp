@@ -242,7 +242,7 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 				*ap++ = ',';
 			}
 			ap[-1] = '\0';
-			out1fmt(sh, snlfmt, buf);
+            out1str(std::format("{}\n", buf));
 		} else {
 			out1fmt(sh, "%.4o\n", mask);
 		}
@@ -398,7 +398,7 @@ printlim(ShellContext &sh, enum limtype how, const struct rlimit *limit,
 		val = limit->rlim_cur;
 
 	if (val == RLIM_INFINITY)
-		out1fmt(sh, "unlimited\n");
+		out1str("unlimited\n");
 	else {
 		val /= l->factor;
 		out1fmt(sh, "%" PRIdMAX "\n", (intmax_t) val);

@@ -374,7 +374,7 @@ eof:
 	if (vflag) {
 		out2str(in.current->nextc);
 #ifdef FLUSHERR
-		flushout(sh, sh.out2);
+		sh.out2->flush(sh);
 #endif
 	}
 

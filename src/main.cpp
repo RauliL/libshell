@@ -87,7 +87,7 @@ run_interactive(ShellContext &sh)
 					if (!Iflag) {
 						out2c('\n');
 #ifdef FLUSHERR
-						flushout(sh, sh.out2);
+						sh.out2->flush(sh);
 #endif
 						break;
 					}

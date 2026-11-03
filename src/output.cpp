@@ -33,14 +33,14 @@
  */
 
 /*
- * Shell sh.output routines.  We use our own sh.output routines because:
+ * Shell output routines.  We use our own output routines because:
  *	When a builtin command is interrupted we have to discard
- *		any pending sh.output.
+ *		any pending output.
  *	When a builtin command appears in back quotes, we want to
- *		save the sh.output of the command in a region obtained
+ *		save the output of the command in a region obtained
  *		via malloc, rather than doing a fork and reading the
- *		sh.output of the command via a pipe.
- *	Our sh.output routines may be smaller than the stdio routines.
+ *		output of the command via a pipe.
+ *	Our output routines may be smaller than the stdio routines.
  */
 
 #include <sys/types.h>		/* quad_t */
@@ -58,100 +58,77 @@
 #include "shell_context.h"
 #include "syntax.h"
 #include "output.h"
-#include "memalloc.h"
 #include "error.h"
 #include "main.h"
 #include "system.h"
 
-
-#define OUTBUFSIZ BUFSIZ
-#define MEM_OUT -3		/* sh.output to dynamically allocated memory */
-
-
 static int xvsnprintf(ShellContext &sh, char *, size_t, const char *, va_list);
 
-
+void
+output::ensure_buf()
+{
+	if (buf.empty() && bufsize)
+		buf.resize(bufsize);
+}
 
 void
-outmem(ShellContext &sh, const char *p, size_t len, struct output *dest)
+output::flush(ShellContext &context)
 {
-	size_t bufsize;
-	size_t offset;
-	size_t nleft;
+	const std::size_t len = pos;
 
-	nleft = dest->end - dest->nextc;
+	if (!len || fd < 0)
+		return;
+
+	pos = 0;
+	if (xwrite(context, fd, buf.data(), len))
+		flags |= OUTPUT_ERR;
+}
+
+void
+output::write(ShellContext &sh, const char *p, std::size_t len)
+{
+	std::size_t nleft = space();
+
 	if (likely(nleft >= len)) {
 buffered:
-		dest->nextc = static_cast<char *>(mempcpy(dest->nextc, p, len));
+		std::memcpy(buf.data() + pos, p, len);
+		pos += len;
 		return;
 	}
 
-	bufsize = dest->bufsize;
-	if (!bufsize) {
+	if (!bufsize)
 		;
-	} else if (dest->buf == NULL) {
-		offset = 0;
-		INTOFF;
-		dest->buf = ckrealloc(sh, dest->buf, bufsize);
-		dest->bufsize = bufsize;
-		dest->end = dest->buf + bufsize;
-		dest->nextc = dest->buf + offset;
-		INTON_DEFER;
+	else if (buf.empty()) {
+		ensure_buf();
 	} else {
-		flushout(sh, dest);
+		flush(sh);
 	}
 
-	nleft = dest->end - dest->nextc;
-	if (nleft > len)
+	nleft = space();
+	if (nleft >= len)
 		goto buffered;
 
-	if ((xwrite(sh, dest->fd, p, len))) {
-		dest->flags |= OUTPUT_ERR;
-	}
+	if (xwrite(sh, fd, p, len))
+		flags |= OUTPUT_ERR;
 }
 
-
 void
-outstr(ShellContext &sh, const char *p, struct output *file)
-{
-	size_t len;
-
-	len = strlen(p);
-	outmem(sh, p, len, file);
-}
-
-
-void
-outcslow(ShellContext &sh, int c, struct output *dest)
+outcslow(ShellContext &sh, int c, output *dest)
 {
 	char buf = c;
-	outmem(sh, &buf, 1, dest);
+
+	dest->write(sh, &buf, 1);
 }
 
 
 void
 flushall(ShellContext &sh)
 {
-	flushout(sh, &sh.output);
+	sh.output.flush(sh);
 #ifdef FLUSHERR
-	flushout(sh, &sh.errout);
+	sh.errout.flush(sh);
 #endif
 }
-
-
-void
-flushout(ShellContext &sh, struct output *dest)
-{
-	size_t len;
-
-	len = dest->nextc - dest->buf;
-	if (!len || dest->fd < 0)
-		return;
-	dest->nextc = dest->buf;
-	if ((xwrite(sh, dest->fd, dest->buf, len)))
-		dest->flags |= OUTPUT_ERR;
-}
-
 
 void
 outfmt(ShellContext &sh, struct output *file, const char *fmt, ...)
@@ -216,25 +193,24 @@ doformat(ShellContext &sh, struct output *dest, const char *f, va_list ap)
 {
 	char *s;
 	int len;
-	int olen;
+	std::size_t olen;
 	std::string overflow;
 
-	s = dest->nextc;
-	olen = dest->end - dest->nextc;
+	s = dest->buf.empty() ? nullptr : dest->buf.data() + dest->pos;
+	olen = dest->space();
 	{
-		auto r = xvasprintf(sh, &s, static_cast<size_t>(olen), overflow,
-				    f, ap);
+		auto r = xvasprintf(sh, &s, olen, overflow, f, ap);
 		if (!r) {
 			dest->flags |= OUTPUT_ERR;
 			return;
 		}
 		len = *r;
 	}
-	if (likely(olen > len)) {
-		dest->nextc += len;
+	if (likely(olen > static_cast<std::size_t>(len))) {
+		dest->pos += static_cast<std::size_t>(len);
 		return;
 	}
-	outmem(sh, s, len, dest);
+	dest->write(sh, s, static_cast<std::size_t>(len));
 }
 
 

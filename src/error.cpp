@@ -100,11 +100,10 @@ exwarning_msg(ShellContext &sh, std::string_view msg)
 	const char *name = sh.arg0.empty() ? "sh" : sh.arg0.c_str();
 
 	if (sh.commandname.empty())
-		outfmt(sh, errs, "%s: %d: ", name, sh.errlinno);
+        errs->write(sh, std::format("{}: {}: ", name, sh.errlinno));
 	else
-		outfmt(sh, errs, "%s: %d: %s: ", name, sh.errlinno,
-		       sh.commandname.c_str());
-	outmem(sh, msg.data(), msg.size(), errs);
+        errs->write(sh, std::format("{}: {}: {}: ", name, sh.errlinno, sh.commandname));
+	errs->write(sh, msg);
 #if FLUSHERR
 	outc(sh, '\n', errs);
 #else

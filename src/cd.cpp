@@ -151,7 +151,7 @@ err:
 	return sh_error(sh, "can't cd to {}", dest);
 out:
 	if (flags & CD_PRINT)
-		out1fmt(sh, snlfmt, sh.curdir.c_str());
+        out1str(std::format("{}\n", sh.curdir));
 	return 0;
 }
 
@@ -301,7 +301,7 @@ pwdcmd(ShellContext &sh, int argc, char **argv)
 			TRY_SHV(setpwd(sh, std::nullopt, 0, true));
 		dir = sh.physdir.c_str();
 	}
-	out1fmt(sh, snlfmt, dir);
+    out1str(std::format("{}\n", dir));
 	return 0;
 }
 

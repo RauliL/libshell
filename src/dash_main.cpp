@@ -155,7 +155,7 @@ handle_err:
 		if (ecode == shell::Error::Interrupt) {
 			out2c('\n');
 #ifdef FLUSHERR
-			flushout(sh, sh.out2);
+			sh.out2->flush(sh);
 #endif
 		}
 		barrier();

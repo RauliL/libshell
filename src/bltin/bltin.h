@@ -59,8 +59,8 @@
 #define putchar(c)	out1c(c)
 #define FILE struct output
 #define fprintf(f, ...) outfmt(sh, f, __VA_ARGS__)
-#define fputs(s, f) outstr(sh, s, f)
-#define fflush(f) flushout(sh, f)
+#define fputs(s, f) ((f)->write(sh, (s)))
+#define fflush(f) ((f)->flush(sh))
 #define fileno(f) ((f)->fd)
 #define ferror outerr
 #define INITARGS(argv)

@@ -98,10 +98,11 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 	if (!*ap) {
 		for (signo = 0 ; signo < NSIG ; signo++) {
 			if (sh.trap[signo]) {
-				out1fmt(sh, "trap -- %s %s\n",
-					single_quote(*sh.trap[signo]).c_str(),
-                    sh.find_signal_name(signo).value_or("").data()
-				);
+                out1str(std::format(
+                    "trap -- {} {}\n",
+					single_quote(*sh.trap[signo]),
+                    sh.find_signal_name(signo).value_or("")
+                ));
 			}
 		}
 		return 0;
@@ -114,7 +115,7 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 		action = *ap++;
 	while (*ap) {
 		if ((signo = decode_signal(sh, *ap, 0)) < 0) {
-			outfmt(sh, sh.out2, "trap: %s: bad trap\n", *ap);
+            sh.out2->write(sh, std::format("trap: {}: bad trap\n", *ap));
 			return 1;
 		}
 		INTOFF;

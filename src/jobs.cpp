@@ -169,7 +169,7 @@ void
 Job::show_pipe(ShellContext &sh, struct output *out) const
 {
 	for (std::size_t i = 1; i < procs.size(); i++)
-		outfmt(sh, out, " | %s", procs[i].cmd.c_str());
+		out->write(sh, std::format(" | {}", procs[i].cmd));
 	outcslow(sh, '\n', out);
 	flushall(sh);
 }
@@ -352,9 +352,9 @@ usage:
 
 		out = sh.out1;
 		if (!*argv) {
-			outstr(sh, "0\n", out);
+			out->write(sh, "0\n");
 			for (i = 1; i < NSIG; i++) {
-				outfmt(sh, out, snlfmt, sh.find_signal_name(i).value_or("").data());
+				out->write(sh, std::format("{}\n", sh.find_signal_name(i).value_or("")));
 			}
 			return 0;
 		}
@@ -362,7 +362,7 @@ usage:
 		if (signo > 128)
 			signo -= 128;
 		if (0 < signo && signo < NSIG)
-			outfmt(sh, out, snlfmt, sh.find_signal_name(signo).value_or("").data());
+			out->write(sh, std::format("{}\n", sh.find_signal_name(signo).value_or("")));
 		else
 			return sh_error(sh, "invalid signal number or exit status: {}",
 				 *argv);
@@ -403,9 +403,9 @@ fgcmd(ShellContext &sh, int argc, char **argv)
 		jp = TRY_SH(getjob(sh, *argv, 1));
 		if (mode == FORK_BG) {
 			set_curjob(sh, jp, CUR_RUNNING);
-			outfmt(sh, out, "[%d] ", jp->number());
+			out->write(sh, std::format("[{}]", jp->number()));
 		}
-		outstr(sh, jp->procs.front().cmd.c_str(), out);
+		out->write(sh, jp->procs.front().cmd);
 		jp->show_pipe(sh, out);
 		retval = TRY_SH(restartjob(sh, jp, mode));
 	} while (*argv && *++argv);
@@ -493,7 +493,7 @@ showjob(ShellContext &sh, struct output *out, Job *jp, int mode)
 
 	if (mode & SHOW_PGID) {
 		/* just output process (group) id of pipeline */
-		outfmt(sh, out, "%d\n", jp->pgid());
+		out->write(sh, std::format("{}\n", jp->pgid()));
 		return;
 	}
 
@@ -1123,13 +1123,12 @@ out:
 
 	if (thisjob && thisjob == job) {
 		char s[48 + 1];
-		int len;
+		int len = sprint_status(s, status, 1);
 
-		len = sprint_status(s, status, 1);
 		if (len) {
 			s[len] = '\n';
 			s[len + 1] = 0;
-			outstr(sh, s, sh.out2);
+			sh.out2->write(sh, s);
 		}
 	}
 	return pid;

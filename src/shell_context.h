@@ -60,13 +60,9 @@ void changelocale(ShellContext &sh, std::string_view val);
 struct ShellContext {
 	using signal_map_type = std::unordered_map<int, std::string_view>;
 
-	struct output output = {
-		nullptr, nullptr, nullptr, BUFSIZ, 1, 0
-	};
-	struct output errout = {
-		nullptr, nullptr, nullptr, 0, 2, 0
-	};
-	struct output preverrout = {};
+	struct output output{BUFSIZ, 1};
+	struct output errout{0, 2};
+	struct output preverrout;
 	struct output *out1 = &output;
 	struct output *out2 = &errout;
 

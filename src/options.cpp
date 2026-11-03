@@ -247,9 +247,11 @@ minus_o(ShellContext &sh, char *name, int val)
 					sh.optlist[i] ? "on" : "off");
 		} else {
 			for (i = 0; i < NOPTS; i++)
-				out1fmt(sh, "set %s %s\n",
+                out1str(std::format(
+                    "set %s %s\n",
 					sh.optlist[i] ? "-o" : "+o",
-					optnames[i]);
+					optnames[i]
+                ));
 
 		}
 	} else {
@@ -316,12 +318,11 @@ freeparam(ShellContext &sh, struct shparam *param)
 shell::Result<int>
 shiftcmd(ShellContext &sh, int argc, char **argv)
 {
-	int n;
+	int n = 1;
 
-	n = 1;
 	if (argc > 1)
 		n = TRY_SH(number(sh, argv[1]));
-	if (static_cast<size_t>(n) > sh.shellparam.p.size())
+	if (static_cast<std::size_t>(n) > sh.shellparam.p.size())
 		return sh_error(sh, "can't shift that many");
 	INTOFF;
 	sh.shellparam.p.erase(sh.shellparam.p.begin(),
@@ -416,7 +417,7 @@ getopts(ShellContext &sh, char *optstr, char *optvar, char **optfirst)
 	sh.shellparam.optind = -1;
 	optnext = optfirst + ind - 1;
 
-	if (ind <= 1 || off < 0 || strlen(optnext[-1]) < off)
+	if (ind <= 1 || off < 0 || std::strlen(optnext[-1]) < off)
 		p = NULL;
 	else
 		p = optnext[-1] + off;
@@ -442,7 +443,7 @@ atend:
 				s[1] = '\0';
 				TRY_SHV(setvar(sh, "OPTARG", s));
 			} else {
-				outfmt(sh, &sh.errout, "Illegal option -%c\n", c);
+                sh.errout.write(sh, std::format("Illegal option -{}\n", static_cast<char>(c)));
 				unsetvar(sh, "OPTARG");
 			}
 			c = '?';
@@ -460,7 +461,7 @@ atend:
 				TRY_SHV(setvar(sh, "OPTARG", s));
 				c = ':';
 			} else {
-				outfmt(sh, &sh.errout, "No arg for -%c option\n", c);
+                sh.errout.write(sh, std::format("No arg for -{} option\n", static_cast<char>(c)));
 				unsetvar(sh, "OPTARG");
 				c = '?';
 			}
