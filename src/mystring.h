@@ -71,7 +71,7 @@ shell::Result<intmax_t> atomax(ShellContext &sh, std::string_view, int);
 shell::Result<intmax_t> atomax10(ShellContext &sh, std::string_view);
 shell::Result<int> number(ShellContext &sh, std::string_view);
 bool is_number(std::string_view);
-std::string single_quote(const char *);
+std::string single_quote(std::string_view);
 int pstrcmp(const void *, const void *);
 std::string ascii_upper(std::string_view);
 

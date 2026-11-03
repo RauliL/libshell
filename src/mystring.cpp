@@ -174,27 +174,31 @@ is_number(std::string_view text)
  */
 
 std::string
-single_quote(const char *s)
+single_quote(std::string_view s)
 {
 	std::string out;
 
 	do {
-		size_t len = strchrnul(s, '\'') - s;
+		size_t len = s.find('\'');
+		if (len == std::string_view::npos)
+			len = s.size();
 
 		out.push_back('\'');
-		out.append(s, len);
+		out.append(s.substr(0, len));
 		out.push_back('\'');
-		s += len;
+		s.remove_prefix(len);
 
-		len = strspn(s, "'");
+		len = 0;
+		while (len < s.size() && s[len] == '\'')
+			++len;
 		if (!len)
 			break;
 
 		out.push_back('"');
-		out.append(s, len);
+		out.append(s.substr(0, len));
 		out.push_back('"');
-		s += len;
-	} while (*s);
+		s.remove_prefix(len);
+	} while (!s.empty());
 
 	return out;
 }
