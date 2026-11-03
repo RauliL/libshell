@@ -1,7 +1,7 @@
 #ifndef MEMALLOC_H
 #define MEMALLOC_H
 /*-
- * Heap wrappers (ckmalloc / ckrealloc / ckfree).
+ * Heap wrappers (ckmalloc / ckfree).
  */
 
 #include <cstddef>
@@ -21,7 +21,6 @@ struct rawmem {
 struct ShellContext;
 
 rawmem ckmalloc(ShellContext &sh, std::size_t);
-rawmem ckrealloc(ShellContext &sh, void *, std::size_t);
 
 #define ckfree(p)	std::free(const_cast<void *>(static_cast<const void *>(p)))
 #endif

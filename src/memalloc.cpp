@@ -28,9 +28,3 @@ ckmalloc(ShellContext &sh, std::size_t nbytes)
 {
 	return checknull(sh, std::malloc(nbytes));
 }
-
-__attribute__((__noinline__)) rawmem
-ckrealloc(ShellContext &sh, void *p, std::size_t nbytes)
-{
-	return checknull(sh, std::realloc(p, nbytes));
-}
