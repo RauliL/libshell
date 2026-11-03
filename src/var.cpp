@@ -112,7 +112,7 @@ changelocale(ShellContext &, std::string_view val)
 
 
 static struct var ** hashvar(ShellContext &sh, std::string_view);
-STATIC int vpcmp(const void *, const void *);
+static int vpcmp(const void *, const void *);
 static struct var ** findvar(ShellContext &sh, std::string_view);
 
 /*
@@ -671,7 +671,7 @@ varcmp(std::string_view p, std::string_view q)
 	return c - d;
 }
 
-STATIC int
+static int
 vpcmp(const void *a, const void *b)
 {
 	return varcmp(*(const char **)a, *(const char **)b);

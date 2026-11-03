@@ -100,7 +100,7 @@ static void forkchild(ShellContext &sh, Job *, Node *, int);
 static shell::Result<void> forkparent(ShellContext &sh, Job *, Node *, int, pid_t);
 static int dowait(ShellContext &sh, int, Job *);
 #ifdef SYSV
-STATIC int onsigchild();
+static int onsigchild();
 #endif
 static int waitproc(ShellContext &sh, int, int *);
 static std::string commandtext(ShellContext &sh, Node *);

@@ -101,7 +101,7 @@ static int eprintlist(ShellContext &sh, struct output *, const ArgList &, int);
 static shell::Result<int> bltincmd(ShellContext &sh, int, char **);
 
 
-STATIC const struct builtincmd bltin = {
+static const struct builtincmd bltin = {
 	.name = nullstr,
 	.builtin = bltincmd,
 	.flags = BUILTIN_REGULAR,
