@@ -53,14 +53,10 @@
 #define GLOB_IS_ENABLED 0
 #endif
 
-extern const char snlfmt[];
-extern const char spcstr[];
 extern const char dolatstr[];
 #define DOLATSTRLEN 6
 extern const char cqchars[];
 #define qchars (cqchars + 1)
-extern const char homestr[];
-extern const char dotdir[];
 
 #include "error.h"
 

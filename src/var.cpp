@@ -140,7 +140,7 @@ INIT {
 
 	p = lookupvar(sh, "PWD");
 	if (p)
-		if (*p != '/' || stat64(p, &st1) || stat64(dotdir, &st2) ||
+		if (*p != '/' || stat64(p, &st1) || stat64(".", &st2) ||
 		    st1.st_dev != st2.st_dev || st1.st_ino != st2.st_ino)
 			p = 0;
 	setpwd(sh, p ? std::optional<std::string_view>(p) : std::nullopt, 0);
@@ -375,7 +375,7 @@ showvars(ShellContext &sh, std::string_view prefix, VarFlags on, VarFlags off)
 
 	qsort(ep, static_cast<size_t>(epend - ep), sizeof(char *), vpcmp);
 
-	sep = prefix.empty() ? "" : spcstr;
+	sep = prefix.empty() ? "" : " ";
 
 	for (; ep < epend; ep++) {
 		const char *p;

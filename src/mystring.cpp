@@ -60,16 +60,12 @@
 
 
 char nullstr[1];		/* zero length string */
-const char spcstr[] = " ";
-const char snlfmt[] = "%s\n";
 const char dolatstr[] = { CTLQUOTEMARK, CTLVAR, VSNORMAL | VSBIT, '@', '=',
 			  CTLQUOTEMARK, '\0' };
 const char cqchars[] = {
 	'\\',
 	CTLESC, CTLMBCHAR, CTLQUOTEMARK, 0
 };
-const char homestr[] = "HOME";
-const char dotdir[] = ".";
 
 /*
  * equal - #defined in mystring.h

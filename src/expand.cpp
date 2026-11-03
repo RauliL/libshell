@@ -442,7 +442,7 @@ done:
 		goto out;
 	*p = '\0';
 	if (*name == '\0') {
-		home = lookupvar(sh, homestr);
+		home = lookupvar(sh, "HOME");
 	} else {
 		home = getpwhome(sh, name);
 	}
@@ -1728,7 +1728,7 @@ expmeta(ShellContext &sh, ExpandBuf &eb, char *name, unsigned name_len, size_t e
 		start = name;
 	*enddir = 0;
 
-	dirp = opendir(expdir_len ? cp : dotdir);
+	dirp = opendir(expdir_len ? cp : ".");
 	if (!dirp)
 		goto out_opendir;
 	esc = 0;

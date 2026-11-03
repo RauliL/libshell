@@ -1407,10 +1407,10 @@ cmdlist(ShellContext &sh, Node *np, int sep, std::string &out)
 {
 	for (; np; np = as<Node::Arg>(np)->next.get()) {
 		if (!sep)
-			cmdputs(out, spcstr);
+			cmdputs(out, " ");
 		cmdtxt(sh, np, out);
 		if (sep && as<Node::Arg>(np)->next)
-			cmdputs(out, spcstr);
+			cmdputs(out, " ");
 	}
 }
 

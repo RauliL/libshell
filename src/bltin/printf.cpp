@@ -563,7 +563,7 @@ check_conversion(ShellContext &sh, const char *s, const char *ep)
 shell::Result<int>
 echocmd(ShellContext &sh, int argc, char **argv)
 {
-	const char *lastfmt = snlfmt;
+	const char *lastfmt = "%s\n";
 	int nonl;
 
 	if (*++argv && equal(*argv, "-n")) {

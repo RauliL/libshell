@@ -104,7 +104,7 @@ cdcmd(ShellContext &sh, int argc, char **argv)
 	flags = TRY_SH(cdopt(sh));
 	dest = *sh.argptr;
 	if (!dest)
-		dest = bltinlookup(sh, homestr);
+		dest = bltinlookup(sh, "HOME");
 	else if (dest[0] == '-' && dest[1] == '\0') {
 		dest = bltinlookup(sh, "OLDPWD");
 		flags |= CD_PRINT;
@@ -127,7 +127,7 @@ dotdot:
 		}
 	}
 	if (!*dest)
-		dest = dotdir;
+		dest = ".";
 	path = bltinlookup(sh, "CDPATH");
 	while (p = path, (len = padvance_magic(sh, &path, dest, 0, candidate)) >= 0) {
 		c = *p;
