@@ -1430,7 +1430,7 @@ more_heredoc:
 					str = static_cast<char *>(alloca(len + 1));
 					*(char *)mempcpy(str, p, len) = 0;
 
-					pushstring(sh, str, NULL);
+					pushstring(sh, str, nullptr);
 				}
 			}
 		}

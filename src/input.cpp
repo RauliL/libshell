@@ -190,27 +190,15 @@ stdin_tee(ShellContext &sh, InputStack &in, void *buf, int nr)
 }
 
 static void
-freestrings(ShellContext &sh, InputStack &in, struct strpush *sp)
+release_pending_aliases(ShellContext &sh, parsefile &pf)
 {
 	INTOFF;
-	do {
-		struct strpush *psp;
-
-		if (sp->ap) {
-			sp->ap->flag &= ~ALIASINUSE;
-			if (sp->ap->flag & ALIASDEAD) {
-				unalias(sh, sp->ap->name);
-			}
-		}
-
-		psp = sp;
-		sp = sp->spfree;
-
-		if (psp != &(in.current->basestrpush))
-			ckfree(psp);
-	} while (sp);
-
-	in.current->spfree = NULL;
+	for (alias *ap : pf.pending_alias_release) {
+		ap->flag &= ~ALIASINUSE;
+		if (ap->flag & ALIASDEAD)
+			unalias(sh, ap->name);
+	}
+	pf.pending_alias_release.clear();
 	INTON_DEFER;
 }
 
@@ -223,11 +211,10 @@ freestrings(ShellContext &sh, InputStack &in, struct strpush *sp)
 int __attribute__((noinline))
 pgetc(ShellContext &sh, InputStack &in)
 {
-	struct strpush *sp = in.current->spfree;
 	int c;
 
-	if (unlikely(sp))
-		freestrings(sh, in, sp);
+	if (unlikely(!in.current->pending_alias_release.empty()))
+		release_pending_aliases(sh, *in.current);
 
 again:
 	if (in.current->unget) {
@@ -240,10 +227,10 @@ nextc:
 	if (likely(in.current->nleft > 0)) {
 		in.current->nleft--;
 		c = (signed char)*in.current->nextc++;
-	} else if (unlikely(in.current->strpush)) {
+	} else if (unlikely(!in.current->string_stack.empty())) {
 		popstring(sh, in);
-		/* The freestrings call must be delayed til the next
-		 * pgetc call for PEOA to work properly.
+		/* Alias release must be delayed until the next pgetc
+		 * so pgetc_eoa can still observe the alias frame.
 		 */
 		goto again;
 	} else
@@ -262,8 +249,11 @@ nextc:
 int
 pgetc_eoa(ShellContext &sh, InputStack &in)
 {
-	return in.current->strpush && in.current->nleft == -1 &&
-	       in.current->strpush->ap ? PEOA : pgetc(sh, in);
+	/* After the last alias character is consumed, nleft is 0 while
+	 * the StringPush frame is still on the stack.
+	 */
+	return !in.current->string_stack.empty() && in.current->nleft == 0 &&
+	       in.current->string_stack.back().ap ? PEOA : pgetc(sh, in);
 }
 
 static int
@@ -405,54 +395,45 @@ pungetc(ShellContext &sh, InputStack &in)
  * We handle aliases this way.
  */
 void
-pushstring(ShellContext &sh, InputStack &in, char *s, void *ap)
+pushstring(ShellContext &sh, InputStack &in, char *s, alias *ap)
 {
-	struct strpush *sp;
-	size_t len;
+	size_t len = strlen(s);
 
-	len = strlen(s);
 	INTOFF;
-	if ((unsigned long)in.current->strpush |
-	    (unsigned long)in.current->spfree) {
-		sp = ckmalloc(sh, sizeof (struct strpush));
-		sp->prev = in.current->strpush;
-		in.current->strpush = sp;
-	} else
-		sp = in.current->strpush = &(in.current->basestrpush);
-	sp->prevstring = in.current->nextc;
-	sp->prevnleft = in.current->nleft;
-	sp->unget = in.current->unget;
-	sp->spfree = in.current->spfree;
-	sp->ap = (struct alias *)ap;
-	if (ap) {
-		((struct alias *)ap)->flag |= ALIASINUSE;
-		sp->string = s; /* start of alias value being scanned */
-	}
+	in.current->string_stack.push_back(StringPush{
+		.prev_string = in.current->nextc,
+		.prev_nleft = in.current->nleft,
+		.ap = ap,
+		.string = s,
+		.unget = in.current->unget,
+	});
+	if (ap)
+		ap->flag |= ALIASINUSE;
 	in.current->nextc = s;
-	in.current->nleft = len;
+	in.current->nleft = static_cast<int>(len);
 	in.current->unget = 0;
-	in.current->spfree = NULL;
 	INTON_DEFER;
 }
 
 static void
 popstring(ShellContext &sh, InputStack &in)
 {
-	struct strpush *sp = in.current->strpush;
+	StringPush sp = in.current->string_stack.back();
 
 	INTOFF;
-	if (sp->ap && in.current->nextc > sp->string) {
+	if (sp.ap && in.current->nextc > sp.string) {
 		if (in.current->nextc[-1] == ' ' ||
 		    in.current->nextc[-1] == '\t') {
 			sh.checkkwd |= CHKALIAS;
 		}
 		/* Alias values are owned by the alias; do not free here. */
 	}
-	in.current->nextc = sp->prevstring;
-	in.current->nleft = sp->prevnleft;
-	in.current->unget = sp->unget;
-	in.current->strpush = sp->prev;
-	in.current->spfree = sp;
+	in.current->nextc = sp.prev_string;
+	in.current->nleft = sp.prev_nleft;
+	in.current->unget = sp.unget;
+	in.current->string_stack.pop_back();
+	if (sp.ap)
+		in.current->pending_alias_release.push_back(sp.ap);
 	INTON_DEFER;
 }
 
@@ -521,10 +502,8 @@ setinputstring(ShellContext &sh, InputStack &in, char *string)
 static void
 pushfile(ShellContext &sh, InputStack &in)
 {
-	struct parsefile *pf;
-
-	pf = (struct parsefile *)ckmalloc(sh, sizeof (struct parsefile));
-	memset(pf, 0, sizeof(*pf));
+	(void)sh;
+	auto *pf = new parsefile{};
 	pf->prev = in.current;
 	pf->linno = 1;
 	pf->fd = -1;
@@ -544,24 +523,27 @@ pushstdin(ShellContext &sh, InputStack &in)
 void
 popfile(ShellContext &sh, InputStack &in)
 {
-	struct parsefile *pf = in.current;
+	parsefile *pf = in.current;
 
 	INTOFF;
-	in.current = pf->prev;
-	pf->prev = NULL;
-	if (pf == &in.base)
+	if (pf == &in.base) {
+		in.current = pf->prev;
+		pf->prev = nullptr;
 		goto out;
+	}
 
 	if (pf->fd >= 0)
 		close(pf->fd);
 	ckfree(pf->buf);
-	if (in.current->spfree)
-		freestrings(sh, in, in.current->spfree);
-	while (pf->strpush) {
+	if (!pf->pending_alias_release.empty())
+		release_pending_aliases(sh, *pf);
+	while (!pf->string_stack.empty()) {
 		popstring(sh, in);
-		freestrings(sh, in, in.current->spfree);
+		release_pending_aliases(sh, *pf);
 	}
-	ckfree(pf);
+	in.current = pf->prev;
+	pf->prev = nullptr;
+	delete pf;
 
 out:
 	INTON_DEFER;
@@ -643,7 +625,7 @@ pungetn(ShellContext &sh, int n)
 }
 
 void
-pushstring(ShellContext &sh, char *s, void *ap)
+pushstring(ShellContext &sh, char *s, alias *ap)
 {
 	pushstring(sh, sh.input, s, ap);
 }

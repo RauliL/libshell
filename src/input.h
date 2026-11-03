@@ -1,5 +1,3 @@
-#ifndef INPUT_H
-#define INPUT_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,9 +33,12 @@
  *
  *	@(#)input.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
 
-#include <limits.h>
+#include <climits>
 #include <string_view>
+#include <vector>
+
 #include <sys/types.h>
 #include <termios.h>
 
@@ -56,39 +57,37 @@ enum {
 
 struct alias;
 
-struct strpush {
-	struct strpush *prev;	/* preceding string on stack */
-	char *prevstring;
-	int prevnleft;
-	struct alias *ap;	/* if push was associated with an alias */
-	char *string;		/* remember the string since it may change */
-
-	/* Delay freeing so we can stop nested aliases. */
-	struct strpush *spfree;
-
-	/* Number of outstanding calls to pungetc. */
-	int unget;
+/*
+ * One pushed string overlay on a parsefile (alias text or parser
+ * re-injection).  Saved cursor state is restored when the string is
+ * exhausted.
+ */
+struct StringPush {
+	char *prev_string = nullptr;
+	int prev_nleft = 0;
+	alias *ap = nullptr;	/* non-null if this push is an alias expansion */
+	char *string = nullptr;	/* start of the pushed text */
+	int unget = 0;
 };
 
 /*
  * One level of the input file stack (script, sourced file, or string).
  */
 struct parsefile {
-	struct parsefile *prev;	/* preceding file on stack */
-	int linno;		/* current line */
-	int fd;			/* file descriptor (or -1 if string) */
-	int nleft;		/* number of chars left in this line */
-	int eof;		/* do not read again once we hit EOF */
-	char *nextc;		/* next char in buffer */
-	char *buf;		/* input buffer */
-	struct strpush *strpush; /* for pushing strings at this level */
-	struct strpush basestrpush; /* so pushing one is fast */
+	parsefile *prev = nullptr;	/* preceding file on stack */
+	int linno = 0;			/* current line */
+	int fd = 0;			/* file descriptor (or -1 if string) */
+	int nleft = 0;			/* number of chars left in this line */
+	int eof = 0;			/* do not read again once we hit EOF */
+	char *nextc = nullptr;		/* next char in buffer */
+	char *buf = nullptr;		/* input buffer */
+	std::vector<StringPush> string_stack;
 
-	/* Delay freeing so we can stop nested aliases. */
-	struct strpush *spfree;
+	/* Aliases whose ALIASINUSE bit is cleared on the next pgetc. */
+	std::vector<alias *> pending_alias_release;
 
 	/* Number of outstanding calls to pungetc. */
-	int unget;
+	int unget = 0;
 };
 
 struct stdin_state {
@@ -137,7 +136,7 @@ int pgetc(ShellContext &sh, InputStack &in);
 int pgetc_eoa(ShellContext &sh, InputStack &in);
 void pungetc(ShellContext &sh, InputStack &in);
 void pungetn(InputStack &in, int);
-void pushstring(ShellContext &sh, InputStack &in, char *, void *);
+void pushstring(ShellContext &sh, InputStack &in, char *, alias *);
 shell::Result<int> setinputfile(ShellContext &sh, InputStack &in,
 				    std::string_view, int);
 void setinputstring(ShellContext &sh, InputStack &in, char *);
@@ -154,7 +153,7 @@ int pgetc(ShellContext &sh);
 int pgetc_eoa(ShellContext &sh);
 void pungetc(ShellContext &sh);
 void pungetn(ShellContext &sh, int);
-void pushstring(ShellContext &sh, char *, void *);
+void pushstring(ShellContext &sh, char *, alias *);
 shell::Result<int> setinputfile(ShellContext &sh, std::string_view, int);
 void setinputstring(ShellContext &sh, char *);
 void pushstdin(ShellContext &sh);
@@ -162,5 +161,3 @@ void popfile(ShellContext &sh);
 void unwindfiles(ShellContext &sh, parsefile *);
 void flush_input(ShellContext &sh);
 void reset_input(ShellContext &sh);
-
-#endif
