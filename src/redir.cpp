@@ -51,7 +51,6 @@
 #include "input.h"
 #include "jobs.h"
 #include "main.h"
-#include "memalloc.h"
 #include "nodes.h"
 #include "options.h"
 #include "output.h"
@@ -70,15 +69,6 @@
 #else
 # define PIPESIZE PIPE_BUF
 #endif
-
-
-MKINIT
-struct redirtab {
-	struct redirtab *next;
-	int renamed[10];
-};
-
-
 
 
 /* Bit map of currently closed file descriptors. */
@@ -116,17 +106,17 @@ shell::Result<void>
 redirect(ShellContext &sh, Node *redir, int flags)
 {
 	Node *n;
-	struct redirtab *sv;
+	RedirFrame *sv;
 	int i;
 	int fd;
 	int newfd;
 	int *p;
 	if (!redir)
 		return {};
-	sv = NULL;
+	sv = nullptr;
 	INTOFF;
 	if (likely(flags & REDIR_PUSH))
-		sv = sh.redirlist;
+		sv = &sh.redirlist.back();
 	n = redir;
 	do {
 		newfd = TRY_SH(openredirect(sh, n));
@@ -373,20 +363,18 @@ out:
 shell::Result<void>
 popredir(ShellContext &sh, int drop)
 {
-	struct redirtab *rp;
-	int i;
-
 	INTOFF;
-	rp = sh.redirlist;
-	for (i = 0 ; i < 10 ; i++) {
+	RedirFrame rp = std::move(sh.redirlist.back());
+	sh.redirlist.pop_back();
+	for (int i = 0; i < 10; i++) {
 		int closed;
 
-		if (rp->renamed[i] == EMPTY)
+		if (rp.renamed[i] == EMPTY)
 			continue;
 
-		closed = drop ? 1 : update_closed_redirs(sh, i, rp->renamed[i]);
+		closed = drop ? 1 : update_closed_redirs(sh, i, rp.renamed[i]);
 
-		switch (rp->renamed[i]) {
+		switch (rp.renamed[i]) {
 		case CLOSED:
 			if (!closed)
 				close(i);
@@ -395,14 +383,12 @@ popredir(ShellContext &sh, int drop)
 			if (!drop) {
 				if (i == 0)
 					reset_input(sh);
-				dup2(rp->renamed[i], i);
+				dup2(rp.renamed[i], i);
 			}
-			close(rp->renamed[i]);
+			close(rp.renamed[i]);
 			break;
 		}
 	}
-	sh.redirlist = rp->next;
-	ckfree(rp);
 	INTON;
 	return {};
 }
@@ -423,7 +409,7 @@ EXITRESET {
 }
 
 FORKRESET {
-	sh.redirlist = NULL;
+	sh.redirlist.clear();
 }
 
 #endif
@@ -478,31 +464,23 @@ redirectsafe(ShellContext &sh, Node *redir, int flags)
 
 
 shell::Result<void>
-unwindredir(ShellContext &sh, struct redirtab *stop)
+unwindredir(ShellContext &sh, std::size_t stop)
 {
-	while (sh.redirlist != stop)
+	while (sh.redirlist.size() > stop)
 		TRY_SHV(popredir(sh, 0));
 	return {};
 }
 
 
-struct redirtab *
+std::size_t
 pushredir(ShellContext &sh, Node *redir)
 {
-	struct redirtab *sv;
-	struct redirtab *q;
-	int i;
-
-	q = sh.redirlist;
+	std::size_t stop = sh.redirlist.size();
 	if (!redir)
-		goto out;
+		return stop;
 
-	sv = ckmalloc(sh, sizeof (struct redirtab));
-	sv->next = q;
-	sh.redirlist = sv;
-	for (i = 0; i < 10; i++)
-		sv->renamed[i] = EMPTY;
-
-out:
-	return q;
+	RedirFrame sv;
+	sv.renamed.fill(EMPTY);
+	sh.redirlist.push_back(sv);
+	return stop;
 }

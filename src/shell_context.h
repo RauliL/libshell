@@ -34,12 +34,12 @@
 #include "options.h"
 #include "output.h"
 #include "parser.h"
+#include "redir.h"
 #include "system.h"
 #include "var.h"
 
 struct backcmd;
 struct alias;
-struct redirtab;
 struct heredoc;
 struct synstack;
 struct tblentry;
@@ -171,7 +171,7 @@ struct ShellContext {
 	struct tblentry **lastcmdentry = nullptr;
 
 	struct alias *atab[39] = {};
-	struct redirtab *redirlist = nullptr;
+	std::vector<RedirFrame> redirlist;
 	unsigned closed_redirs = 0;
 	std::string curdir;	/* empty when unknown */
 	std::string physdir;	/* empty when unknown */

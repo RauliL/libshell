@@ -731,7 +731,7 @@ evalcommand(ShellContext &sh, Node *cmd, EvalFlags flags)
 {
 	std::size_t localvar_stop;
 	struct parsefile *file_stop;
-	struct redirtab *redir_stop;
+	std::size_t redir_stop;
 	Node *argp;
 	ArgList args;
 	ArgList vars;
