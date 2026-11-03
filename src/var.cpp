@@ -58,7 +58,6 @@
 #include "syntax.h"
 #include "options.h"
 #include "var.h"
-#include "memalloc.h"
 #include "error.h"
 #include "mystring.h"
 #include "parser.h"
@@ -67,13 +66,6 @@
 
 
 #define VTABSIZE 39
-
-
-struct localvar_list {
-	struct localvar_list *next;
-	struct localvar *lv;
-};
-
 
 
 const char defpathvar[] =
@@ -452,7 +444,7 @@ localcmd(ShellContext &sh, int argc, char **argv)
 {
 	char *name;
 
-	if (!sh.localvar_stack)
+	if (sh.localvar_stack.empty())
 		return sh_error(sh, "not in a function");
 
 	argv = sh.argptr;
@@ -473,37 +465,35 @@ localcmd(ShellContext &sh, int argc, char **argv)
 shell::Result<void>
 mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
 {
-	struct localvar *lvp;
+	localvar lv;
 	struct var *vp;
 
 	INTOFF;
-	lvp = new localvar;
 	if (name == "-") {
-		lvp->text.assign(sh.optlist, sizeof(sh.optlist));
-		vp = NULL;
+		lv.text.assign(sh.optlist, sizeof(sh.optlist));
+		vp = nullptr;
 	} else {
 		auto eq = name.find('=');
 
 		vp = *findvar(sh, name);
-		if (vp == NULL) {
+		if (vp == nullptr) {
 			if (eq != std::string_view::npos)
 				vp = TRY_SH(setvareq(sh, std::string(name),
 						     VarFlag::str_fixed | flags));
 			else
 				vp = TRY_SH(setvar(sh, std::string(name), std::nullopt,
 						   VarFlag::str_fixed | flags));
-			lvp->flags = VarFlag::unset;
+			lv.flags = VarFlag::unset;
 		} else {
-			lvp->text = vp->text;
-			lvp->flags = vp->flags;
+			lv.text = vp->text;
+			lv.flags = vp->flags;
 			vp->flags |= VarFlag::str_fixed;
 			if (eq != std::string_view::npos)
 				TRY_SHV(setvareq(sh, std::string(name), flags));
 		}
 	}
-	lvp->vp = vp;
-	lvp->next = sh.localvar_stack->lv;
-	sh.localvar_stack->lv = lvp;
+	lv.vp = vp;
+	sh.localvar_stack.back().vars.push_back(std::move(lv));
 	INTON;
 	return {};
 }
@@ -517,34 +507,25 @@ mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
 static shell::Result<void>
 poplocalvars(ShellContext &sh)
 {
-	struct localvar_list *ll;
-	struct localvar *lvp, *next;
-	struct var *vp;
-
 	INTOFF;
-	ll = sh.localvar_stack;
-	sh.localvar_stack = ll->next;
+	LocalVarFrame frame = std::move(sh.localvar_stack.back());
+	sh.localvar_stack.pop_back();
 
-	next = ll->lv;
-	ckfree(ll);
-
-	while ((lvp = next) != NULL) {
-		next = lvp->next;
-		vp = lvp->vp;
+	for (auto it = frame.vars.rbegin(); it != frame.vars.rend(); ++it) {
+		struct var *vp = it->vp;
 		TRACE(("poplocalvar %s\n", vp ? vp->text.c_str() : "-"));
-		if (vp == NULL) {	/* $- saved */
-			memcpy(sh.optlist, lvp->text.data(), sizeof(sh.optlist));
+		if (vp == nullptr) {	/* $- saved */
+			memcpy(sh.optlist, it->text.data(), sizeof(sh.optlist));
 			optschanged(sh);
-		} else if (lvp->flags == VarFlag::unset) {
+		} else if (it->flags == VarFlag::unset) {
 			vp->flags &= ~(VarFlag::str_fixed | VarFlag::readonly);
 			unsetvar(sh, vp->text);
 		} else {
-			vp->flags = lvp->flags;
-			vp->text = std::move(lvp->text);
+			vp->flags = it->flags;
+			vp->text = std::move(it->text);
 			if (!vp->flags.test(VarFlag::nofunc))
 				varfunc(sh, vp);
 		}
-		delete lvp;
 	}
 	INTON;
 	return {};
@@ -554,32 +535,24 @@ poplocalvars(ShellContext &sh)
 /*
  * Create a new localvar environment.
  */
-shell::Result<struct localvar_list *>
+shell::Result<std::size_t>
 pushlocalvars(ShellContext &sh, int push)
 {
-	struct localvar_list *ll;
-	struct localvar_list *top;
-
-	top = sh.localvar_stack;
+	std::size_t stop = sh.localvar_stack.size();
 	if (!push)
-		goto out;
+		return stop;
 
 	INTOFF;
-	ll = ckmalloc(sh, sizeof(*ll));
-	ll->lv = NULL;
-	ll->next = top;
-	sh.localvar_stack = ll;
+	sh.localvar_stack.emplace_back();
 	INTON;
-
-out:
-	return top;
+	return stop;
 }
 
 
 shell::Result<void>
-unwindlocalvars(ShellContext &sh, struct localvar_list *stop)
+unwindlocalvars(ShellContext &sh, std::size_t stop)
 {
-	while (sh.localvar_stack != stop)
+	while (sh.localvar_stack.size() > stop)
 		TRY_SHV(poplocalvars(sh));
 	return {};
 }

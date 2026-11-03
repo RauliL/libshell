@@ -729,7 +729,7 @@ parse_command_args(ShellContext &sh, ArgList *alist, Node **argpp,
 shell::Result<int>
 evalcommand(ShellContext &sh, Node *cmd, EvalFlags flags)
 {
-	struct localvar_list *localvar_stop;
+	std::size_t localvar_stop;
 	struct parsefile *file_stop;
 	struct redirtab *redir_stop;
 	Node *argp;

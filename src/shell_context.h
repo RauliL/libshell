@@ -42,7 +42,6 @@ struct alias;
 struct redirtab;
 struct heredoc;
 struct synstack;
-struct localvar_list;
 struct tblentry;
 struct t_op;
 struct ifs_state;
@@ -90,7 +89,7 @@ struct ShellContext {
 	char defifsvar[sizeof("IFS= \t\n")] = "IFS= \t\n";
 	char defoptindvar[sizeof("OPTIND=1")] = "OPTIND=1";
 	int lineno = 0;
-	struct localvar_list *localvar_stack = nullptr;
+	std::vector<LocalVarFrame> localvar_stack;
 
 	static constexpr int varinit_len =
 		6

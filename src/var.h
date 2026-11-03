@@ -182,13 +182,15 @@ struct var {
 
 
 struct localvar {
-	struct localvar *next;		/* next local variable in list */
-	struct var *vp;			/* the variable that was made local */
-	VarFlags flags;			/* saved flags */
+	struct var *vp = nullptr;	/* the variable that was made local */
+	VarFlags flags{};		/* saved flags */
 	std::string text;		/* saved text or $- optlist bytes */
 };
 
-struct localvar_list;
+/* One function/scope frame: ordered restore records (undo log), not a map. */
+struct LocalVarFrame {
+	std::vector<localvar> vars;
+};
 
 
 /* varinit / defifsvar live on ShellContext; macros require &sh. */
@@ -244,8 +246,8 @@ shell::Result<int> exportcmd(ShellContext &sh, int, char **);
 shell::Result<int> localcmd(ShellContext &sh, int, char **);
 shell::Result<void> mklocal(ShellContext &sh, std::string_view name,
 				VarFlags flags = {});
-shell::Result<struct localvar_list *> pushlocalvars(ShellContext &sh, int push);
-shell::Result<void> unwindlocalvars(ShellContext &sh, struct localvar_list *stop);
+shell::Result<std::size_t> pushlocalvars(ShellContext &sh, int push);
+shell::Result<void> unwindlocalvars(ShellContext &sh, std::size_t stop);
 shell::Result<int> unsetcmd(ShellContext &sh, int, char **);
 shell::Result<void> unsetvar(ShellContext &sh, const std::string &);
 int varcmp(std::string_view, std::string_view);
