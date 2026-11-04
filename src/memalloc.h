@@ -2,6 +2,9 @@
 #define MEMALLOC_H
 /*-
  * Heap wrappers (ckmalloc / ckfree).
+ *
+ * These no longer take a ShellContext; allocation policy is not part of
+ * shell execution state. Prefer stack / std::vector / new where practical.
  */
 
 #include <cstddef>
@@ -18,9 +21,7 @@ struct rawmem {
 	}
 };
 
-struct ShellContext;
-
-rawmem ckmalloc(ShellContext &sh, std::size_t);
+rawmem ckmalloc(std::size_t);
 
 #define ckfree(p)	std::free(const_cast<void *>(static_cast<const void *>(p)))
 #endif

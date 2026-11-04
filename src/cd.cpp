@@ -151,7 +151,7 @@ err:
 	return sh_error(sh, "can't cd to {}", dest);
 out:
 	if (flags & CD_PRINT)
-        out1str(std::format("{}\n", sh.curdir));
+        out1str(std::format("{}\n", sh.cwd.curdir));
 	return 0;
 }
 
@@ -218,9 +218,9 @@ updatepwd(ShellContext &sh, const char *dir)
 #endif
 
 	if (*dir != '/') {
-		if (sh.curdir.empty())
+		if (sh.cwd.curdir.empty())
 			return std::optional<std::string>{};
-		path = sh.curdir;
+		path = sh.cwd.curdir;
 	}
 
 	components.assign(dir);
@@ -293,13 +293,13 @@ shell::Result<int>
 pwdcmd(ShellContext &sh, int argc, char **argv)
 {
 	int flags;
-	const char *dir = sh.curdir.c_str();
+	const char *dir = sh.cwd.curdir.c_str();
 
 	flags = TRY_SH(cdopt(sh));
 	if (flags) {
-		if (sh.physdir.empty())
+		if (sh.cwd.physdir.empty())
 			TRY_SHV(setpwd(sh, std::nullopt, 0, true));
-		dir = sh.physdir.c_str();
+		dir = sh.cwd.physdir.c_str();
 	}
     out1str(std::format("{}\n", dir));
 	return 0;
@@ -310,21 +310,21 @@ setpwd(ShellContext &sh, std::optional<std::string_view> val, int setold,
        bool refresh_phys)
 {
 	if (setold)
-		TRY_SHV(setvar(sh, "OLDPWD", sh.curdir, VarFlag::exported));
+		TRY_SHV(setvar(sh, "OLDPWD", sh.cwd.curdir, VarFlag::exported));
 
 	INTOFF;
 	if (refresh_phys) {
-		sh.physdir = getpwd(sh);
+		sh.cwd.physdir = getpwd(sh);
 	} else {
-		sh.physdir.clear();
+		sh.cwd.physdir.clear();
 		if (!val) {
-			sh.curdir = getpwd(sh);
-			sh.physdir = sh.curdir;
+			sh.cwd.curdir = getpwd(sh);
+			sh.cwd.physdir = sh.cwd.curdir;
 		} else {
-			sh.curdir = *val;
+			sh.cwd.curdir = *val;
 		}
 	}
 	INTON;
-	TRY_SHV(setvar(sh, "PWD", sh.curdir, VarFlag::exported));
+	TRY_SHV(setvar(sh, "PWD", sh.cwd.curdir, VarFlag::exported));
 	return {};
 }

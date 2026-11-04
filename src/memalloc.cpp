@@ -6,13 +6,10 @@
 #include <cstdlib>
 #include <unistd.h>
 
-#include "shell.h"
-#include "shell_context.h"
 #include "memalloc.h"
-#include "error.h"
 
 static rawmem
-checknull(ShellContext &sh, void *p)
+checknull(void *p)
 {
 	if (!p) {
 		// OOM is fatal; avoid ShellResult blast radius through ckmalloc.
@@ -24,7 +21,7 @@ checknull(ShellContext &sh, void *p)
 }
 
 __attribute__((__noinline__)) rawmem
-ckmalloc(ShellContext &sh, std::size_t nbytes)
+ckmalloc(std::size_t nbytes)
 {
-	return checknull(sh, std::malloc(nbytes));
+	return checknull(std::malloc(nbytes));
 }

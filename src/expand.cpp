@@ -1182,7 +1182,7 @@ recordregion(ShellContext &sh, int start, int end, int nulonly)
 		ifsp = &sh.expand.ifsfirst;
 	} else {
 		INTOFF;
-		ifsp = (struct ifsregion *)ckmalloc(sh, sizeof (struct ifsregion));
+		ifsp = (struct ifsregion *)ckmalloc(sizeof (struct ifsregion));
 		ifsp->next = NULL;
 		sh.expand.ifslastp->next = ifsp;
 		INTON_DEFER;
@@ -2039,7 +2039,7 @@ _rmescapes(ShellContext &sh, char *str, int flag, ExpandBuf *eb)
 			str = eb->base() + strloc;
 			p = str + len;
 		} else {
-			r = ckmalloc(sh, fulllen);
+			r = ckmalloc(fulllen);
 		}
 		q = r;
 		if (len > 0) {

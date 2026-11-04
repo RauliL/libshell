@@ -473,7 +473,7 @@ setinputfd(ShellContext &sh, InputStack &in, int fd, int push)
 	if (!push)
 		in.top = in.current;
 	in.current->fd = fd;
-	in.current->nextc = in.current->buf = ckmalloc(sh, IBUFSIZ);
+	in.current->nextc = in.current->buf = ckmalloc(IBUFSIZ);
 }
 
 

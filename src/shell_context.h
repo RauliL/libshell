@@ -26,6 +26,7 @@
 #include <sys/resource.h>
 #include <sys/types.h>
 
+#include "cd.h"
 #include "error.h"
 #include "exec.h"
 #include "eval.h"
@@ -141,8 +142,7 @@ struct ShellContext {
 	struct alias *atab[39] = {};
 	std::vector<RedirFrame> redirlist;
 	unsigned closed_redirs = 0;
-	std::string curdir;	/* empty when unknown */
-	std::string physdir;	/* empty when unknown */
+	CdState cwd;
 
 #ifdef DEBUG
 	FILE *tracefile = nullptr;
