@@ -42,16 +42,20 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+/** Argument/result scratch for one `printf` builtin invocation. */
+struct PrintfState {
+	char **gargv = nullptr;
+	int rval = 0;
+};
+
 static int conv_escape_str(ShellContext &sh, char *, std::string &);
-static int getchr(ShellContext &sh);
-static double getdouble(ShellContext &sh);
-static uintmax_t getuintmax(ShellContext &sh, int);
-static char	* getstr(ShellContext &sh);
+static int getchr(PrintfState &);
+static double getdouble(ShellContext &sh, PrintfState &);
+static uintmax_t getuintmax(ShellContext &sh, PrintfState &, int);
+static char *getstr(PrintfState &);
 static std::string mklong(const char *, const char *);
-static void check_conversion(ShellContext &sh, const char *, const char *);
-
-
-
+static void check_conversion(ShellContext &sh, PrintfState &, const char *,
+			     const char *);
 
 #define isodigit(c)	((c) >= '0' && (c) <= '7')
 #define octtobin(c)	((c) - '0')
@@ -133,8 +137,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 	char *fmt;
 	char *format;
 	int ch;
-
-	sh.rval = 0;
+	PrintfState st;
 
 	TRY_SHV(nextopt(sh, nullstr));
 
@@ -144,7 +147,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 	if (!format)
 		return error("usage: printf format [arg ...]");
 
-	sh.gargv = ++argv;
+	st.gargv = ++argv;
 
 #define SKIP1	"#-+ 0"
 #define SKIP2	"*0123456789"
@@ -188,7 +191,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 			fmt += strspn(fmt, SKIP1);
 			if (*fmt == '*') {
 				++fmt;
-				*param++ = getuintmax(sh, 1);
+				*param++ = getuintmax(sh, st, 1);
 			} else {
 				/* skip to possible '.',
 				 * get following precision
@@ -200,7 +203,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 				++fmt;
 				if (*fmt == '*') {
 					++fmt;
-					*param++ = getuintmax(sh, 1);
+					*param++ = getuintmax(sh, st, 1);
 				} else
 					fmt += strspn(fmt, SKIP2);
 			}
@@ -218,23 +221,23 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 				*fmt = 's';
 				/* escape if a \c was encountered */
 				if (TRY_SH(print_escape_str(sh, start, param, array,
-						     getstr(sh))))
+						     getstr(st))))
 					goto out;
 				*fmt = 'b';
 				break;
 			case 'c': {
-				int p = getchr(sh);
+				int p = getchr(st);
 				PF(start, p);
 				break;
 			}
 			case 's': {
-				char *p = getstr(sh);
+				char *p = getstr(st);
 				PF(start, p);
 				break;
 			}
 			case 'd':
 			case 'i': {
-				uintmax_t p = getuintmax(sh, 1);
+				uintmax_t p = getuintmax(sh, st, 1);
 				std::string longfmt = mklong(start, fmt);
 				PF(longfmt.c_str(), p);
 				break;
@@ -243,7 +246,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 			case 'u':
 			case 'x':
 			case 'X': {
-				uintmax_t p = getuintmax(sh, 0);
+				uintmax_t p = getuintmax(sh, st, 0);
 				std::string longfmt = mklong(start, fmt);
 				PF(longfmt.c_str(), p);
 				break;
@@ -256,7 +259,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 			case 'F':
 			case 'g':
 			case 'G': {
-				double p = getdouble(sh);
+				double p = getdouble(sh, st);
 				PF(start, p);
 				break;
 			}
@@ -265,10 +268,10 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 			}
 			*++fmt = nextch;
 		}
-	} while (sh.gargv != argv && *sh.gargv);
+	} while (st.gargv != argv && *st.gargv);
 
 out:
-	return sh.rval;
+	return st.rval;
 }
 
 
@@ -484,35 +487,35 @@ mklong(const char *str, const char *ch)
 }
 
 static int
-getchr(ShellContext &sh)
+getchr(PrintfState &st)
 {
 	int val = 0;
 
-	if (*sh.gargv)
-		val = **sh.gargv++;
+	if (*st.gargv)
+		val = **st.gargv++;
 	return val;
 }
 
 static char *
-getstr(ShellContext &sh)
+getstr(PrintfState &st)
 {
 	char *val = nullstr;
 
-	if (*sh.gargv)
-		val = *sh.gargv++;
+	if (*st.gargv)
+		val = *st.gargv++;
 	return val;
 }
 
 static uintmax_t
-getuintmax(ShellContext &sh, int sign)
+getuintmax(ShellContext &sh, PrintfState &st, int sign)
 {
 	uintmax_t val = 0;
 	char *cp, *ep;
 
-	cp = *sh.gargv;
+	cp = *st.gargv;
 	if (cp == NULL)
 		goto out;
-	sh.gargv++;
+	st.gargv++;
 
 	val = (unsigned char) cp[1];
 	if (*cp == '\"' || *cp == '\'')
@@ -520,43 +523,44 @@ getuintmax(ShellContext &sh, int sign)
 
 	errno = 0;
 	val = sign ? std::strtoimax(cp, &ep, 0) : std::strtoumax(cp, &ep, 0);
-	check_conversion(sh, cp, ep);
+	check_conversion(sh, st, cp, ep);
 out:
 	return val;
 }
 
 static double
-getdouble(ShellContext &sh)
+getdouble(ShellContext &sh, PrintfState &st)
 {
 	double val;
 	char *cp, *ep;
 
-	cp = *sh.gargv;
+	cp = *st.gargv;
 	if (cp == NULL)
 		return 0;
-	sh.gargv++;
+	st.gargv++;
 
 	if (*cp == '\"' || *cp == '\'')
 		return (unsigned char) cp[1];
 
 	errno = 0;
 	val = std::strtod(cp, &ep);
-	check_conversion(sh, cp, ep);
+	check_conversion(sh, st, cp, ep);
 	return val;
 }
 
 static void
-check_conversion(ShellContext &sh, const char *s, const char *ep)
+check_conversion(ShellContext &sh, PrintfState &st, const char *s,
+		 const char *ep)
 {
 	if (*ep) {
 		if (ep == s)
 			warnx("{}: expected numeric value", s);
 		else
 			warnx("{}: not completely converted", s);
-		sh.rval = 1;
+		st.rval = 1;
 	} else if (errno == ERANGE) {
 		warnx("{}: {}", s, strerror(ERANGE));
-		sh.rval = 1;
+		st.rval = 1;
 	}
 }
 

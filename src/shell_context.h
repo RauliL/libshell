@@ -44,7 +44,6 @@ struct backcmd;
 struct alias;
 struct heredoc;
 struct synstack;
-struct t_op;
 struct ifs_state;
 struct builtincmd;
 struct cmdentry;
@@ -169,11 +168,6 @@ struct ShellContext {
 	unsigned closed_redirs = 0;
 	std::string curdir;	/* empty when unknown */
 	std::string physdir;	/* empty when unknown */
-
-	char **t_wp = nullptr;
-	const struct t_op *t_wp_op = nullptr;
-	int rval = 0;
-	char **gargv = nullptr;
 
 #ifdef DEBUG
 	FILE *tracefile = nullptr;

@@ -95,6 +95,12 @@ struct t_op {
 	short op_num, op_type;
 };
 
+/** Expression-walker state for one `test`/`[` invocation. */
+struct TestState {
+	char **wp = nullptr;
+	const t_op *wp_op = nullptr;
+};
+
 static const struct t_op ops[] = {
 	{"-r",	FILRD,	UNOP},
 	{"-w",	FILWR,	UNOP},
@@ -141,18 +147,20 @@ static const struct t_op ops[] = {
 
 
 
-static tl::unexpected<shell::Error> syntax(ShellContext &sh, const char *, const char *);
-static shell::Result<int> oexpr(ShellContext &sh, enum token);
-static shell::Result<int> aexpr(ShellContext &sh, enum token);
-static shell::Result<int> nexpr(ShellContext &sh, enum token);
-static shell::Result<int> primary(ShellContext &sh, enum token);
-static shell::Result<int> binop(ShellContext &sh);
-static int filstat(ShellContext &sh, char *, enum token);
-static enum token t_lex(ShellContext &sh, char **);
-static int isoperand(ShellContext &sh, char **);
-static bool newerf(ShellContext &sh, const char *, const char *);
-static bool olderf(ShellContext &sh, const char *, const char *);
-static int equalf(ShellContext &sh, const char *, const char *);
+static tl::unexpected<shell::Error> syntax(ShellContext &sh, const char *,
+					  const char *);
+static shell::Result<int> oexpr(ShellContext &sh, TestState &, enum token);
+static shell::Result<int> aexpr(ShellContext &sh, TestState &, enum token);
+static shell::Result<int> nexpr(ShellContext &sh, TestState &, enum token);
+static shell::Result<int> primary(ShellContext &sh, TestState &, enum token);
+static shell::Result<int> binop(ShellContext &sh, TestState &);
+static int filstat(char *, enum token);
+static enum token t_lex(TestState &, char **);
+static int isoperand(char **);
+static bool newerf(const char *, const char *);
+static bool olderf(const char *, const char *);
+static int equalf(const char *, const char *);
+static const t_op *getop(const char *s);
 
 #ifdef HAVE_FACCESSAT
 # ifdef HAVE_TRADITIONAL_FACCESSAT
@@ -172,33 +180,30 @@ getn(ShellContext &sh, const char *s)
 	return atomax10(sh, s);
 }
 
-const struct t_op *
-getop(ShellContext &sh, const char *s)
+static const t_op *
+getop(const char *s)
 {
-	const struct t_op *op;
-
-	for (op = ops; op->op_text; op++) {
+	for (const t_op *op = ops; op->op_text; op++) {
 		if (strcmp(s, op->op_text) == 0)
 			return op;
 	}
 
-	return NULL;
+	return nullptr;
 }
 
 shell::Result<int>
 testcmd(ShellContext &sh, int argc, char **argv)
 {
-	const struct t_op *op;
+	const t_op *op;
 	enum token n;
 	int res = 1;
+	TestState st;
 
 	if (*argv[0] == '[') {
 		if (*argv[--argc] != ']')
 			return error("missing ]");
 		argv[argc] = NULL;
 	}
-
-	sh.t_wp_op = NULL;
 
 recheck:
 	argv++;
@@ -213,7 +218,7 @@ recheck:
 	 */
 	switch (argc) {
 	case 3:
-		op = getop(sh, argv[1]);
+		op = getop(argv[1]);
 		if (op && op->op_type == BINOP) {
 			n = OPERAND;
 			goto eval;
@@ -231,12 +236,12 @@ recheck:
 		}
 	}
 
-	n = t_lex(sh, argv);
+	n = t_lex(st, argv);
 
 eval:
-	sh.t_wp = argv;
-	res ^= TRY_SH(oexpr(sh, n));
-	argv = sh.t_wp;
+	st.wp = argv;
+	res ^= TRY_SH(oexpr(sh, st, n));
+	argv = st.wp;
 
 	if (argv[0] != NULL && argv[1] != NULL)
 		return syntax(sh, argv[0], "unexpected operator");
@@ -254,54 +259,54 @@ syntax(ShellContext &sh, const char *op, const char *msg)
 }
 
 static shell::Result<int>
-oexpr(ShellContext &sh, enum token n)
+oexpr(ShellContext &sh, TestState &st, enum token n)
 {
 	int res = 0;
 
 	for (;;) {
-		res |= TRY_SH(aexpr(sh, n));
-		if (!*sh.t_wp)
+		res |= TRY_SH(aexpr(sh, st, n));
+		if (!*st.wp)
 			break;
-		n = t_lex(sh, sh.t_wp + 1);
+		n = t_lex(st, st.wp + 1);
 		if (n != BOR)
 			break;
-		n = t_lex(sh, sh.t_wp += 2);
+		n = t_lex(st, st.wp += 2);
 	}
 	return res;
 }
 
 static shell::Result<int>
-aexpr(ShellContext &sh, enum token n)
+aexpr(ShellContext &sh, TestState &st, enum token n)
 {
 	int res = 1;
 
 	for (;;) {
-		if (!TRY_SH(nexpr(sh, n)))
+		if (!TRY_SH(nexpr(sh, st, n)))
 			res = 0;
-		if (!*sh.t_wp)
+		if (!*st.wp)
 			break;
-		n = t_lex(sh, sh.t_wp + 1);
+		n = t_lex(st, st.wp + 1);
 		if (n != BAND)
 			break;
-		n = t_lex(sh, sh.t_wp += 2);
+		n = t_lex(st, st.wp += 2);
 	}
 	return res;
 }
 
 static shell::Result<int>
-nexpr(ShellContext &sh, enum token n)
+nexpr(ShellContext &sh, TestState &st, enum token n)
 {
 	if (n != UNOT)
-		return primary(sh, n);
+		return primary(sh, st, n);
 
-	n = t_lex(sh, sh.t_wp + 1);
+	n = t_lex(st, st.wp + 1);
 	if (n != EOI)
-		sh.t_wp++;
-	return !TRY_SH(nexpr(sh, n));
+		st.wp++;
+	return !TRY_SH(nexpr(sh, st, n));
 }
 
 static shell::Result<int>
-primary(ShellContext &sh, enum token n)
+primary(ShellContext &sh, TestState &st, enum token n)
 {
 	enum token nn;
 	int res;
@@ -309,55 +314,55 @@ primary(ShellContext &sh, enum token n)
 	if (n == EOI)
 		return 0;		/* missing expression */
 	if (n == LPAREN) {
-		if ((nn = t_lex(sh, ++sh.t_wp)) == RPAREN)
+		if ((nn = t_lex(st, ++st.wp)) == RPAREN)
 			return 0;	/* missing expression */
-		res = TRY_SH(oexpr(sh, nn));
-		if (t_lex(sh, ++sh.t_wp) != RPAREN)
+		res = TRY_SH(oexpr(sh, st, nn));
+		if (t_lex(st, ++st.wp) != RPAREN)
 			return syntax(sh, NULL, "closing paren expected");
 		return res;
 	}
-	if (sh.t_wp_op && sh.t_wp_op->op_type == UNOP) {
+	if (st.wp_op && st.wp_op->op_type == UNOP) {
 		/* unary expression */
-		if (*++sh.t_wp == NULL)
-			return syntax(sh, sh.t_wp_op->op_text, "argument expected");
+		if (*++st.wp == NULL)
+			return syntax(sh, st.wp_op->op_text, "argument expected");
 		switch (n) {
 		case STREZ:
-			return strlen(*sh.t_wp) == 0;
+			return strlen(*st.wp) == 0;
 		case STRNZ:
-			return strlen(*sh.t_wp) != 0;
+			return strlen(*st.wp) != 0;
 		case FILTT:
-			return isatty(TRY_SH(getn(sh, *sh.t_wp)));
+			return isatty(TRY_SH(getn(sh, *st.wp)));
 #ifdef HAVE_FACCESSAT
 		case FILRD:
-			return test_file_access(sh, *sh.t_wp, R_OK);
+			return test_file_access(sh, *st.wp, R_OK);
 		case FILWR:
-			return test_file_access(sh, *sh.t_wp, W_OK);
+			return test_file_access(sh, *st.wp, W_OK);
 		case FILEX:
-			return test_file_access(sh, *sh.t_wp, X_OK);
+			return test_file_access(sh, *st.wp, X_OK);
 #endif
 		default:
-			return filstat(sh, *sh.t_wp, n);
+			return filstat(*st.wp, n);
 		}
 	}
 
-	if (t_lex(sh, sh.t_wp + 1), sh.t_wp_op && sh.t_wp_op->op_type == BINOP) {
-		return binop(sh);
+	if (t_lex(st, st.wp + 1), st.wp_op && st.wp_op->op_type == BINOP) {
+		return binop(sh, st);
 	}
 
-	return strlen(*sh.t_wp) > 0;
+	return strlen(*st.wp) > 0;
 }
 
 static shell::Result<int>
-binop(ShellContext &sh)
+binop(ShellContext &sh, TestState &st)
 {
 	const char *opnd1, *opnd2;
-	struct t_op const *op;
+	const t_op *op;
 
-	opnd1 = *sh.t_wp;
-	t_lex(sh, ++sh.t_wp);
-	op = sh.t_wp_op;
+	opnd1 = *st.wp;
+	t_lex(st, ++st.wp);
+	op = st.wp_op;
 
-	if ((opnd2 = *++sh.t_wp) == (char *)0)
+	if ((opnd2 = *++st.wp) == (char *)0)
 		return syntax(sh, op->op_text, "argument expected");
 
 	switch (op->op_num) {
@@ -387,16 +392,16 @@ binop(ShellContext &sh)
 	case INTLT:
 		return TRY_SH(getn(sh, opnd1)) < TRY_SH(getn(sh, opnd2));
 	case FILNT:
-		return newerf(sh, opnd1, opnd2);
+		return newerf(opnd1, opnd2);
 	case FILOT:
-		return olderf(sh, opnd1, opnd2);
+		return olderf(opnd1, opnd2);
 	case FILEQ:
-		return equalf(sh, opnd1, opnd2);
+		return equalf(opnd1, opnd2);
 	}
 }
 
 static int
-filstat(ShellContext &sh, char *nm, enum token mode)
+filstat(char *nm, enum token mode)
 {
 	struct stat64 s;
 
@@ -448,31 +453,29 @@ filstat(ShellContext &sh, char *nm, enum token mode)
 }
 
 static enum token
-t_lex(ShellContext &sh, char **tp)
+t_lex(TestState &st, char **tp)
 {
-	struct t_op const *op;
 	char *s = *tp;
 
 	if (s == 0) {
-		sh.t_wp_op = (struct t_op *)0;
+		st.wp_op = nullptr;
 		return EOI;
 	}
 
-	op = getop(sh, s);
-	if (op && !(op->op_type == UNOP && isoperand(sh, tp)) &&
+	const t_op *op = getop(s);
+	if (op && !(op->op_type == UNOP && isoperand(tp)) &&
 	    !(op->op_num == LPAREN && !tp[1])) {
-		sh.t_wp_op = op;
+		st.wp_op = op;
 		return static_cast<token>(op->op_num);
 	}
 
-	sh.t_wp_op = (struct t_op *)0;
+	st.wp_op = nullptr;
 	return OPERAND;
 }
 
 static int
-isoperand(ShellContext &sh, char **tp)
+isoperand(char **tp)
 {
-	struct t_op const *op;
 	char *s;
 
 	if (!(s = tp[1]))
@@ -480,12 +483,12 @@ isoperand(ShellContext &sh, char **tp)
 	if (!tp[2])
 		return 0;
 
-	op = getop(sh, s);
+	const t_op *op = getop(s);
 	return op && op->op_type == BINOP;
 }
 
 static bool
-newerf(ShellContext &sh, const char *f1, const char *f2)
+newerf(const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
 
@@ -504,7 +507,7 @@ newerf(ShellContext &sh, const char *f1, const char *f2)
 }
 
 static bool
-olderf(ShellContext &sh, const char *f1, const char *f2)
+olderf(const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
 
@@ -523,7 +526,7 @@ olderf(ShellContext &sh, const char *f1, const char *f2)
 }
 
 static int
-equalf(ShellContext &sh, const char *f1, const char *f2)
+equalf(const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
 
