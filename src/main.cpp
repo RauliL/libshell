@@ -49,7 +49,6 @@ int *dash_errno;
 #include "parser.h"
 #include "nodes.h"
 #include "eval.h"
-#include "jobs.h"
 #include "input.h"
 #include "trap.h"
 #include "var.h"
@@ -76,27 +75,22 @@ run_interactive(ShellContext &sh)
 	for (;;) {
 		int skip;
 
-		if (sh.jobctl)
-			showjobs(sh, sh.out2, SHOW_CHANGED);
 		try {
 			ParseCmdResult cmd = parsecmd(sh, 1);
 			if (cmd.eof) {
 				if (numeof >= 50)
 					break;
-				if (!stoppedjobs(sh)) {
-					if (!Iflag) {
-						out2c('\n');
+				if (!Iflag) {
+					out2c('\n');
 #ifdef FLUSHERR
-						sh.out2->flush(sh);
+					sh.out2->flush(sh);
 #endif
-						break;
-					}
-					out2str("\nUse \"exit\" to leave shell.\n");
+					break;
 				}
+				out2str("\nUse \"exit\" to leave shell.\n");
 				numeof++;
 			} else {
 				Node *n = cmd.tree.get();
-				sh.job_warning = (sh.job_warning == 2) ? 1 : 0;
 				numeof = 0;
 				auto r = evaltree(sh, n, {});
 				if (!r) {
@@ -149,15 +143,12 @@ cmdloop(ShellContext &sh)
 	for (;;) {
 		int skip;
 
-		if (sh.jobctl)
-			showjobs(sh, sh.out2, SHOW_CHANGED);
 		try {
 			ParseCmdResult cmd = parsecmd(sh, 0);
 			if (cmd.eof) {
 				break;
 			}
 			Node *n = cmd.tree.get();
-			sh.job_warning = (sh.job_warning == 2) ? 1 : 0;
 			auto r = evaltree(sh, n, {});
 			if (!r) {
 				sh.exception = r.error();
@@ -249,9 +240,6 @@ dotcmd(ShellContext &sh, int argc, char **argv)
 shell::Result<int>
 exitcmd(ShellContext &sh, int argc, char **argv)
 {
-	if (stoppedjobs(sh))
-		return 0;
-
 	if (argc > 1)
 		sh.savestatus = TRY_SH(number(sh, argv[1]));
 

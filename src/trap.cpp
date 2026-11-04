@@ -46,7 +46,6 @@
 #include "nodes.h"	/* for other headers */
 #include "eval.h"
 #include "init.h"
-#include "jobs.h"
 #include "show.h"
 #include "options.h"
 #include "syntax.h"
@@ -329,7 +328,6 @@ exitshell(ShellContext &sh)
 	}
 	exitreset(sh);
 	postexitreset(sh);
-	setjobctl(sh, 0);
 	flushall(sh);
 	_exit(sh.exitstatus);
 	/* NOTREACHED */

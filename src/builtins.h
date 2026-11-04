@@ -23,9 +23,8 @@ struct builtincmd {
 
 const builtincmd *find_builtin(std::string_view name);
 
-/* Stable identities used by eval / jobs / trap. */
+/* Stable identities used by eval / trap. */
 extern const builtincmd builtin_command;
 extern const builtincmd builtin_eval;
 extern const builtincmd builtin_exec;
-extern const builtincmd builtin_jobs;
 extern const builtincmd builtin_trap;

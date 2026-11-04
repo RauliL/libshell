@@ -22,7 +22,6 @@
 #include <string>
 #include <sys/resource.h>
 #include <sys/types.h>
-#include <termios.h>
 #include <vector>
 
 #include "error.h"
@@ -77,15 +76,9 @@ struct ShellContext {
 	volatile sig_atomic_t gotsigchld = 0;
 
 	std::vector<std::unique_ptr<Job>> jobs;
-	std::vector<Job *> job_order;	/* job-control order (stopped first) */
+	std::vector<Job *> job_order;	/* current job first */
 	pid_t backgndpid = 0;
-#if JOBS
-	int initialpgrp = 0;
-	int ttyfd = -1;
-#endif
 	int vforked = 0;
-	int jobctl = 0;
-	int job_warning = 0;
 	char defifsvar[sizeof("IFS= \t\n")] = "IFS= \t\n";
 	char defoptindvar[sizeof("OPTIND=1")] = "OPTIND=1";
 	int lineno = 0;

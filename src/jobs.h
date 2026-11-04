@@ -53,13 +53,7 @@
 #define FORK_BG 1
 #define FORK_NOJOB 2
 
-/* mode flags for showjob(s) */
-#define	SHOW_PGID	0x01	/* only show pgid - for jobs -p */
-#define	SHOW_PID	0x04	/* include process pid */
-#define	SHOW_CHANGED	0x08	/* only jobs whose state has changed */
-
 struct ShellContext;
-struct output;
 struct Node;
 
 /*
@@ -75,43 +69,24 @@ struct ProcStat {
 struct Job {
 	enum class State : std::uint8_t {
 		Running = 0,	/* at least one proc running */
-		Stopped = 1,	/* all procs are stopped */
-		Done = 2,	/* all procs are completed */
+		Done = 1,	/* all procs are completed */
 	};
 
 	std::size_t slot = 0;		/* index in ShellContext::jobs */
 	std::vector<ProcStat> procs;
-#if JOBS
-	int stopstatus = 0;		/* status of a stopped job */
-	bool sigint = false;		/* job was killed by SIGINT */
-	bool jobctl = false;		/* job running under job control */
-#endif
 	State state = State::Running;
 	bool waited = false;		/* true if this entry has been waited for */
-	bool changed = false;		/* true if status has changed */
 
 	int number() const { return static_cast<int>(slot + 1); }
 	pid_t pgid() const { return procs.empty() ? -1 : procs.front().pid; }
 
 	ProcStat &add_process(pid_t pid, std::string cmd = {});
-	void clear_stopped();
 	int calc_status(bool pipefail_on);
-	void show_pipe(ShellContext &sh, struct output *out) const;
 };
 
-shell::Result<void> setjobctl(ShellContext &, int);
 shell::Result<int> killcmd(ShellContext &, int, char **);
-shell::Result<int> fgcmd(ShellContext &, int, char **);
-shell::Result<int> bgcmd(ShellContext &, int, char **);
-shell::Result<int> jobscmd(ShellContext &, int, char **);
-void showjobs(ShellContext &, struct output *, int);
 shell::Result<int> waitcmd(ShellContext &, int, char **);
 Job *makejob(ShellContext &, int);
 shell::Result<int> forkshell(ShellContext &, Job *, Node *, int);
 shell::Result<Job *> vforkexec(ShellContext &, Node *, char **, const char *, int);
 shell::Result<int> waitforjob(ShellContext &, Job *);
-int stoppedjobs(ShellContext &);
-
-#if ! JOBS
-#define setjobctl(sh, on) ((void)(on))	/* do nothing */
-#endif

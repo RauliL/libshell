@@ -46,8 +46,6 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #endif
-#include <sys/ioctl.h>
-
 #include <algorithm>
 #include <cstring>
 #include <format>
@@ -57,11 +55,6 @@
 
 #include "shell.h"
 #include "shell_context.h"
-#if JOBS
-#include <termios.h>
-#undef CEOF			/* syntax.h redefines this */
-#endif
-#include "builtins.h"
 #include "exec.h"
 #include "eval.h"
 #include "init.h"
@@ -84,7 +77,6 @@
 /* mode flags for set_curjob */
 #define CUR_DELETE 2
 #define CUR_RUNNING 1
-#define CUR_STOPPED 0
 
 /* mode flags for dowait */
 #define DOWAIT_NONBLOCK 0
@@ -93,9 +85,9 @@
 #define DOWAIT_WAITCMD_ALL 4
 
 static void set_curjob(ShellContext &sh, Job *, unsigned);
-static int sprint_status(char *, int, int);
+static int sprint_status(char *, int);
 static void freejob(ShellContext &sh, Job *);
-static shell::Result<Job *> getjob(ShellContext &sh, const char *, int);
+static shell::Result<Job *> getjob(ShellContext &sh, const char *);
 static void forkchild(ShellContext &sh, Job *, Node *, int);
 static shell::Result<void> forkparent(ShellContext &sh, Job *, Node *, int, pid_t);
 static int dowait(ShellContext &sh, int, Job *);
@@ -107,27 +99,12 @@ static std::string commandtext(ShellContext &sh, Node *);
 static void cmdtxt(ShellContext &sh, Node *, std::string &);
 static void cmdlist(ShellContext &sh, Node *, int, std::string &);
 static void cmdputs(std::string &, std::string_view);
-static void showjob(ShellContext &sh, struct output *, Job *, int);
-
-#if JOBS
-static shell::Result<int> restartjob(ShellContext &sh, Job *, int);
-static shell::Result<void> xtcsetpgrp(ShellContext &sh, int, pid_t);
-#endif
 
 ProcStat &
 Job::add_process(pid_t pid, std::string cmd)
 {
 	procs.push_back(ProcStat{pid, -1, std::move(cmd)});
 	return procs.back();
-}
-
-void
-Job::clear_stopped()
-{
-	for (auto &ps : procs) {
-		if (WIFSTOPPED(ps.status))
-			ps.status = -1;
-	}
 }
 
 int
@@ -147,31 +124,12 @@ Job::calc_status(bool pipefail_on)
 
 	int retval = WEXITSTATUS(status);
 	if (!WIFEXITED(status)) {
-#if JOBS
-		retval = WSTOPSIG(status);
-		if (!WIFSTOPPED(status))
-#endif
-		{
-			retval = WTERMSIG(status);
-#if JOBS
-			if (retval == SIGINT)
-				sigint = true;
-#endif
-		}
+		retval = WTERMSIG(status);
 		retval += 128;
 	}
 	TRACE(("getstatus: job %d, nproc %zu, status %x, retval %x\n",
 		number(), procs.size(), status, retval));
 	return retval;
-}
-
-void
-Job::show_pipe(ShellContext &sh, struct output *out) const
-{
-	for (std::size_t i = 1; i < procs.size(); i++)
-		out->write(sh, std::format(" | {}", procs[i].cmd));
-	outcslow(sh, '\n', out);
-	flushall(sh);
 }
 
 static void
@@ -187,115 +145,11 @@ set_curjob(ShellContext &sh, Job *jp, unsigned mode)
 #endif
 	case CUR_DELETE:
 		break;
-	case CUR_RUNNING: {
-		/* newly created job or backgrounded job,
-		   put after all stopped jobs. */
-		auto it = order.begin();
-		while (it != order.end()) {
-#if JOBS
-			if ((*it)->state != Job::State::Stopped)
-#endif
-				break;
-			++it;
-		}
-		order.insert(it, jp);
-		break;
-	}
-#if JOBS
-	case CUR_STOPPED:
-		/* newly stopped job - becomes current */
+	case CUR_RUNNING:
 		order.insert(order.begin(), jp);
 		break;
-#endif
 	}
 }
-#if JOBS
-/*
- * Turn job control on and off.
- *
- * Note:  This code assumes that the third arg to ioctl is a character
- * pointer, which is true on Berkeley systems but not System V.  Since
- * System V doesn't have job control yet, this isn't a problem now.
- *
- * Called with interrupts off.
- */
-
-
-
-static shell::Result<void>
-xxtcsetpgrp(ShellContext &sh, pid_t pgrp)
-{
-	int fd = sh.ttyfd;
-
-	if (fd < 0)
-		return {};
-
-	TRY_SHV(xtcsetpgrp(sh, fd, pgrp));
-	return {};
-}
-
-shell::Result<void>
-setjobctl(ShellContext &sh, int on)
-{
-	int pgrp = -1;
-	int fd;
-
-	if (on == sh.jobctl || rootshell == 0)
-		return {};
-	if (on) {
-		int ofd;
-		ofd = fd = TRY_SH(sh_open(sh, _PATH_TTY, O_RDWR, 1));
-		if (fd < 0) {
-			fd += 3;
-			while (!isatty(fd))
-				if (--fd < 0)
-					goto out;
-		}
-		fd = TRY_SH(savefd(sh, fd, ofd));
-		do { /* while we are in the background */
-			if ((pgrp = tcgetpgrp(fd)) < 0) {
-close:
-				close(fd);
-				fd = -1;
-out:
-				if (!iflag)
-					break;
-				sh_warnx(sh, "can't access tty; job control turned off");
-				mflag = on = 0;
-				return {};
-			}
-			if (pgrp == getpgrp())
-				break;
-			if (!iflag)
-				goto close;
-			killpg(0, SIGTTIN);
-		} while (1);
-		sh.initialpgrp = pgrp;
-		pgrp = sh.rootpid;
-	} else {
-		/* turning job control off */
-		fd = sh.ttyfd;
-		pgrp = sh.initialpgrp;
-	}
-
-	setsignal(sh, SIGTSTP);
-	setsignal(sh, SIGTTOU);
-	setsignal(sh, SIGTTIN);
-	if (fd >= 0) {
-		setpgid(0, pgrp);
-		TRY_SHV(xtcsetpgrp(sh, fd, pgrp));
-
-		if (!on) {
-			close(fd);
-			fd = -1;
-		}
-	}
-
-	sh.ttyfd = fd;
-	sh.jobctl = on;
-	return {};
-}
-#endif
 
 
 shell::Result<int>
@@ -372,7 +226,7 @@ usage:
 	i = 0;
 	do {
 		if (**argv == '%') {
-			jp = TRY_SH(getjob(sh, *argv, 0));
+			jp = TRY_SH(getjob(sh, *argv));
 			pid = -jp->pgid();
 		} else
 			pid = **argv == '-' ?
@@ -386,229 +240,28 @@ usage:
 	return i;
 }
 
-#if JOBS
-shell::Result<int>
-fgcmd(ShellContext &sh, int argc, char **argv)
-{
-	Job *jp;
-	struct output *out;
-	int mode;
-	int retval;
-
-	mode = (**argv == 'f') ? FORK_FG : FORK_BG;
-	TRY_SHV(nextopt(sh, nullstr));
-	argv = sh.argptr;
-	out = sh.out1;
-	do {
-		jp = TRY_SH(getjob(sh, *argv, 1));
-		if (mode == FORK_BG) {
-			set_curjob(sh, jp, CUR_RUNNING);
-			out->write(sh, std::format("[{}]", jp->number()));
-		}
-		out->write(sh, jp->procs.front().cmd);
-		jp->show_pipe(sh, out);
-		retval = TRY_SH(restartjob(sh, jp, mode));
-	} while (*argv && *++argv);
-	return retval;
-}
-
-shell::Result<int>
-bgcmd(ShellContext &sh, int argc, char **argv)
-#ifdef HAVE_ALIAS_ATTRIBUTE
-	__attribute__((__alias__("fgcmd")));
-#else
-{
-	return fgcmd(sh, argc, argv);
-}
-#endif
-
-
-static shell::Result<int>
-restartjob(ShellContext &sh, Job *jp, int mode)
-{
-	int status;
-
-	INTOFF;
-	if (jp->state == Job::State::Done)
-		goto out;
-	jp->state = Job::State::Running;
-	if (mode == FORK_FG)
-		TRY_SHV(xxtcsetpgrp(sh, jp->pgid()));
-	killpg(jp->pgid(), SIGCONT);
-	jp->clear_stopped();
-out:
-	status = (mode == FORK_FG) ? TRY_SH(waitforjob(sh, jp)) : 0;
-	INTON;
-	return status;
-}
-#endif
+/*
+ * Text for a signal that killed the job waited on.  SIGINT and SIGPIPE
+ * are not reported.  Returns 0 when there is nothing to print.
+ */
 static int
-sprint_status(char *os, int status, int sigonly)
+sprint_status(char *os, int status)
 {
 	char *s = os;
 	int st;
 
-	st = WEXITSTATUS(status);
-	if (!WIFEXITED(status)) {
-#if JOBS
-		st = WSTOPSIG(status);
-		if (!WIFSTOPPED(status))
-#endif
-			st = WTERMSIG(status);
-		if (sigonly) {
-			if (st == SIGINT || st == SIGPIPE)
-				goto out;
-#if JOBS
-			if (WIFSTOPPED(status))
-				goto out;
-#endif
-		}
-		s = stpncpy(s, strsignal(st), 32);
+	if (WIFEXITED(status))
+		return 0;
+
+	st = WTERMSIG(status);
+	if (st == SIGINT || st == SIGPIPE)
+		return 0;
+	s = stpncpy(s, strsignal(st), 32);
 #ifdef WCOREDUMP
-		if (WCOREDUMP(status)) {
-			s = stpcpy(s, " (core dumped)");
-		}
+	if (WCOREDUMP(status))
+		s = stpcpy(s, " (core dumped)");
 #endif
-	} else if (!sigonly) {
-		if (st)
-			s = stpcpy(s, std::format("Done({})", st).c_str());
-		else
-			s = stpcpy(s, "Done");
-	}
-
-out:
 	return s - os;
-}
-
-static void
-showjob(ShellContext &sh, struct output *out, Job *jp, int mode)
-{
-	int col;
-	int indent;
-	char s[80];
-	std::size_t pi = 0;
-
-	if (jp->procs.empty())
-		return;
-
-	if (mode & SHOW_PGID) {
-		/* just output process (group) id of pipeline */
-		out->write(sh, std::format("{}\n", jp->pgid()));
-		return;
-	}
-
-	{
-		auto t = std::format("[{}]   ", jp->number());
-		col = static_cast<int>(t.size());
-		memcpy(s, t.c_str(), t.size() + 1);
-	}
-	indent = col;
-
-	if (!sh.job_order.empty() && jp == sh.job_order.front())
-		s[col - 2] = '+';
-	else if (sh.job_order.size() > 1 && jp == sh.job_order[1])
-		s[col - 2] = '-';
-
-	if (mode & SHOW_PID) {
-		auto t = std::format("{} ", jp->procs[0].pid);
-		memcpy(s + col, t.c_str(), t.size() + 1);
-		col += static_cast<int>(t.size());
-	}
-
-	if (jp->state == Job::State::Running) {
-		scopy("Running", s + col);
-		col += strlen("Running");
-	} else {
-		int status = jp->procs.back().status;
-#if JOBS
-		if (jp->state == Job::State::Stopped)
-			status = jp->stopstatus;
-#endif
-		col += sprint_status(s + col, status, 0);
-	}
-
-	goto start;
-
-	do {
-		/* for each process */
-		{
-			auto t = std::format(" |\n{:{}c}{} ", ' ', indent,
-				jp->procs[pi].pid);
-			memcpy(s, t.c_str(), t.size() + 1);
-			col = static_cast<int>(t.size()) - 3;
-		}
-
-start:
-		outfmt(sh, out, "%s%*c%s",
-			s, 33 - col >= 0 ? 33 - col : 0, ' ',
-			jp->procs[pi].cmd.c_str()
-		);
-		if (!(mode & SHOW_PID)) {
-			jp->show_pipe(sh, out);
-			break;
-		}
-		if (++pi == jp->procs.size()) {
-			outcslow(sh, '\n', out);
-			break;
-		}
-	} while (1);
-
-	jp->changed = false;
-
-	if (jp->state == Job::State::Done) {
-		TRACE(("showjob: freeing job %d\n", jp->number()));
-		freejob(sh, jp);
-	}
-}
-
-shell::Result<int>
-jobscmd(ShellContext &sh, int argc, char **argv)
-{
-	int mode, m;
-	struct output *out;
-
-	mode = 0;
-	while ((m = TRY_SH(nextopt(sh, "lp"))))
-		if (m == 'l')
-			mode = SHOW_PID;
-		else
-			mode = SHOW_PGID;
-
-	out = sh.out1;
-	argv = sh.argptr;
-	if (*argv)
-		do
-			showjob(sh, out, TRY_SH(getjob(sh, *argv,0)), mode);
-		while (*++argv);
-	else
-		showjobs(sh, out, mode);
-
-	return 0;
-}
-
-
-/*
- * Print a list of jobs.  If "change" is nonzero, only print jobs whose
- * statuses have sh.changed since the last call to showjobs.
- */
-
-void
-showjobs(ShellContext &sh, struct output *out, int mode)
-{
-	TRACE(("showjobs(%x) called\n", mode));
-
-	dowait(sh, DOWAIT_NONBLOCK, nullptr);
-
-	/* Copy pointers: showjob may free a job and mutate job_order. */
-	std::vector<Job *> snapshot = sh.job_order;
-	for (Job *jp : snapshot) {
-		if (!jp)
-			continue;
-		if (jp->slot >= sh.jobs.size() || sh.jobs[jp->slot].get() != jp)
-			continue;
-		if (!(mode & SHOW_CHANGED) || jp->changed)
-			showjob(sh, out, jp, mode);
-	}
 }
 
 /*
@@ -670,8 +323,8 @@ waitcmd(ShellContext &sh, int argc, char **argv)
 			if (!job)
 				goto repeat;
 		} else
-			job = TRY_SH(getjob(sh, *argv, 0));
-		/* loop until process terminated or stopped */
+			job = TRY_SH(getjob(sh, *argv));
+		/* loop until process terminated */
 		if (!dowait(sh, DOWAIT_WAITCMD, job))
 			goto sigout;
 		job->waited = true;
@@ -694,14 +347,13 @@ sigout:
  */
 
 static shell::Result<Job *>
-getjob(ShellContext &sh, const char *name, int getctl)
+getjob(ShellContext &sh, const char *name)
 {
 	enum class JobErr {
 		NoSuch,
 		NoCurrent,
 		NoPrevious,
 		Ambiguous,
-		NotJobCtl,
 	};
 
 	Job *jp;
@@ -775,12 +427,6 @@ check:
 	jp = found;
 
 gotit:
-#if JOBS
-	if (getctl && !jp->jobctl) {
-		err_kind = JobErr::NotJobCtl;
-		goto err;
-	}
-#endif
 	return jp;
 err:
 	switch (err_kind) {
@@ -790,8 +436,6 @@ err:
 		return sh_error(sh, "No previous job");
 	case JobErr::Ambiguous:
 		return sh_error(sh, "{}: ambiguous", name);
-	case JobErr::NotJobCtl:
-		return sh_error(sh, "job {} not created under job control", name);
 	case JobErr::NoSuch:
 	default:
 		return sh_error(sh, "No such job: {}", name ? name : "");
@@ -815,8 +459,6 @@ makejob(ShellContext &sh, int nprocs)
 			break;
 		if (jp->state != Job::State::Done || !jp->waited)
 			continue;
-		if (sh.jobctl)
-			continue;
 		freejob(sh, jp);
 		break;
 	}
@@ -826,10 +468,6 @@ makejob(ShellContext &sh, int nprocs)
 	auto owned = std::make_unique<Job>();
 	owned->slot = slot;
 	owned->procs.reserve(static_cast<std::size_t>(nprocs > 0 ? nprocs : 0));
-#if JOBS
-	if (sh.jobctl)
-		owned->jobctl = true;
-#endif
 	Job *jp = owned.get();
 	sh.jobs[slot] = std::move(owned);
 	sh.job_order.insert(sh.job_order.begin(), jp);
@@ -838,18 +476,16 @@ makejob(ShellContext &sh, int nprocs)
 }
 
 /*
- * Fork off a subshell.  If we are doing job control, give the subshell its
- * own process group.  Jp is a job structure that the job is to be added to.
+ * Fork off a subshell.  Jp is a job structure that the job is to be added to.
  * N is the command that will be evaluated by the child.  Both jp and n may
  * be NULL.  The mode parameter can be one of the following:
  *	FORK_FG - Fork off a foreground process.
  *	FORK_BG - Fork off a background process.
- *	FORK_NOJOB - Like FORK_FG, but don't give the process its own
- *		     process group even if job control is on.
+ *	FORK_NOJOB - Like FORK_FG, but keep the command node across fork reset
+ *		     (command substitution).
  *
- * When job control is turned off, background processes have their standard
- * input redirected to /dev/null (except for the second and later processes
- * in a pipeline).
+ * Background processes have their standard input redirected to /dev/null
+ * (except for the second and later processes in a pipeline).
  *
  * Called with interrupts off.
  */
@@ -858,11 +494,9 @@ static void
 forkchild(ShellContext &sh, Job *jp, Node *n, int mode)
 {
 	int lvforked;
-	int oldlvl;
 
 	TRACE(("Child shell %d\n", getpid()));
 
-	oldlvl = sh.shlvl;
 	lvforked = sh.vforked;
 
 	if (!lvforked) {
@@ -870,29 +504,8 @@ forkchild(ShellContext &sh, Job *jp, Node *n, int mode)
 		sh.shlvl++;
 
 		forkreset(sh, mode == FORK_NOJOB ? n : NULL);
-
-#if JOBS
-		/* do job control only in root shell */
-		sh.jobctl = 0;
-#endif
 	}
 
-#if JOBS
-	if (mode != FORK_NOJOB && jp && jp->jobctl && !oldlvl) {
-		pid_t pgrp;
-
-		if (jp->procs.empty())
-			sh.mypid = pgrp = getpid();
-		else
-			pgrp = jp->pgid();
-		/* This can fail because we are doing it in the parent also */
-		setpgid(0, pgrp);
-		if (mode == FORK_FG)
-			xxtcsetpgrp(sh, pgrp);
-		setsignal(sh, SIGTSTP);
-		setsignal(sh, SIGTTOU);
-	} else
-#endif
 	if (mode == FORK_BG) {
 		ignoresig(sh, SIGINT);
 		ignoresig(sh, SIGQUIT);
@@ -913,9 +526,6 @@ forkchild(ShellContext &sh, Job *jp, Node *n, int mode)
 
 	freejob(sh, jp);
 
-	if (issimplecmd(n, builtin_jobs.name))
-		return;
-
 	while (!sh.job_order.empty())
 		freejob(sh, sh.job_order.front());
 }
@@ -933,28 +543,11 @@ forkparent(ShellContext &sh, Job *jp, Node *n, int mode, pid_t pid)
 	TRACE(("In parent shell:  child = %d\n", pid));
 	if (!jp)
 		return {};
-#if JOBS
-	if (mode != FORK_NOJOB && jp->jobctl) {
-		int pgrp;
-
-		if (jp->procs.empty())
-			pgrp = pid;
-		else
-			pgrp = jp->pgid();
-		/* This can fail because we are doing it in the child also */
-		setpgid(pid, pgrp);
-	}
-#endif
 	if (mode == FORK_BG) {
 		sh.backgndpid = pid;		/* set $! */
 		set_curjob(sh, jp, CUR_RUNNING);
 	}
-	{
-		std::string cmd;
-		if (sh.jobctl && n)
-			cmd = commandtext(sh, n);
-		jp->add_process(pid, std::move(cmd));
-	}
+	jp->add_process(pid, n ? commandtext(sh, n) : std::string{});
 	return {};
 }
 
@@ -1002,23 +595,7 @@ vforkexec(ShellContext &sh, Node *n, char **argv, const char *path, int idx)
 }
 
 /*
- * Wait for job to finish.
- *
- * Under job control we have the problem that while a child process is
- * running interrupts generated by the user are sent to the child but not
- * to the shell.  This means that an infinite loop started by an inter-
- * active user may be hard to kill.  With job control turned off, an
- * interactive user may place an interactive program inside a loop.  If
- * the interactive program catches interrupts, the user doesn't want
- * these interrupts to also abort the loop.  The approach we take here
- * is to have the shell ignore interrupt signals while waiting for a
- * forground process to terminate, and then send itself an interrupt
- * signal if the child process was terminated by an interrupt signal.
- * Unfortunately, some programs want to do a bit of cleanup and then
- * exit on interrupt; unless these processes terminate themselves by
- * sending a signal to themselves (instead of calling exit) they will
- * confuse this approach.
- *
+ * Wait for a job to finish and return its status.
  * Called with interrupts off.
  */
 
@@ -1033,22 +610,7 @@ waitforjob(ShellContext &sh, Job *jp)
 		return sh.exitstatus;
 
 	st = jp->calc_status(pipefail);
-#if JOBS
-	if (jp->jobctl) {
-		TRY_SHV(xxtcsetpgrp(sh, sh.rootpid));
-		/*
-		 * This is truly gross.
-		 * If we're doing job control, then we did a TIOCSPGRP which
-		 * caused us (the shell) to no longer be in the controlling
-		 * session -- so we wouldn't have seen any ^C/SIGINT.  So, we
-		 * intuit from the subprocess exit status whether a SIGINT
-		 * occurred, and if so interrupt ourselves.  Yuck.  - mycroft
-		 */
-		if (jp->sigint)
-			raise(SIGINT);
-	}
-#endif
-	if (! JOBS || jp->state == Job::State::Done)
+	if (jp->state == Job::State::Done)
 		freejob(sh, jp);
 	return st;
 }
@@ -1087,14 +649,6 @@ waitone(ShellContext &sh, int block, Job *job)
 			}
 			if (sp.status == -1)
 				state = Job::State::Running;
-#if JOBS
-			if (state == Job::State::Running)
-				continue;
-			if (WIFSTOPPED(sp.status)) {
-				jp->stopstatus = sp.status;
-				state = Job::State::Stopped;
-			}
-#endif
 		}
 		if (thisjob)
 			goto gotjob;
@@ -1102,28 +656,19 @@ waitone(ShellContext &sh, int block, Job *job)
 	goto out;
 
 gotjob:
-	if (state != Job::State::Running) {
-		thisjob->changed = true;
-
-		if (thisjob->state != state) {
-			TRACE(("Job %d: changing state from %d to %d\n",
-				thisjob->number(),
-				static_cast<int>(thisjob->state),
-				static_cast<int>(state)));
-			thisjob->state = state;
-#if JOBS
-			if (state == Job::State::Stopped) {
-				set_curjob(sh, thisjob, CUR_STOPPED);
-			}
-#endif
-		}
+	if (state != Job::State::Running && thisjob->state != state) {
+		TRACE(("Job %d: changing state from %d to %d\n",
+			thisjob->number(),
+			static_cast<int>(thisjob->state),
+			static_cast<int>(state)));
+		thisjob->state = state;
 	}
 out:
 	INTON_DEFER;
 
 	if (thisjob && thisjob == job) {
 		char s[48 + 1];
-		int len = sprint_status(s, status, 1);
+		int len = sprint_status(s, status);
 
 		if (len) {
 			s[len] = '\n';
@@ -1184,11 +729,6 @@ waitproc(ShellContext &sh, int block, int *status)
 	int flags = block == DOWAIT_BLOCK ? 0 : WNOHANG;
 	int err;
 
-#if JOBS
-	if (sh.jobctl)
-		flags |= WUNTRACED;
-#endif
-
 	do {
 		sh.gotsigchld = 0;
 		do
@@ -1214,32 +754,8 @@ waitproc(ShellContext &sh, int block, int *status)
 }
 
 /*
- * return 1 if there are stopped jobs, otherwise 0
- */
-
-int
-stoppedjobs(ShellContext &sh)
-{
-	int retval = 0;
-
-	if (!JOBS)
-		goto out;
-	if (sh.job_warning)
-		goto out;
-	if (!sh.job_order.empty() &&
-	    sh.job_order.front()->state == Job::State::Stopped) {
-		out2str("You have stopped jobs.\n");
-		sh.job_warning = 2;
-		retval++;
-	}
-
-out:
-	return retval;
-}
-
-/*
- * Return a string identifying a command (to be printed by the
- * jobs command).
+ * Return a string identifying a command, so kill and wait can match %job
+ * names.
  */
 
 
@@ -1501,20 +1017,3 @@ dostr:
 		out.push_back('"');
 	}
 }
-
-
-#if JOBS
-static shell::Result<void>
-xtcsetpgrp(ShellContext &sh, int fd, pid_t pgrp)
-{
-	int err;
-
-	sigblockall(sh, NULL);
-	err = tcsetpgrp(fd, pgrp);
-	sigclearmask();
-
-	if (err)
-		return sh_error(sh, "Cannot set tty process group ({})", strerror(errno));
-	return {};
-}
-#endif

@@ -45,7 +45,6 @@
 #undef DEFINE_OPTIONS
 #include "nodes.h"	/* for other header files */
 #include "eval.h"
-#include "jobs.h"
 #include "input.h"
 #include "output.h"
 #include "trap.h"
@@ -177,7 +176,6 @@ optschanged(ShellContext &sh)
 	setsignal(sh, SIGINT);
 	setsignal(sh, SIGQUIT);
 	setsignal(sh, SIGTERM);
-	setjobctl(sh, mflag);
 }
 
 /*

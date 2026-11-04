@@ -46,9 +46,6 @@ const builtincmd builtin_dot{".", dotcmd, S | R};
 const builtincmd builtin_colon{":", truecmd, S | R};
 const builtincmd builtin_test_brack{"[", testcmd, 0};
 const builtincmd builtin_alias{"alias", aliascmd, A | R};
-#if JOBS
-const builtincmd builtin_bg{"bg", bgcmd, R};
-#endif
 const builtincmd builtin_break{"break", breakcmd, S | R};
 const builtincmd builtin_cd{"cd", cdcmd, R};
 const builtincmd builtin_chdir{"chdir", cdcmd, 0};
@@ -57,9 +54,6 @@ const builtincmd builtin_echo{"echo", echocmd, 0};
 const builtincmd builtin_exit{"exit", exitcmd, S | R};
 const builtincmd builtin_export{"export", exportcmd, S | R | A};
 const builtincmd builtin_false{"false", falsecmd, R};
-#if JOBS
-const builtincmd builtin_fg{"fg", fgcmd, R};
-#endif
 const builtincmd builtin_getopts{"getopts", getoptscmd, R};
 const builtincmd builtin_hash{"hash", hashcmd, R};
 const builtincmd builtin_kill{"kill", killcmd, R};
@@ -88,10 +82,6 @@ static const std::unordered_map<std::string_view, const builtincmd *> map = {
 	{builtin_colon.name, &builtin_colon},
 	{builtin_test_brack.name, &builtin_test_brack},
 	{builtin_alias.name, &builtin_alias},
-#if JOBS
-	{builtin_bg.name, &builtin_bg},
-	{builtin_fg.name, &builtin_fg},
-#endif
 	{builtin_break.name, &builtin_break},
 	{builtin_cd.name, &builtin_cd},
 	{builtin_chdir.name, &builtin_chdir},
@@ -105,7 +95,6 @@ static const std::unordered_map<std::string_view, const builtincmd *> map = {
 	{builtin_false.name, &builtin_false},
 	{builtin_getopts.name, &builtin_getopts},
 	{builtin_hash.name, &builtin_hash},
-	{builtin_jobs.name, &builtin_jobs},
 	{builtin_kill.name, &builtin_kill},
 	{builtin_local.name, &builtin_local},
 	{builtin_printf.name, &builtin_printf},
@@ -134,7 +123,6 @@ static const std::unordered_map<std::string_view, const builtincmd *> map = {
 const builtincmd builtin_command{"command", commandcmd, R};
 const builtincmd builtin_eval{"eval", nullptr, S | R};
 const builtincmd builtin_exec{"exec", execcmd, S | R};
-const builtincmd builtin_jobs{"jobs", jobscmd, R};
 const builtincmd builtin_trap{"trap", trapcmd, S | R};
 
 const builtincmd *
