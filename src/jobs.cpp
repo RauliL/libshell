@@ -182,14 +182,14 @@ usage:
 					list = 1;
 					break;
 				case 's':
-					signo = decode_signal(sh, sh.optionarg, 1);
+					signo = decode_signal(sh, sh.bopt.optionarg, 1);
 					if (signo < 0) {
 						return sh_error(sh, "invalid signal number or name: {}",
-							sh.optionarg);
+							sh.bopt.optionarg);
 					}
 		                        break;
 				}
-			argv = sh.argptr;
+			argv = sh.bopt.argptr;
 		} else
 			argv++;
 	}
@@ -288,7 +288,7 @@ waitcmd(ShellContext &sh, int argc, char **argv)
 	TRY_SHV(nextopt(sh, nullstr));
 	retval = 0;
 
-	argv = sh.argptr;
+	argv = sh.bopt.argptr;
 	if (!*argv) {
 		/* wait for all jobs */
 		for (;;) {

@@ -172,9 +172,9 @@ unaliascmd(ShellContext &sh, int argc, char **argv)
 			return 0;
 		}
 	}
-	for (i = 0; *sh.argptr; sh.argptr++) {
-		if (TRY_SH(unalias(sh, *sh.argptr))) {
-            sh.out2->write(sh, std::format("{}: {} not found\n", "unalias", *sh.argptr));
+	for (i = 0; *sh.bopt.argptr; sh.bopt.argptr++) {
+		if (TRY_SH(unalias(sh, *sh.bopt.argptr))) {
+            sh.out2->write(sh, std::format("{}: {} not found\n", "unalias", *sh.bopt.argptr));
 			i = 1;
 		}
 	}

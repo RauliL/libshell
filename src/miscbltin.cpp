@@ -129,7 +129,7 @@ readcmd(ShellContext &sh, int argc, char **argv)
 	prompt = NULL;
 	while ((i = TRY_SH(nextopt(sh, "p:r"))) != '\0') {
 		if (i == 'p')
-			prompt = sh.optionarg;
+			prompt = sh.bopt.optionarg;
 		else
 			rflag = 1;
 	}
@@ -139,7 +139,7 @@ readcmd(ShellContext &sh, int argc, char **argv)
 		flushall(sh);
 #endif
 	}
-	if (*(ap = sh.argptr) == NULL)
+	if (*(ap = sh.bopt.argptr) == NULL)
 		return sh_error(sh, "arg count");
 
 	status = 0;
@@ -226,7 +226,7 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 	umask(mask);
 	INTON;
 
-	if ((ap = *sh.argptr) == NULL) {
+	if ((ap = *sh.bopt.argptr) == NULL) {
 		if (symbolic_mode) {
 			char buf[18];
 			int j;
@@ -253,7 +253,7 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 			new_mask = 0;
 			do {
 				if (*ap >= '8' || *ap < '0')
-					return sh_error(sh, "Illegal number: {}", *sh.argptr);
+					return sh_error(sh, "Illegal number: {}", *sh.bopt.argptr);
 				new_mask = (new_mask << 3) + (*ap - '0');
 			} while (*++ap != '\0');
 		} else {
@@ -317,7 +317,7 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 			}
 			if (*ap) {
 error:
-				return sh_error(sh, "Illegal mode: {}", *sh.argptr);
+				return sh_error(sh, "Illegal mode: {}", *sh.bopt.argptr);
 				return 1;
 			}
 			new_mask = ~new_mask;
@@ -472,11 +472,11 @@ ulimitcmd(ShellContext &sh, int argc, char **argv)
 	for (l = limits; l->option != what; l++)
 		;
 
-	set = *sh.argptr ? 1 : 0;
+	set = *sh.bopt.argptr ? 1 : 0;
 	if (set) {
-		char *p = *sh.argptr;
+		char *p = *sh.bopt.argptr;
 
-		if (all || sh.argptr[1])
+		if (all || sh.bopt.argptr[1])
 			return sh_error(sh, "too many arguments");
 		if (strcmp(p, "unlimited") == 0)
 			val = RLIM_INFINITY;

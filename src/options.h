@@ -36,6 +36,7 @@
  *	@(#)options.h	8.2 (Berkeley) 5/4/95
  */
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -47,31 +48,53 @@ struct shparam {
 	int optoff = -1;	/* used by getopts */
 };
 
-
-
-#define eflag (sh.optlist[0])
-#define fflag (sh.optlist[1])
-#define Iflag (sh.optlist[2])
-#define iflag (sh.optlist[3])
-#define mflag (sh.optlist[4])
-#define nflag (sh.optlist[5])
-#define sflag (sh.optlist[6])
-#define xflag (sh.optlist[7])
-#define vflag (sh.optlist[8])
-#define	Cflag (sh.optlist[9])
-#define	aflag (sh.optlist[10])
-#define	bflag (sh.optlist[11])
-#define	uflag (sh.optlist[12])
-#define	pipefail (sh.optlist[13])
-#define	debug (sh.optlist[14])
-
 #define NOPTS	15
 
+/** Shell `set` / startup option bits (`$-`, `set -e`, …). */
+struct ShellOptions {
+	char list[NOPTS] = {};
+	/** True when the host started the shell with `-c`. */
+	bool c_mode = false;
+};
+
+/**
+ * Scratch for builtin `nextopt` / argv walking. Not durable shell state.
+ */
+struct NextOptState {
+	char **argptr = nullptr;
+	char *optionarg = nullptr;
+	char *optptr = nullptr;
+};
+
+/**
+ * Host-facing result of parsing process argv (`-c`, login shell, …).
+ * The `-c` script string lives here, not on ShellContext.
+ */
+struct ProcArgsResult {
+	int login = 0;
+	std::optional<std::string> minusc;
+};
+
+#define eflag (sh.opts.list[0])
+#define fflag (sh.opts.list[1])
+#define Iflag (sh.opts.list[2])
+#define iflag (sh.opts.list[3])
+#define mflag (sh.opts.list[4])
+#define nflag (sh.opts.list[5])
+#define sflag (sh.opts.list[6])
+#define xflag (sh.opts.list[7])
+#define vflag (sh.opts.list[8])
+#define	Cflag (sh.opts.list[9])
+#define	aflag (sh.opts.list[10])
+#define	bflag (sh.opts.list[11])
+#define	uflag (sh.opts.list[12])
+#define	pipefail (sh.opts.list[13])
+#define	debug (sh.opts.list[14])
+
 extern const char optletters[NOPTS];
-/* optlist, minusc, arg0, shellparam, argptr, optionarg, optptr: ShellContext fields */
 
 struct ShellContext;
-shell::Result<int> procargs(ShellContext &sh, char **);
+shell::Result<ProcArgsResult> procargs(ShellContext &sh, char **);
 void optschanged(ShellContext &sh);
 void setparam(ShellContext &sh, char **);
 void freeparam(ShellContext &sh, struct shparam *);

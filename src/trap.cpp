@@ -93,7 +93,7 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 	int signo;
 
 	TRY_SHV(nextopt(sh, nullstr));
-	ap = sh.argptr;
+	ap = sh.bopt.argptr;
 	if (!*ap) {
 		for (signo = 0 ; signo < NSIG ; signo++) {
 			if (sh.trap[signo]) {
@@ -181,7 +181,7 @@ setsignal(ShellContext &sh, int signo)
 		switch (signo) {
 		case SIGINT:
 			/* Catch so INTOFF/INTON can defer; onint re-raises. */
-			if (sh.minusc || sflag == 0)
+			if (sh.opts.c_mode || sflag == 0)
 				action = S_CATCH;
 			break;
 #if JOBS

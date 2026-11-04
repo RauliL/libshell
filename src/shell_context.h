@@ -122,11 +122,8 @@ struct ShellContext {
 
 	std::string arg0;
 	struct shparam shellparam = {};
-	char **argptr = nullptr;
-	char *optionarg = nullptr;
-	char *optptr = nullptr;
-	std::optional<std::string> minusc;	/* nullopt = no -c */
-	char optlist[NOPTS] = {};
+	ShellOptions opts;
+	NextOptState bopt;
 
 	int rootpid = 0;
 	int mypid = 0;

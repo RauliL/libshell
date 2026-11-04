@@ -102,7 +102,7 @@ cdcmd(ShellContext &sh, int argc, char **argv)
 	std::string candidate;
 
 	flags = TRY_SH(cdopt(sh));
-	dest = *sh.argptr;
+	dest = *sh.bopt.argptr;
 	if (!dest)
 		dest = bltinlookup(sh, "HOME");
 	else if (dest[0] == '-' && dest[1] == '\0') {

@@ -973,8 +973,8 @@ evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv,
 	int i = 0;
 
 	sh.commandname = argv[0] ? argv[0] : "";
-	sh.argptr = argv + 1;
-	sh.optptr = NULL;			/* initialize nextopt */
+	sh.bopt.argptr = argv + 1;
+	sh.bopt.optptr = NULL;			/* initialize nextopt */
 
 	shell::Result<int> r;
 	if (cmd == &builtin_eval)

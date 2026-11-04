@@ -151,7 +151,7 @@ dotcmd(ShellContext &sh, int argc, char **argv)
 	int status = 0;
 
 	TRY_SHV(nextopt(sh, nullstr));
-	argv = sh.argptr;
+	argv = sh.bopt.argptr;
 
 	if (*argv) {
 		auto fullname_r = find_dot_file(sh, *argv);

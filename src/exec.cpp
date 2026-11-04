@@ -275,7 +275,7 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 		return 0;
 	}
 
-	if (*sh.argptr == NULL) {
+	if (*sh.bopt.argptr == NULL) {
 		for (const auto &cmd : sh.cmdtable) {
 			if (cmd.second.cmdtype == CMDNORMAL)
 				printentry(sh, cmd.first, cmd.second);
@@ -283,14 +283,14 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 		return 0;
 	}
 	c = 0;
-	while ((name = *sh.argptr) != NULL) {
+	while ((name = *sh.bopt.argptr) != NULL) {
 		tblentry *cmdp = cmdlookup(sh, name, 0);
 		if (cmdp && hash_affected(*cmdp, sh.builtinloc))
 			delete_cmd_entry(sh, name);
 		TRY_SHV(find_command(sh, name, &entry, DO_ERR, pathval()));
 		if (entry.cmdtype == CMDUNKNOWN)
 			c = 1;
-		sh.argptr++;
+		sh.bopt.argptr++;
 	}
 	return c;
 }
@@ -677,8 +677,8 @@ typecmd(ShellContext &sh, int argc, char **argv)
 	int err = 0;
 
 	TRY_SHV(nextopt(sh, nullstr));
-	while (*sh.argptr) {
-		err |= TRY_SH(describe_command(sh, sh.out1, *sh.argptr++, NULL, 1));
+	while (*sh.bopt.argptr) {
+		err |= TRY_SH(describe_command(sh, sh.out1, *sh.bopt.argptr++, NULL, 1));
 	}
 	return err;
 }
@@ -817,7 +817,7 @@ commandcmd(ShellContext &sh, int argc, char **argv)
 		else
 			path = defpath;
 
-	cmd = *sh.argptr;
+	cmd = *sh.bopt.argptr;
 	if (verify && cmd)
 		return describe_command(sh, sh.out1, cmd, path, verify - VERIFY_BRIEF);
 

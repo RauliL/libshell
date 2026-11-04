@@ -1,4 +1,7 @@
 #include <iostream>
+#include <optional>
+#include <string>
+#include <utility>
 
 #include <libshell.hpp>
 
@@ -32,12 +35,16 @@ resume:
 	shell::Error err{};
 	bool failed = false;
 
+	std::optional<std::string> minusc;
+
 	if (state == 0) {
 		const auto pr = procargs(sh, argv);
 
 		if (!pr) {
 			err = pr.error();
 			failed = true;
+		} else {
+			minusc = std::move(pr->minusc);
 		}
 	}
 
@@ -50,13 +57,13 @@ resume:
 
 	if (!failed && state < 4) {
 		state = 4;
-		if (sh.minusc)
-			take(sh.eval(*sh.minusc, sflag ? EvalFlags{} : EvalFlag::exit));
+		if (minusc)
+			take(sh.eval(*minusc, sflag ? EvalFlags{} : EvalFlag::exit));
 	}
 	if (!failed) {
 		if (iflag)
 			take(run_interactive(sh));
-		else if (sflag || !sh.minusc)
+		else if (sflag || !minusc)
 			take(cmdloop(sh));
 	}
 

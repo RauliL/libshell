@@ -141,7 +141,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 
 	TRY_SHV(nextopt(sh, nullstr));
 
-	argv = sh.argptr;
+	argv = sh.bopt.argptr;
 	format = *argv;
 
 	if (!format)

@@ -1088,7 +1088,7 @@ numvar:
 	case '-':
 		p = eb.makespace(NOPTS, eb.dest);
 		for (i = NOPTS - 1; i >= 0; i--) {
-			if (sh.optlist[i] && optletters[i]) {
+			if (sh.opts.list[i] && optletters[i]) {
 				(*(p)++ = (optletters[i]));
 				len++;
 			}

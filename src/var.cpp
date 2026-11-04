@@ -413,7 +413,7 @@ exportcmd(ShellContext &sh, int argc, char **argv)
 	int notp;
 
 	notp = TRY_SH(nextopt(sh, "p")) - 'p';
-	if (notp && ((name = *(aptr = sh.argptr)))) {
+	if (notp && ((name = *(aptr = sh.bopt.argptr)))) {
 		do {
 			if ((p = strchr(name, '=')) != NULL) {
 				p++;
@@ -447,7 +447,7 @@ localcmd(ShellContext &sh, int argc, char **argv)
 	if (sh.localvar_stack.empty())
 		return sh_error(sh, "not in a function");
 
-	argv = sh.argptr;
+	argv = sh.bopt.argptr;
 	while ((name = *argv++) != NULL) {
 		TRY_SHV(mklocal(sh, name));
 	}
@@ -470,7 +470,7 @@ mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
 
 	INTOFF;
 	if (name == "-") {
-		lv.text.assign(sh.optlist, sizeof(sh.optlist));
+		lv.text.assign(sh.opts.list, sizeof(sh.opts.list));
 		vp = nullptr;
 	} else {
 		auto eq = name.find('=');
@@ -515,7 +515,7 @@ poplocalvars(ShellContext &sh)
 		struct var *vp = it->vp;
 		TRACE(("poplocalvar %s\n", vp ? vp->text.c_str() : "-"));
 		if (vp == nullptr) {	/* $- saved */
-			memcpy(sh.optlist, it->text.data(), sizeof(sh.optlist));
+			memcpy(sh.opts.list, it->text.data(), sizeof(sh.opts.list));
 			optschanged(sh);
 		} else if (it->flags == VarFlag::unset) {
 			vp->flags &= ~(VarFlag::str_fixed | VarFlag::readonly);
@@ -575,7 +575,7 @@ unsetcmd(ShellContext &sh, int argc, char **argv)
 		flag = i;
 	}
 
-	for (ap = sh.argptr; *ap ; ap++) {
+	for (ap = sh.bopt.argptr; *ap ; ap++) {
 		if (flag != 'f') {
 			TRY_SHV(unsetvar(sh, *ap));
 			continue;
