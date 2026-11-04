@@ -20,12 +20,14 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <sys/resource.h>
 #include <sys/types.h>
 
 #include "error.h"
+#include "exec.h"
 #include "eval.h"
 #include "expand.h"
 #include "input.h"
@@ -42,7 +44,6 @@ struct backcmd;
 struct alias;
 struct heredoc;
 struct synstack;
-struct tblentry;
 struct t_op;
 struct ifs_state;
 struct builtincmd;
@@ -160,9 +161,8 @@ struct ShellContext {
 	int errlinno = 0;
 
 	const char *pathopt = nullptr;
-	struct tblentry *cmdtable[31] = {};
+	std::unordered_map<std::string, tblentry> cmdtable;
 	int builtinloc = -1;
-	struct tblentry **lastcmdentry = nullptr;
 
 	struct alias *atab[39] = {};
 	std::vector<RedirFrame> redirlist;

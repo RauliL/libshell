@@ -35,6 +35,8 @@
  */
 #pragma once
 
+#include <string_view>
+
 #include "nodes.h"
 
 /* values of cmdtype */
@@ -53,6 +55,13 @@ struct cmdparam {
 struct cmdentry {
 	int cmdtype = CMDUNKNOWN;
 	cmdparam u;
+};
+
+/* One remembered command: a function, a builtin, or a hashed path. */
+struct tblentry {
+	cmdparam param{};
+	short cmdtype = CMDUNKNOWN;
+	bool rehash = false;
 };
 
 

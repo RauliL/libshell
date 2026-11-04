@@ -47,9 +47,6 @@
  * When commands are first encountered, they are entered in a hash table.
  * This ensures that a full path search will not have to be done for them
  * on each invocation.
- *
- * We should investigate converting to a linear search, even though that
- * would make the command name "hash" a misnomer.
  */
 
 #include "shell.h"
@@ -75,29 +72,16 @@
 #include "system.h"
 
 
-#define CMDTABLESIZE 31		/* should be prime */
-
-
-
-struct tblentry {
-	struct tblentry *next = nullptr; /* next entry in hash chain */
-	cmdparam param{};		/* definition of builtin function */
-	short cmdtype = 0;		/* index identifying command */
-	char rehash = 0;		/* if set, cd done since entry created */
-	std::string cmdname;		/* name of command */
-};
-
-
-
 		/* index in path of %builtin, or -1 */
 
 
 static void tryexec(ShellContext &sh, char *, char **, char **);
-static void printentry(ShellContext &sh, struct tblentry *);
+static void printentry(ShellContext &sh, const std::string &, const tblentry &);
+static bool hash_affected(const tblentry &, int);
 static void clearcmdentry(ShellContext &sh);
-static struct tblentry * cmdlookup(ShellContext &sh, const char *, int);
-static void delete_cmd_entry(ShellContext &sh);
-static void addcmdentry(ShellContext &sh, char *, struct cmdentry *);
+static tblentry *cmdlookup(ShellContext &sh, const char *, int);
+static void delete_cmd_entry(ShellContext &sh, const char *);
+static void addcmdentry(ShellContext &sh, const char *, const struct cmdentry *);
 static shell::Result<int> describe_command(ShellContext &sh, struct output *, char *, const char *, int);
 
 
@@ -262,11 +246,22 @@ padvance_magic(ShellContext &sh, const char **path, const char *name, int magic,
 /*** Command hashing code ***/
 
 
+/*
+ * True for entries that a cd or a PATH change must invalidate.
+ */
+static bool
+hash_affected(const tblentry &cmdp, int builtinloc)
+{
+	return cmdp.cmdtype == CMDNORMAL ||
+		(cmdp.cmdtype == CMDBUILTIN &&
+		 !(cmdp.param.cmd->flags & BUILTIN_REGULAR) &&
+		 builtinloc > 0);
+}
+
+
 shell::Result<int>
 hashcmd(ShellContext &sh, int argc, char **argv)
 {
-	struct tblentry **pp;
-	struct tblentry *cmdp;
 	int c;
 	struct cmdentry entry;
 	char *name;
@@ -281,22 +276,17 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 	}
 
 	if (*sh.argptr == NULL) {
-		for (pp = sh.cmdtable ; pp < &sh.cmdtable[CMDTABLESIZE] ; pp++) {
-			for (cmdp = *pp ; cmdp ; cmdp = cmdp->next) {
-				if (cmdp->cmdtype == CMDNORMAL)
-					printentry(sh, cmdp);
-			}
+		for (const auto &cmd : sh.cmdtable) {
+			if (cmd.second.cmdtype == CMDNORMAL)
+				printentry(sh, cmd.first, cmd.second);
 		}
 		return 0;
 	}
 	c = 0;
 	while ((name = *sh.argptr) != NULL) {
-		if ((cmdp = cmdlookup(sh, name, 0)) &&
-		    (cmdp->cmdtype == CMDNORMAL ||
-		     (cmdp->cmdtype == CMDBUILTIN &&
-		      !(cmdp->param.cmd->flags & BUILTIN_REGULAR) &&
-		      sh.builtinloc > 0)))
-			delete_cmd_entry(sh);
+		tblentry *cmdp = cmdlookup(sh, name, 0);
+		if (cmdp && hash_affected(*cmdp, sh.builtinloc))
+			delete_cmd_entry(sh, name);
 		TRY_SHV(find_command(sh, name, &entry, DO_ERR, pathval()));
 		if (entry.cmdtype == CMDUNKNOWN)
 			c = 1;
@@ -307,18 +297,18 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 
 
 static void
-printentry(ShellContext &sh, struct tblentry *cmdp)
+printentry(ShellContext &sh, const std::string &cmdname, const tblentry &cmdp)
 {
 	int idx;
 	const char *path;
 	std::string name;
 
-	idx = cmdp->param.index;
+	idx = cmdp.param.index;
 	path = pathval();
 	do {
-		padvance(sh, &path, cmdp->cmdname.c_str(), name);
+		padvance(sh, &path, cmdname.c_str(), name);
 	} while (--idx >= 0);
-	out1str(std::format("{}{}\n", name, cmdp->rehash ? "*" : ""));
+	out1str(std::format("{}{}\n", name, cmdp.rehash ? "*" : ""));
 }
 
 static int
@@ -406,7 +396,7 @@ absfail:
 
 			updatetbl = 0;
 			cmdp = NULL;
-		} else if (cmdp->rehash == 0)
+		} else if (!cmdp->rehash)
 			/* if not invalidated by cd, we're done */
 			goto success;
 	}
@@ -492,7 +482,7 @@ loop:
 
 	/* We failed.  If there was an entry for this command, delete it */
 	if (cmdp && updatetbl)
-		delete_cmd_entry(sh);
+		delete_cmd_entry(sh, name);
 	if (act & DO_ERR)
 		sh_warnx(sh, "{}: {}", name, errmsg(e, E_EXEC));
 fail:
@@ -511,7 +501,7 @@ builtin_success:
 	cmdp->param.cmd = bcmd;
 	INTON;
 success:
-	cmdp->rehash = 0;
+	cmdp->rehash = false;
 	entry->cmdtype = cmdp->cmdtype;
 	entry->u = cmdp->param;
 	return {};
@@ -533,18 +523,9 @@ success:
 void
 hashcd(ShellContext &sh)
 {
-	struct tblentry **pp;
-	struct tblentry *cmdp;
-
-	for (pp = sh.cmdtable ; pp < &sh.cmdtable[CMDTABLESIZE] ; pp++) {
-		for (cmdp = *pp ; cmdp ; cmdp = cmdp->next) {
-			if (cmdp->cmdtype == CMDNORMAL || (
-				cmdp->cmdtype == CMDBUILTIN &&
-				!(cmdp->param.cmd->flags & BUILTIN_REGULAR) &&
-				sh.builtinloc > 0
-			))
-				cmdp->rehash = 1;
-		}
+	for (auto &entry : sh.cmdtable) {
+		if (hash_affected(entry.second, sh.builtinloc))
+			entry.second.rehash = true;
 	}
 }
 
@@ -592,25 +573,10 @@ changepath(ShellContext &sh, std::string_view newval)
 static void
 clearcmdentry(ShellContext &sh)
 {
-	struct tblentry **tblp;
-	struct tblentry **pp;
-	struct tblentry *cmdp;
-
 	INTOFF;
-	for (tblp = sh.cmdtable ; tblp < &sh.cmdtable[CMDTABLESIZE] ; tblp++) {
-		pp = tblp;
-		while ((cmdp = *pp) != NULL) {
-			if (cmdp->cmdtype == CMDNORMAL ||
-			    (cmdp->cmdtype == CMDBUILTIN &&
-			     !(cmdp->param.cmd->flags & BUILTIN_REGULAR) &&
-			     sh.builtinloc > 0)) {
-				*pp = cmdp->next;
-				delete cmdp;
-			} else {
-				pp = &cmdp->next;
-			}
-		}
-	}
+	std::erase_if(sh.cmdtable, [&](const auto &entry) {
+		return hash_affected(entry.second, sh.builtinloc);
+	});
 	INTON_DEFER;
 }
 
@@ -618,58 +584,36 @@ clearcmdentry(ShellContext &sh)
 
 /*
  * Locate a command in the command hash table.  If "add" is nonzero,
- * add the command to the table if it is not already present.  The
- * variable "lastcmdentry" is set to point to the address of the link
- * pointing to the entry, so that delete_cmd_entry can delete the
- * entry.
+ * add the command to the table if it is not already present.
  *
  * Interrupts must be off if called with add != 0.
+ * The returned pointer is invalidated by a later insertion.
  */
 
 
 
 
-static struct tblentry *
+static tblentry *
 cmdlookup(ShellContext &sh, const char *name, int add)
 {
-	unsigned int hashval;
-	const char *p;
-	struct tblentry *cmdp;
-	struct tblentry **pp;
-
-	p = name;
-	hashval = (unsigned char)*p << 4;
-	while (*p)
-		hashval += (unsigned char)*p++;
-	hashval &= 0x7FFF;
-	pp = &sh.cmdtable[hashval % CMDTABLESIZE];
-	for (cmdp = *pp ; cmdp ; cmdp = cmdp->next) {
-		if (equal(cmdp->cmdname.c_str(), name))
-			break;
-		pp = &cmdp->next;
+	auto it = sh.cmdtable.find(name);
+	if (it == sh.cmdtable.end()) {
+		if (!add)
+			return nullptr;
+		it = sh.cmdtable.try_emplace(std::string(name)).first;
 	}
-	if (add && cmdp == NULL) {
-		cmdp = *pp = new tblentry;
-		cmdp->cmdtype = CMDUNKNOWN;
-		cmdp->cmdname = name;
-	}
-	sh.lastcmdentry = pp;
-	return cmdp;
+	return &it->second;
 }
 
 /*
- * Delete the command entry returned on the last lookup.
+ * Delete the command entry for this name, if one exists.
  */
 
 static void
-delete_cmd_entry(ShellContext &sh)
+delete_cmd_entry(ShellContext &sh, const char *name)
 {
-	struct tblentry *cmdp;
-
 	INTOFF;
-	cmdp = *sh.lastcmdentry;
-	*sh.lastcmdentry = cmdp->next;
-	delete cmdp;
+	sh.cmdtable.erase(name);
 	INTON_DEFER;
 }
 
@@ -681,14 +625,14 @@ delete_cmd_entry(ShellContext &sh)
  */
 
 static void
-addcmdentry(ShellContext &sh, char *name, struct cmdentry *entry)
+addcmdentry(ShellContext &sh, const char *name, const struct cmdentry *entry)
 {
-	struct tblentry *cmdp;
+	tblentry *cmdp;
 
 	cmdp = cmdlookup(sh, name, 1);
 	cmdp->cmdtype = entry->cmdtype;
 	cmdp->param = entry->u;
-	cmdp->rehash = 0;
+	cmdp->rehash = false;
 }
 
 
@@ -704,7 +648,7 @@ defun(ShellContext &sh, Node *func)
 	INTOFF;
 	entry.cmdtype = CMDFUNCTION;
 	entry.u.func = std::shared_ptr<Node>(func->clone());
-	addcmdentry(sh, const_cast<char *>(as<Node::Defun>(func)->text.c_str()), &entry);
+	addcmdentry(sh, as<Node::Defun>(func)->text.c_str(), &entry);
 	INTON_DEFER;
 }
 
@@ -716,12 +660,11 @@ defun(ShellContext &sh, Node *func)
 void
 unsetfunc(ShellContext &sh, std::string_view name)
 {
-	struct tblentry *cmdp;
 	std::string key(name);
+	tblentry *cmdp = cmdlookup(sh, key.c_str(), 0);
 
-	if ((cmdp = cmdlookup(sh, key.c_str(), 0)) != NULL &&
-	    cmdp->cmdtype == CMDFUNCTION)
-		delete_cmd_entry(sh);
+	if (cmdp != nullptr && cmdp->cmdtype == CMDFUNCTION)
+		delete_cmd_entry(sh, key.c_str());
 }
 
 /*
