@@ -88,15 +88,15 @@ static void set_curjob(ShellContext &sh, Job *, unsigned);
 static std::string sprint_status(int);
 static void freejob(ShellContext &sh, Job *);
 static shell::Result<Job *> getjob(ShellContext &sh, const char *);
-static void forkchild(ShellContext &sh, Job *, Node *, int);
-static shell::Result<void> forkparent(ShellContext &sh, Job *, Node *, int, pid_t);
+static void forkchild(ShellContext &sh, Job *, const Node *, int);
+static shell::Result<void> forkparent(ShellContext &sh, Job *, const Node *, int, pid_t);
 static int dowait(ShellContext &sh, int, Job *);
 #ifdef SYSV
 static int onsigchild();
 #endif
 static int waitproc(ShellContext &sh, int, int *);
-static std::string commandtext(ShellContext &sh, Node *);
-static void cmdtxt(ShellContext &sh, Node *, std::string &);
+static std::string commandtext(ShellContext &sh, const Node *);
+static void cmdtxt(ShellContext &sh, const Node *, std::string &);
 static void cmdlist(ShellContext &sh, Node *, int, std::string &);
 static void cmdputs(std::string &, std::string_view);
 
@@ -489,7 +489,7 @@ makejob(ShellContext &sh, int nprocs)
  */
 
 static void
-forkchild(ShellContext &sh, Job *jp, Node *n, int mode)
+forkchild(ShellContext &sh, Job *jp, const Node *n, int mode)
 {
 	int lvforked;
 
@@ -529,7 +529,7 @@ forkchild(ShellContext &sh, Job *jp, Node *n, int mode)
 }
 
 static shell::Result<void>
-forkparent(ShellContext &sh, Job *jp, Node *n, int mode, pid_t pid)
+forkparent(ShellContext &sh, Job *jp, const Node *n, int mode, pid_t pid)
 {
 	if (pid < 0) {
 		TRACE(("Fork failed, errno=%d", errno));
@@ -568,7 +568,7 @@ forkshell(ShellContext &sh, Job *jp, Node *n, int mode)
 }
 
 shell::Result<Job *>
-vforkexec(ShellContext &sh, Node *n, char **argv, const char *path, int idx)
+vforkexec(ShellContext &sh, const Node *n, char **argv, const char *path, int idx)
 {
 	Job *jp;
 	int pid;
@@ -757,7 +757,7 @@ waitproc(ShellContext &sh, int block, int *status)
 
 
 static std::string
-commandtext(ShellContext &sh, Node *n)
+commandtext(ShellContext &sh, const Node *n)
 {
 	std::string out;
 	cmdtxt(sh, n, out);
@@ -765,7 +765,7 @@ commandtext(ShellContext &sh, Node *n)
 }
 
 static void
-cmdtxt(ShellContext &sh, Node *n, std::string &out)
+cmdtxt(ShellContext &sh, const Node *n, std::string &out)
 {
 	Node *np;
 	const char *p;

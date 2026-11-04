@@ -86,5 +86,5 @@ shell::Result<int> killcmd(ShellContext &, int, char **);
 shell::Result<int> waitcmd(ShellContext &, int, char **);
 Job *makejob(ShellContext &, int);
 shell::Result<int> forkshell(ShellContext &, Job *, Node *, int);
-shell::Result<Job *> vforkexec(ShellContext &, Node *, char **, const char *, int);
+shell::Result<Job *> vforkexec(ShellContext &, const Node *, char **, const char *, int);
 shell::Result<int> waitforjob(ShellContext &, Job *);

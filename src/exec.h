@@ -85,7 +85,7 @@ int padvance_magic(ShellContext &sh, const char **path, const char *name,
 shell::Result<void> find_command(ShellContext &, char *, struct cmdentry *, int, const char *);
 void hashcd(ShellContext &);
 void changepath(ShellContext &, std::string_view);
-void defun(ShellContext &, Node *);
+void defun(ShellContext &, const Node::Defun *);
 void unsetfunc(ShellContext &, std::string_view);
 shell::Result<int> hashcmd(ShellContext &sh, int, char **);
 shell::Result<int> typecmd(ShellContext &sh, int, char **);

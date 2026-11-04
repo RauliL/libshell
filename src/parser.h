@@ -92,7 +92,7 @@ struct ParseCmdResult {
 };
 
 bool isassignment(std::string_view p);
-bool issimplecmd(Node *n, std::string_view name);
+bool issimplecmd(const Node *n, std::string_view name);
 ParseCmdResult parsecmd(ShellContext &sh, int);
 void fixredir(ShellContext &sh, Node *, const char *, int);
 std::string getprompt(ShellContext &, void *);

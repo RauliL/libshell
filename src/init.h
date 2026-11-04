@@ -1,5 +1,3 @@
-#ifndef INIT_H
-#define INIT_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,13 +33,13 @@
  *
  *	@(#)init.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
 
 struct Node;
 
 struct ShellContext;
 void init(ShellContext &sh);
 void exitreset(ShellContext &sh);
-void forkreset(ShellContext &sh, Node *);
+void forkreset(ShellContext &sh, const Node *);
 void postexitreset(ShellContext &sh);
 void reset(ShellContext &sh);
-#endif

@@ -133,7 +133,7 @@ char reset[] = "\
 struct event event[] = {
 	{"INIT", "init", init},
 	{"EXITRESET", "exitreset", exitreset},
-	{"FORKRESET", "forkreset", forkreset, "Node *n"},
+	{"FORKRESET", "forkreset", forkreset, "const Node *n"},
 	{"POSTEXITRESET", "postexitreset", postexitreset},
 	{"RESET", "reset", reset},
 	{NULL, NULL}

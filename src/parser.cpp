@@ -162,7 +162,7 @@ isassignment(std::string_view p)
 
 
 bool
-issimplecmd(Node *n, std::string_view name)
+issimplecmd(const Node *n, std::string_view name)
 {
 	return n && n->type == Node::Type::Cmd && as<Node::Command>(n)->args &&
 	       as<Node::Arg>(as<Node::Command>(n)->args.get())->text == name;

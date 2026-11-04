@@ -641,14 +641,14 @@ addcmdentry(ShellContext &sh, const char *name, const struct cmdentry *entry)
  */
 
 void
-defun(ShellContext &sh, Node *func)
+defun(ShellContext &sh, const Node::Defun *func)
 {
 	struct cmdentry entry;
 
 	INTOFF;
 	entry.cmdtype = CMDFUNCTION;
 	entry.u.func = std::shared_ptr<Node>(func->clone());
-	addcmdentry(sh, as<Node::Defun>(func)->text.c_str(), &entry);
+	addcmdentry(sh, func->text.c_str(), &entry);
 	INTON_DEFER;
 }
 

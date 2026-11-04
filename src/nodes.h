@@ -11,6 +11,10 @@
 #include <type_traits>
 #include <vector>
 
+#include "eval.h"
+
+struct ShellContext;
+
 struct Node {
 	using ptr = std::unique_ptr<Node>;
 
@@ -71,6 +75,17 @@ struct Node {
 	virtual ~Node() = default;
 
 	virtual ptr clone() const = 0;
+
+	/**
+	 * Evaluate this node.  Prologue/epilogue (traps, set -e, EvalFlag::exit)
+	 * live in the free evaltree(); overrides implement type-specific work.
+	 * Set checkexit when a failing status should trigger set -e.
+	 */
+	virtual shell::Result<int> eval(
+		ShellContext &sh,
+		EvalFlags flags,
+		bool &checkexit
+	) const;
 };
 
 template <
@@ -126,6 +141,11 @@ struct Node::Command : Node {
 	explicit Command(Type t = Type::Cmd) : Node(t) {}
 	~Command() override;
 	ptr clone() const override;
+	shell::Result<int> eval(
+		ShellContext &sh,
+		EvalFlags flags,
+		bool &checkexit
+	) const override;
 };
 
 struct Node::Pipe : Node {
@@ -135,6 +155,11 @@ struct Node::Pipe : Node {
 	explicit Pipe(Type t = Type::Pipe) : Node(t) {}
 	~Pipe() override;
 	ptr clone() const override;
+	shell::Result<int> eval(
+		ShellContext &sh,
+		EvalFlags flags,
+		bool &checkexit
+	) const override;
 };
 
 struct Node::Redir : Node {
@@ -145,6 +170,11 @@ struct Node::Redir : Node {
 	explicit Redir(Type t = Type::Redir) : Node(t) {}
 	~Redir() override;
 	ptr clone() const override;
+	shell::Result<int> eval(
+		ShellContext &sh,
+		EvalFlags flags,
+		bool &checkexit
+	) const override;
 };
 
 struct Node::Binary : Node {
@@ -154,6 +184,11 @@ struct Node::Binary : Node {
 	explicit Binary(Type t = Type::Semi) : Node(t) {}
 	~Binary() override;
 	ptr clone() const override;
+	shell::Result<int> eval(
+		ShellContext &sh,
+		EvalFlags flags,
+		bool &checkexit
+	) const override;
 };
 
 struct Node::If : Node {
@@ -164,6 +199,11 @@ struct Node::If : Node {
 	explicit If(Type t = Type::If) : Node(t) {}
 	~If() override;
 	ptr clone() const override;
+	shell::Result<int> eval(
+		ShellContext &sh,
+		EvalFlags flags,
+		bool &checkexit
+	) const override;
 };
 
 struct Node::For : Node {
@@ -175,6 +215,11 @@ struct Node::For : Node {
 	explicit For(Type t = Type::For) : Node(t) {}
 	~For() override;
 	ptr clone() const override;
+	shell::Result<int> eval(
+		ShellContext &sh,
+		EvalFlags flags,
+		bool &checkexit
+	) const override;
 };
 
 struct Node::Case : Node {
@@ -185,6 +230,11 @@ struct Node::Case : Node {
 	explicit Case(Type t = Type::Case) : Node(t) {}
 	~Case() override;
 	ptr clone() const override;
+	shell::Result<int> eval(
+		ShellContext &sh,
+		EvalFlags flags,
+		bool &checkexit
+	) const override;
 };
 
 struct Node::CaseList : Node {
@@ -205,6 +255,11 @@ struct Node::Defun : Node {
 	explicit Defun(Type t = Type::Defun) : Node(t) {}
 	~Defun() override;
 	ptr clone() const override;
+	shell::Result<int> eval(
+		ShellContext &sh,
+		EvalFlags flags,
+		bool &checkexit
+	) const override;
 };
 
 struct Node::Arg : Node {
@@ -249,4 +304,9 @@ struct Node::Not : Node {
 	Not(Type t = Type::Not) : Node(t) {}
 	~Not() override;
 	ptr clone() const override;
+	shell::Result<int> eval(
+		ShellContext &sh,
+		EvalFlags flags,
+		bool &checkexit
+	) const override;
 };
