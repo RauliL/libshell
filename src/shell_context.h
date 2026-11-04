@@ -42,7 +42,6 @@
 
 struct backcmd;
 struct alias;
-struct heredoc;
 struct synstack;
 struct ifs_state;
 struct builtincmd;
@@ -66,7 +65,7 @@ struct ShellContext {
 	struct output *out2 = &errout;
 
 	InputStack input;
-	int whichprompt = 0;
+	ParseSession parse;
 
 	std::optional<std::string> trap[NSIG] = {};
 	int ptrap = 0;
@@ -118,18 +117,6 @@ struct ShellContext {
 	const char *ncifs = nullptr;
 	size_t ifsmb0len = 0;
 	std::wstring wcifs;
-
-	struct heredoc *heredoclist = nullptr;
-	int doprompt = 0;
-	int needprompt = 0;
-	Token lasttoken = Token::Eof;
-	int tokpushback = 0;
-	std::string wordtext;
-	int checkkwd = 0;
-	std::vector<Node::ptr> backquotelist;
-	Node::ptr redirnode;
-	struct heredoc *heredoc = nullptr;
-	int quoteflag = 0;
 
 	int evalskip = 0;
 	int skipcount = 0;

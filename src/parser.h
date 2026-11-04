@@ -82,6 +82,27 @@ namespace shell { class ParseError; }
 
 
 struct ShellContext;
+struct heredoc;
+
+/**
+ * Ephemeral parser state for one parse pass (and nested expandstr /
+ * here-doc reads). Not part of the durable script environment.
+ */
+struct ParseSession {
+	struct heredoc *heredoclist = nullptr;
+	/** Here-doc currently being attached to a redirection node. */
+	struct heredoc *pending_here = nullptr;
+	int doprompt = 0;
+	int needprompt = 0;
+	int whichprompt = 0;
+	Token lasttoken = Token::Eof;
+	int tokpushback = 0;
+	std::string wordtext;
+	int checkkwd = 0;
+	std::vector<Node::ptr> backquotelist;
+	Node::ptr redirnode;
+	int quoteflag = 0;
+};
 
 /**
  * Result of `parsecmd()`: EOF vs blank line vs parse tree.

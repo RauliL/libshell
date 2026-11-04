@@ -321,13 +321,13 @@ static bool is_end_of_list_token(Token t)
 ParseCmdResult
 parsecmd(ShellContext &sh, int interact)
 {
-	sh.tokpushback = 0;
-	sh.checkkwd = 0;
-	sh.heredoclist = 0;
-	sh.doprompt = interact;
-	if (sh.doprompt)
-		setprompt(sh, sh.doprompt);
-	sh.needprompt = 0;
+	sh.parse.tokpushback = 0;
+	sh.parse.checkkwd = 0;
+	sh.parse.heredoclist = 0;
+	sh.parse.doprompt = interact;
+	if (sh.parse.doprompt)
+		setprompt(sh, sh.parse.doprompt);
+	sh.parse.needprompt = 0;
 	bool eof = false;
 	Node::ptr tree = list(sh, 1, &eof);
 	return {eof, std::move(tree)};
@@ -342,7 +342,7 @@ list(ShellContext &sh, int nlflag, bool *eof_out)
 	Token tok;
 
 	for (;;) {
-		sh.checkkwd = chknl | CHKKWD | CHKALIAS;
+		sh.parse.checkkwd = chknl | CHKKWD | CHKALIAS;
 		tok = readtoken(sh);
 		switch (tok) {
 		case Token::Nl:
@@ -354,14 +354,14 @@ list(ShellContext &sh, int nlflag, bool *eof_out)
 				*eof_out = true;
 out_eof:
 			parseheredoc(sh);
-			sh.tokpushback++;
-			sh.lasttoken = Token::Eof;
+			sh.parse.tokpushback++;
+			sh.parse.lasttoken = Token::Eof;
 			return n1;
 		default:
 			break;
 		}
 
-		sh.tokpushback++;
+		sh.parse.tokpushback++;
 		if (nlflag == 2 && is_end_of_list_token(tok))
 			return n1;
 		nlflag |= 2;
@@ -394,7 +394,7 @@ out_eof:
 		case Token::Eof:
 			goto out_eof;
 		case Token::Nl:
-			sh.tokpushback++;
+			sh.parse.tokpushback++;
 			/* fall through */
 		case Token::Backgnd:
 		case Token::Semi:
@@ -402,7 +402,7 @@ out_eof:
 		default:
 			if (!chknl)
 				synexpect(sh);
-			sh.tokpushback++;
+			sh.parse.tokpushback++;
 			return n1;
 		}
 	}
@@ -425,10 +425,10 @@ andor(ShellContext &sh)
 		} else if (token == Token::Or) {
 			t = Node::Type::Or;
 		} else {
-			sh.tokpushback++;
+			sh.parse.tokpushback++;
 			return n1;
 		}
-		sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
+		sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		n2 = pipeline(sh);
 		n3 = make_node<Node::Binary>();
 		n3->type = t;
@@ -450,9 +450,9 @@ pipeline(ShellContext &sh)
 	TRACE(("pipeline: entered\n"));
 	if (readtoken(sh) == Token::Not) {
 		negate = !negate;
-		sh.checkkwd = CHKKWD | CHKALIAS;
+		sh.parse.checkkwd = CHKKWD | CHKALIAS;
 	} else
-		sh.tokpushback++;
+		sh.parse.tokpushback++;
 	n1 = command(sh);
 	if (readtoken(sh) == Token::Pipe) {
 		pipenode = make_node<Node::Pipe>();
@@ -460,12 +460,12 @@ pipeline(ShellContext &sh)
 		as<Node::Pipe>(pipenode)->backgnd = 0;
 		as<Node::Pipe>(pipenode)->cmdlist.push_back(std::move(n1));
 		do {
-			sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
+			sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 			as<Node::Pipe>(pipenode)->cmdlist.push_back(command(sh));
 		} while (readtoken(sh) == Token::Pipe);
 		n1 = std::move(pipenode);
 	}
-	sh.tokpushback++;
+	sh.parse.tokpushback++;
 	if (negate) {
 		n2 = make_node<Node::Not>();
 		n2->type = Node::Type::Not;
@@ -515,10 +515,10 @@ command(ShellContext &sh)
 				synexpect(sh, Token::Then);
 			as<Node::If>(nwalk)->ifpart = list(sh, 0);
 		}
-		if (sh.lasttoken == Token::Else)
+		if (sh.parse.lasttoken == Token::Else)
 			as<Node::If>(nwalk)->elsepart = list(sh, 0);
 		else {
-			sh.tokpushback++;
+			sh.parse.tokpushback++;
 		}
 		t = Token::Fi;
 		break;
@@ -527,10 +527,10 @@ command(ShellContext &sh)
 	case Token::Until: {
 		Token got;
 		n1 = make_node<Node::Binary>();
-		n1->type = (sh.lasttoken == Token::While)? Node::Type::While : Node::Type::Until;
+		n1->type = (sh.parse.lasttoken == Token::While)? Node::Type::While : Node::Type::Until;
 		as<Node::Binary>(n1)->ch1 = list(sh, 0);
 		if ((got=readtoken(sh)) != Token::Do) {
-TRACE(("expecting DO got %s %s\n", token_name(got), got == Token::Word ? sh.wordtext.c_str() : ""));
+TRACE(("expecting DO got %s %s\n", token_name(got), got == Token::Word ? sh.parse.wordtext.c_str() : ""));
 			synexpect(sh, Token::Do);
 		}
 		as<Node::Binary>(n1)->ch2 = list(sh, 0);
@@ -538,25 +538,25 @@ TRACE(("expecting DO got %s %s\n", token_name(got), got == Token::Word ? sh.word
 		break;
 	}
 	case Token::For:
-		if (readtoken(sh) != Token::Word || sh.quoteflag ||
-		    endofname(sh.wordtext) != sh.wordtext.size())
+		if (readtoken(sh) != Token::Word || sh.parse.quoteflag ||
+		    endofname(sh.parse.wordtext) != sh.parse.wordtext.size())
 			synerror(sh, "Bad for loop variable");
 		n1 = make_node<Node::For>();
 		n1->type = Node::Type::For;
 		as<Node::For>(n1)->linno = savelinno;
-		as<Node::For>(n1)->var = sh.wordtext;
-		sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
+		as<Node::For>(n1)->var = sh.parse.wordtext;
+		sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		if (readtoken(sh) == Token::In) {
 			app = &ap;
 			while (readtoken(sh) == Token::Word) {
 				*app = make_node<Node::Arg>();
 				(*app)->type = Node::Type::Arg;
-				as<Node::Arg>(*app)->text = sh.wordtext;
-				as<Node::Arg>(*app)->backquote = std::move(sh.backquotelist);
+				as<Node::Arg>(*app)->text = sh.parse.wordtext;
+				as<Node::Arg>(*app)->backquote = std::move(sh.parse.backquotelist);
 				app = &as<Node::Arg>(*app)->next;
 			}
 			as<Node::For>(n1)->args = std::move(ap);
-			if (sh.lasttoken != Token::Nl && sh.lasttoken != Token::Semi)
+			if (sh.parse.lasttoken != Token::Nl && sh.parse.lasttoken != Token::Semi)
 				synexpect(sh);
 		} else {
 			n2 = make_node<Node::Arg>();
@@ -567,10 +567,10 @@ TRACE(("expecting DO got %s %s\n", token_name(got), got == Token::Word ? sh.word
 			 * Newline or semicolon here is optional (but note
 			 * that the original Bourne shell only allowed NL).
 			 */
-			if (sh.lasttoken != Token::Semi)
-				sh.tokpushback++;
+			if (sh.parse.lasttoken != Token::Semi)
+				sh.parse.tokpushback++;
 		}
-		sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
+		sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		if (readtoken(sh) != Token::Do)
 			synexpect(sh, Token::Do);
 		as<Node::For>(n1)->body = list(sh, 0);
@@ -584,42 +584,42 @@ TRACE(("expecting DO got %s %s\n", token_name(got), got == Token::Word ? sh.word
 			synexpect(sh, Token::Word);
 		n2 = make_node<Node::Arg>();
 		n2->type = Node::Type::Arg;
-		as<Node::Arg>(n2)->text = sh.wordtext;
-		as<Node::Arg>(n2)->backquote = std::move(sh.backquotelist);
+		as<Node::Arg>(n2)->text = sh.parse.wordtext;
+		as<Node::Arg>(n2)->backquote = std::move(sh.parse.backquotelist);
 		as<Node::Case>(n1)->expr = std::move(n2);
-		sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
+		sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		if (readtoken(sh) != Token::In)
 			synexpect(sh, Token::In);
 		cpp = &as<Node::Case>(n1)->cases;
 next_case:
-		sh.checkkwd = CHKNL | CHKKWD;
+		sh.parse.checkkwd = CHKNL | CHKKWD;
 		t = readtoken(sh);
 		while(t != Token::Esac) {
-			if (sh.lasttoken == Token::Lp)
+			if (sh.parse.lasttoken == Token::Lp)
 				readtoken(sh);
 			*cpp = make_node<Node::CaseList>();
 			(*cpp)->type = Node::Type::CaseList;
 			Node *cp = cpp->get();
 			app = &as<Node::CaseList>(cp)->pattern;
 			for (;;) {
-				if (sh.lasttoken < Token::Word)
+				if (sh.parse.lasttoken < Token::Word)
 					synexpect(sh, Token::Word);
 				*app = make_node<Node::Arg>();
 				(*app)->type = Node::Type::Arg;
-				as<Node::Arg>(*app)->text = sh.wordtext;
-				as<Node::Arg>(*app)->backquote = std::move(sh.backquotelist);
+				as<Node::Arg>(*app)->text = sh.parse.wordtext;
+				as<Node::Arg>(*app)->backquote = std::move(sh.parse.backquotelist);
 				if (readtoken(sh) != Token::Pipe)
 					break;
 				app = &as<Node::Arg>(*app)->next;
 				readtoken(sh);
 			}
-			if (sh.lasttoken != Token::Rp)
+			if (sh.parse.lasttoken != Token::Rp)
 				synexpect(sh, Token::Rp);
 			as<Node::CaseList>(cp)->body = list(sh, 2);
 
 			cpp = &as<Node::CaseList>(cp)->next;
 
-			sh.checkkwd = CHKNL | CHKKWD;
+			sh.parse.checkkwd = CHKNL | CHKKWD;
 			if ((t = readtoken(sh)) != Token::Esac) {
 				if (t != Token::Endcase)
 					synexpect(sh, Token::Endcase);
@@ -641,7 +641,7 @@ next_case:
 		break;
 	case Token::Word:
 	case Token::Redir:
-		sh.tokpushback++;
+		sh.parse.tokpushback++;
 		return simplecmd(sh);
 	}
 
@@ -650,14 +650,14 @@ next_case:
 
 redir:
 	/* Now check for redirection which may follow command */
-	sh.checkkwd = CHKKWD | CHKALIAS;
+	sh.parse.checkkwd = CHKKWD | CHKALIAS;
 	rpp = rpp2;
 	while (readtoken(sh) == Token::Redir) {
 		parsefname(sh);
-		*rpp = std::move(sh.redirnode);
+		*rpp = std::move(sh.parse.redirnode);
 		rpp = &as<Node::RedirList>(*rpp)->next;
 	}
-	sh.tokpushback++;
+	sh.parse.tokpushback++;
 	if (redir) {
 		if (n1->type != Node::Type::Subshell) {
 			n2 = make_node<Node::Redir>();
@@ -689,14 +689,14 @@ simplecmd(ShellContext &sh)
 	savecheckkwd = CHKALIAS;
 	savelinno = plinno;
 	for (;;) {
-		sh.checkkwd = savecheckkwd;
+		sh.parse.checkkwd = savecheckkwd;
 		switch (readtoken(sh)) {
 		case Token::Word:
 			n = make_node<Node::Arg>();
 			n->type = Node::Type::Arg;
-			as<Node::Arg>(n)->text = sh.wordtext;
-			as<Node::Arg>(n)->backquote = std::move(sh.backquotelist);
-			if (savecheckkwd && isassignment(sh.wordtext)) {
+			as<Node::Arg>(n)->text = sh.parse.wordtext;
+			as<Node::Arg>(n)->backquote = std::move(sh.parse.backquotelist);
+			if (savecheckkwd && isassignment(sh.parse.wordtext)) {
 				*vpp = std::move(n);
 				vpp = &as<Node::Arg>(*vpp)->next;
 			} else {
@@ -707,7 +707,7 @@ simplecmd(ShellContext &sh)
 			break;
 		case Token::Redir:
 			parsefname(sh);	/* read name of redirection file */
-			*rpp = std::move(sh.redirnode);
+			*rpp = std::move(sh.parse.redirnode);
 			rpp = &as<Node::RedirList>(*rpp)->next;
 			break;
 		case Token::Lp:
@@ -731,7 +731,7 @@ simplecmd(ShellContext &sh)
 				args.reset();
 				n = make_node<Node::Defun>();
 				n->type = Node::Type::Defun;
-				sh.checkkwd = CHKNL | CHKKWD | CHKALIAS;
+				sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 				as<Node::Defun>(n)->text = std::move(fname);
 				as<Node::Defun>(n)->linno = plinno;
 				as<Node::Defun>(n)->body = command(sh);
@@ -739,7 +739,7 @@ simplecmd(ShellContext &sh)
 			}
 			/* fall through */
 		default:
-			sh.tokpushback++;
+			sh.parse.tokpushback++;
 			goto out;
 		}
 	}
@@ -759,8 +759,8 @@ makename(ShellContext &sh)
 	Node::ptr n = make_node<Node::Arg>();
 
 	n->type = Node::Type::Arg;
-	as<Node::Arg>(n)->text = sh.wordtext;
-	as<Node::Arg>(n)->backquote = std::move(sh.backquotelist);
+	as<Node::Arg>(n)->text = sh.parse.wordtext;
+	as<Node::Arg>(n)->backquote = std::move(sh.parse.backquotelist);
 
 	return n;
 }
@@ -788,31 +788,31 @@ fixredir(ShellContext &sh, Node *n, const char *text, int err)
 static void
 parsefname(ShellContext &sh)
 {
-	auto n = sh.redirnode.get();
+	auto n = sh.parse.redirnode.get();
 
 	if (n->type == Node::Type::Here)
-		sh.checkkwd |= CHKEOFMARK;
+		sh.parse.checkkwd |= CHKEOFMARK;
 	if (readtoken(sh) != Token::Word)
 		synexpect(sh);
-	sh.checkkwd &= ~CHKEOFMARK;
+	sh.parse.checkkwd &= ~CHKEOFMARK;
 	if (n->type == Node::Type::Here) {
-		struct heredoc *here = sh.heredoc;
+		struct heredoc *here = sh.parse.pending_here;
 		struct heredoc *p;
 
-		if (sh.quoteflag == 0)
+		if (sh.parse.quoteflag == 0)
 			n->type = Node::Type::XHere;
 		TRACE(("Here document %d\n", n->type));
-		rmescapes(sh.wordtext.data());
-		here->eofmark = sh.wordtext;
+		rmescapes(sh.parse.wordtext.data());
+		here->eofmark = sh.parse.wordtext;
 		here->next = NULL;
-		if (sh.heredoclist == NULL)
-			sh.heredoclist = here;
+		if (sh.parse.heredoclist == NULL)
+			sh.parse.heredoclist = here;
 		else {
-			for (p = sh.heredoclist ; p->next ; p = p->next);
+			for (p = sh.parse.heredoclist ; p->next ; p = p->next);
 			p->next = here;
 		}
 	} else if (n->type == Node::Type::ToFd || n->type == Node::Type::FromFd) {
-		fixredir(sh, n, sh.wordtext.c_str(), 0);
+		fixredir(sh, n, sh.parse.wordtext.c_str(), 0);
 	} else {
 		as<Node::File>(n)->fname = makename(sh);
 	}
@@ -828,12 +828,12 @@ parseheredoc(ShellContext &sh)
 {
 	struct heredoc *here;
 
-	here = sh.heredoclist;
-	sh.heredoclist = 0;
+	here = sh.parse.heredoclist;
+	sh.parse.heredoclist = 0;
 
 	while (here) {
 		struct heredoc *next = here->next;
-		if (sh.needprompt) {
+		if (sh.parse.needprompt) {
 			setprompt(sh, 2);
 		}
 		if (here->here->type == Node::Type::Here)
@@ -842,8 +842,8 @@ parseheredoc(ShellContext &sh)
 			readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, &here->eofmark, here->striptabs);
 		Node::ptr n = make_node<Node::Arg>();
 		n->type = Node::Type::Arg;
-		as<Node::Arg>(n)->text = sh.wordtext;
-		as<Node::Arg>(n)->backquote = std::move(sh.backquotelist);
+		as<Node::Arg>(n)->text = sh.parse.wordtext;
+		as<Node::Arg>(n)->backquote = std::move(sh.parse.backquotelist);
 		as<Node::Here>(here->here)->doc = std::move(n);
 		delete here;
 		here = next;
@@ -854,9 +854,9 @@ static Token
 readtoken(ShellContext &sh)
 {
 	Token t;
-	int kwd = sh.checkkwd;
+	int kwd = sh.parse.checkkwd;
 #ifdef DEBUG
-	int alreadyseen = sh.tokpushback;
+	int alreadyseen = sh.parse.tokpushback;
 #endif
 
 top:
@@ -868,15 +868,15 @@ top:
 	if (kwd & CHKNL) {
 		while (t == Token::Nl) {
 			parseheredoc(sh);
-			sh.checkkwd = 0;
+			sh.parse.checkkwd = 0;
 			t = xxreadtoken(sh);
 		}
 	}
 
-	kwd |= sh.checkkwd;
-	sh.checkkwd = 0;
+	kwd |= sh.parse.checkkwd;
+	sh.parse.checkkwd = 0;
 
-	if (t != Token::Word || sh.quoteflag) {
+	if (t != Token::Word || sh.parse.quoteflag) {
 		goto out;
 	}
 
@@ -884,9 +884,9 @@ top:
 	 * check for keywords
 	 */
 	if (kwd & CHKKWD) {
-		if (const auto pp = findkwd(sh.wordtext)) {
+		if (const auto pp = findkwd(sh.parse.wordtext)) {
 			t = *pp;
-			sh.lasttoken = t;
+			sh.parse.lasttoken = t;
 			TRACE(("keyword %s recognized\n", token_name(t)));
 			goto out;
 		}
@@ -894,7 +894,7 @@ top:
 
 	if (kwd & CHKALIAS) {
 		struct alias *ap;
-		if ((ap = lookupalias(sh, sh.wordtext, 1)) != NULL) {
+		if ((ap = lookupalias(sh, sh.parse.wordtext, 1)) != NULL) {
 			if (!ap->val.empty()) {
 				pushstring(sh, ap->val.data(), ap);
 			}
@@ -904,9 +904,9 @@ top:
 out:
 #ifdef DEBUG
 	if (!alreadyseen)
-	    TRACE(("token %s %s\n", token_name(t), t == Token::Word ? sh.wordtext.c_str() : ""));
+	    TRACE(("token %s %s\n", token_name(t), t == Token::Word ? sh.parse.wordtext.c_str() : ""));
 	else
-	    TRACE(("reread token %s %s\n", token_name(t), t == Token::Word ? sh.wordtext.c_str() : ""));
+	    TRACE(("reread token %s %s\n", token_name(t), t == Token::Word ? sh.parse.wordtext.c_str() : ""));
 #endif
 	return (t);
 }
@@ -915,7 +915,7 @@ static void
 nlprompt(ShellContext &sh)
 {
 	plinno++;
-	if (sh.doprompt)
+	if (sh.parse.doprompt)
 		setprompt(sh, 2);
 }
 
@@ -923,16 +923,16 @@ static void
 nlnoprompt(ShellContext &sh)
 {
 	plinno++;
-	sh.needprompt = sh.doprompt;
+	sh.parse.needprompt = sh.parse.doprompt;
 }
 
 
 /*
  * Read the next input token.
- * If the token is a word, we set sh.backquotelist to the list of cmds in
- *	backquotes.  We set sh.quoteflag to true if any part of the word was
+ * If the token is a word, we set sh.parse.backquotelist to the list of cmds in
+ *	backquotes.  We set sh.parse.quoteflag to true if any part of the word was
  *	quoted.
- * If the token is Token::Redir, then we set sh.redirnode to a structure containing
+ * If the token is Token::Redir, then we set sh.parse.redirnode to a structure containing
  *	the redirection.
  *
  * [Change comment:  here documents and internal procedures]
@@ -943,18 +943,18 @@ nlnoprompt(ShellContext &sh)
  *  have parseword (readtoken1?) handle both words and redirection.]
  */
 
-#define RETURN(token)	return sh.lasttoken = token
+#define RETURN(token)	return sh.parse.lasttoken = token
 
 static Token
 xxreadtoken(ShellContext &sh)
 {
 	int c;
 
-	if (sh.tokpushback) {
-		sh.tokpushback = 0;
-		return sh.lasttoken;
+	if (sh.parse.tokpushback) {
+		sh.parse.tokpushback = 0;
+		return sh.parse.lasttoken;
 	}
-	if (sh.needprompt) {
+	if (sh.parse.needprompt) {
 		setprompt(sh, 2);
 	}
 	for (;;) {	/* until token or start of word found */
@@ -1160,7 +1160,7 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 		.syntax = syntax,
 		.dblquote = syntax == DQSYNTAX,
 	};
-	int chkeofmark = sh.checkkwd & CHKEOFMARK;
+	int chkeofmark = sh.parse.checkkwd & CHKEOFMARK;
 	struct synstack *synstack = &synbase;
 	bool printesc = syntax == SQSYNTAX;
 	const char *newsyn = nullptr;
@@ -1369,16 +1369,16 @@ endword:
 		 && len <= 2
 		 && (*out == '\0' || is_digit(*out))) {
 			PARSEREDIR();
-			return sh.lasttoken = Token::Redir;
+			return sh.parse.lasttoken = Token::Redir;
 		} else {
 			pungetc(sh);
 		}
 	}
-	sh.quoteflag = quotef;
-	sh.backquotelist = std::move(bqlist);
+	sh.parse.quoteflag = quotef;
+	sh.parse.backquotelist = std::move(bqlist);
 	grabstackblock(eb, len);
-	sh.wordtext = out;
-	return sh.lasttoken = Token::Word;
+	sh.parse.wordtext = out;
+	return sh.parse.lasttoken = Token::Word;
 /* end of readtoken routine */
 
 
@@ -1500,11 +1500,11 @@ parseredir: {
 	np->type = redir_type;
 	as<Node::RedirList>(np)->fd = fd != '\0' ? digit_val(fd) : default_fd;
 	if (redir_type == Node::Type::Here) {
-		sh.heredoc = new heredoc;
-		sh.heredoc->here = np.get();
-		sh.heredoc->striptabs = striptabs;
+		sh.parse.pending_here = new heredoc;
+		sh.parse.pending_here->here = np.get();
+		sh.parse.pending_here->striptabs = striptabs;
 	}
-	sh.redirnode = std::move(np);
+	sh.parse.redirnode = std::move(np);
 	goto parseredir_return;
 }
 
@@ -1707,7 +1707,7 @@ parsebackq: {
 
 		while (!done) {
 			({ char *_q = (pout); size_t _l = (MB_LEN_MAX + 1); size_t _m = static_cast<size_t>(eb.cap_ptr() - _q); if (_l > _m) (pout) = eb.makespace(_l, _q); 0; });
-			if (sh.needprompt) {
+			if (sh.parse.needprompt) {
 				setprompt(sh, 2);
 			}
 			switch (pc = pgetc_eatbnl(sh)) {
@@ -1742,18 +1742,18 @@ parsebackq: {
 		pstr = (eb.commit_to(pout));
 		setinputstring(sh, pstr);
         }
-	saveheredoclist = sh.heredoclist;
-	sh.heredoclist = NULL;
+	saveheredoclist = sh.parse.heredoclist;
+	sh.parse.heredoclist = NULL;
 
 	if (oldstyle) {
-		saveprompt = sh.doprompt;
-		sh.doprompt = 0;
+		saveprompt = sh.parse.doprompt;
+		sh.parse.doprompt = 0;
 	}
 
 	n = list(sh, 2);
 
 	if (oldstyle)
-		sh.doprompt = saveprompt;
+		sh.parse.doprompt = saveprompt;
 	else {
 		if (readtoken(sh) != Token::Rp)
 			synexpect(sh, Token::Rp);
@@ -1761,7 +1761,7 @@ parsebackq: {
 	}
 
 	parseheredoc(sh);
-	sh.heredoclist = saveheredoclist;
+	sh.parse.heredoclist = saveheredoclist;
 
 	bqlist.push_back(std::move(n));
 	/* Start reading from old file again. */
@@ -1774,7 +1774,7 @@ parsebackq_out:
 		/* Ignore any pushed back tokens left from the backquote
 		 * parsing.
 		 */
-		sh.tokpushback = 0;
+		sh.parse.tokpushback = 0;
 		goto parsebackq_oldreturn;
 	} else {
 		goto parsebackq_newreturn;
@@ -1838,9 +1838,9 @@ synexpect(ShellContext &sh, std::optional<Token> token)
 
 	if (token) {
 		msg = std::format("{} unexpected (expecting {})",
-			token_name(sh.lasttoken), token_name(*token));
+			token_name(sh.parse.lasttoken), token_name(*token));
 	} else {
-		msg = std::format("{} unexpected", token_name(sh.lasttoken));
+		msg = std::format("{} unexpected", token_name(sh.parse.lasttoken));
 	}
 	synerror(sh, msg.c_str());
 	/* NOTREACHED */
@@ -1893,8 +1893,8 @@ try_parse_string(ShellContext &sh, std::string_view s)
 static void __attribute__((noinline))
 setprompt(ShellContext &sh, int which)
 {
-	sh.needprompt = 0;
-	sh.whichprompt = which;
+	sh.parse.needprompt = 0;
+	sh.parse.whichprompt = which;
 
 	if (!sh.input.current->nleft)
 		out2str(getprompt(sh, nullptr));
@@ -1915,18 +1915,18 @@ expandstr(ShellContext &sh, const char *ps)
 	/* XXX Fix (char *) cast. */
 	setinputstring(sh, (char *)ps);
 
-	saveheredoclist = sh.heredoclist;
-	sh.heredoclist = NULL;
-	saveprompt = sh.doprompt;
-	sh.doprompt = 0;
-	sh.needprompt = 0;
+	saveheredoclist = sh.parse.heredoclist;
+	sh.parse.heredoclist = NULL;
+	saveprompt = sh.parse.doprompt;
+	sh.parse.doprompt = 0;
+	sh.parse.needprompt = 0;
 	try {
 		readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, FAKEEOFMARK, 0);
 
 		n.type = Node::Type::Arg;
 		n.next = nullptr;
-		n.text = sh.wordtext;
-		n.backquote = std::move(sh.backquotelist);
+		n.text = sh.parse.wordtext;
+		n.backquote = std::move(sh.parse.backquotelist);
 
 		if (auto r = expandarg_to_string(sh, reinterpret_cast<Node *>(&n), EXP_QUOTED); !r) {
 			sh.exception = r.error();
@@ -1940,9 +1940,9 @@ expandstr(ShellContext &sh, const char *ps)
 
 	restore_handler_expandarg(sh, err);
 
-	sh.doprompt = saveprompt;
+	sh.parse.doprompt = saveprompt;
 	unwindfiles(sh, file_stop);
-	sh.heredoclist = saveheredoclist;
+	sh.parse.heredoclist = saveheredoclist;
 
 	return result;
 }
@@ -1956,7 +1956,7 @@ getprompt(ShellContext &sh, void *unused)
 {
 	const char *prompt;
 
-	switch (sh.whichprompt) {
+	switch (sh.parse.whichprompt) {
 	default:
 #ifdef DEBUG
 		return "<internal prompt error>";

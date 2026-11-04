@@ -424,7 +424,7 @@ popstring(ShellContext &sh, InputStack &in)
 	if (sp.ap && in.current->nextc > sp.string) {
 		if (in.current->nextc[-1] == ' ' ||
 		    in.current->nextc[-1] == '\t') {
-			sh.checkkwd |= CHKALIAS;
+			sh.parse.checkkwd |= CHKALIAS;
 		}
 		/* Alias values are owned by the alias; do not free here. */
 	}
