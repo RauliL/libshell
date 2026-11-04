@@ -42,7 +42,7 @@
 #include "nodes.h"
 #include "token.h"
 
-namespace dash { class ParseError; }
+namespace shell { class ParseError; }
 
 /* control characters in argument strings */
 #define CTL_FIRST -127		/* first 'special' character */
@@ -101,5 +101,5 @@ std::optional<Token> findkwd(std::string_view);
 std::size_t endofname(std::string_view name);
 std::string expandstr(ShellContext &sh, const char *);
 unsigned getmbc(ShellContext &sh, int c, char *out, int mode);
-void report_parse_error(ShellContext &sh, const dash::ParseError &e);
+void report_parse_error(ShellContext &sh, const shell::ParseError &e);
 tl::expected<void, std::string> try_parse_string(ShellContext &sh, std::string_view s);

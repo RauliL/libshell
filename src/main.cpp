@@ -62,73 +62,6 @@ int *dash_errno;
 static shell::Result<std::string> find_dot_file(ShellContext &sh, char *);
 
 /*
- * Top-level interactive parse/eval loop: prompting, ignoreeof, and
- * recovering from parse errors at the prompt.
- */
-shell::Result<int>
-run_interactive(ShellContext &sh)
-{
-	int status = 0;
-	int numeof = 0;
-
-	TRACE(("run_interactive() called\n"));
-	for (;;) {
-		int skip;
-
-		try {
-			ParseCmdResult cmd = parsecmd(sh, 1);
-			if (cmd.eof) {
-				if (numeof >= 50)
-					break;
-				if (!Iflag) {
-					out2c('\n');
-#ifdef FLUSHERR
-					sh.out2->flush(sh);
-#endif
-					break;
-				}
-				out2str("\nUse \"exit\" to leave shell.\n");
-				numeof++;
-			} else {
-				Node *n = cmd.tree.get();
-				numeof = 0;
-				auto r = evaltree(sh, n, {});
-				if (!r) {
-					sh.exception = r.error();
-					if (r.error() == shell::Error::Generic) {
-						skip = sh.evalskip;
-						if (skip) {
-							sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
-							break;
-						}
-						continue;
-					}
-					return r;
-				}
-				if (n)
-					status = *r;
-			}
-		} catch (const dash::ParseError &e) {
-			report_parse_error(sh, e);
-			skip = sh.evalskip;
-			if (skip) {
-				sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
-				break;
-			}
-			continue;
-		}
-
-		skip = sh.evalskip;
-		if (skip) {
-			sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
-			break;
-		}
-	}
-
-	return status;
-}
-
-/*
  * Read and execute commands until EOF.  No prompting or other interactive
  * behaviour — used for scripts, -c companions, `.`, and sourced files.
  * shell::Error::Generic is converted to an exit status at this boundary; shell::Error::Exit/EXEND/EXINT
@@ -157,7 +90,7 @@ cmdloop(ShellContext &sh)
 				return r;
 			}
 			status = *r;
-		} catch (const dash::ParseError &e) {
+		} catch (const shell::ParseError &e) {
 			report_parse_error(sh, e);
 			return sh.exitstatus;
 		}

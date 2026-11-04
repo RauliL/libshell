@@ -1,5 +1,4 @@
-#ifndef DASH_CONFIG_H
-#define DASH_CONFIG_H
+#pragma once
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
@@ -83,6 +82,4 @@
 #cmakedefine HAVE_BSD_SIGNAL_ALIAS 1
 #ifdef HAVE_BSD_SIGNAL_ALIAS
 #define signal bsd_signal
-#endif
-
 #endif

@@ -42,8 +42,6 @@
 
 #include <sys/types.h>
 
-#include <libshell.hpp>
-
 #ifndef JOBS
 #define JOBS 1
 #endif

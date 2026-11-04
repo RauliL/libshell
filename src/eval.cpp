@@ -32,17 +32,19 @@
  * SUCH DAMAGE.
  */
 
-#include <stdlib.h>
-#include <signal.h>
+#include <cstdlib>
+#include <csignal>
+#include <string>
+#include <vector>
+
 #include <unistd.h>
 #include <sys/types.h>
+
+#include <libshell.hpp>
 
 /*
  * Evaluate a command.
  */
-
-#include <string>
-#include <vector>
 
 #include "init.h"
 #include "main.h"
@@ -67,22 +69,6 @@
 #include "show.h"
 #include "mystring.h"
 #include "parse_error.h"
-
-
-			/* set if we are skipping commands */
-		/* number of levels to skip */
-		/* current loop nesting level */
-		/* starting line number of current function, or 0 if not in a function */
-
-
-
-			/* exit status of last command */
-		/* exit status of backquoted command */
-		/* exit status of last command outside traps */
-
-/* Prevent PS4 nesting. */
-
-
 
 
 static void evaltreenr(ShellContext &, Node *, EvalFlags)
@@ -202,7 +188,7 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
 		}
 		popfile(sh);
 		return status;
-	} catch (const dash::ParseError &e) {
+	} catch (const shell::ParseError &e) {
 		report_parse_error(sh, e);
 		popfile(sh);
 		return sh.exitstatus;

@@ -44,8 +44,6 @@
 
 #include <sys/types.h>
 
-#include <libshell.hpp>
-
 struct ShellContext;
 
 /*

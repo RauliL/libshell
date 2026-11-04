@@ -3,8 +3,7 @@
 /build/
 /out/
 
-# generated configuration
-/config.h
+/include/libshell/config.hpp
 
 # leftover autotools output, if a previous tree still has it
 Makefile.in

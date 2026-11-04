@@ -777,12 +777,10 @@ fixredir(ShellContext &sh, Node *n, const char *text, int err)
 	else if (text[0] == '-' && text[1] == '\0')
 		as<Node::Dup>(n)->dupfd = -1;
 	else {
-
 		if (err)
-			throw dash::ParseError(
-				std::string("Bad fd number: ") + text, plinno);
-		else
-			as<Node::Dup>(n)->vname = makename(sh);
+			throw shell::ParseError(std::format("Bad fd number: {}", text), plinno);
+
+		as<Node::Dup>(n)->vname = makename(sh);
 	}
 }
 
@@ -1853,11 +1851,12 @@ static void
 synerror(ShellContext &sh, const char *msg)
 {
 	sh.errlinno = plinno;
-	throw dash::ParseError(std::string("Syntax error: ") + msg, plinno);
+
+	throw shell::ParseError(std::format("Syntax error: {}", msg), plinno);
 }
 
 void
-report_parse_error(ShellContext &sh, const dash::ParseError &e)
+report_parse_error(ShellContext &sh, const shell::ParseError &e)
 {
 	sh.errlinno = e.lineno();
 	sh.exitstatus = 2;
@@ -1882,7 +1881,7 @@ try_parse_string(ShellContext &sh, std::string_view s)
 		popfile(sh);
 		nflag = save_nflag;
 		return {};
-	} catch (const dash::ParseError &e) {
+	} catch (const shell::ParseError &e) {
 		sh.errlinno = e.lineno();
 		popfile(sh);
 		nflag = save_nflag;
@@ -1935,7 +1934,7 @@ expandstr(ShellContext &sh, const char *ps)
 		} else {
 			result = std::move(*r);
 		}
-	} catch (const dash::ParseError &) {
+	} catch (const shell::ParseError &) {
 		err = 1;
 	}
 

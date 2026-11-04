@@ -20,9 +20,10 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
+
 #include <sys/resource.h>
 #include <sys/types.h>
-#include <vector>
 
 #include "error.h"
 #include "eval.h"

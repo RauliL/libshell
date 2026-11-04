@@ -31,14 +31,14 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include <cstdlib>
+#include <string>
+#include <vector>
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <cstdlib>
-#include <string>
-#include <vector>
 #ifdef HAVE_PATHS_H
 #include <paths.h>
 #endif

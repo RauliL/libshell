@@ -37,8 +37,6 @@
 
 #include <cerrno>
 
-#include <libshell.hpp>
-
 struct ShellContext;
 
 /* shell level: 0 for the main shell, 1 for its children, and so on */

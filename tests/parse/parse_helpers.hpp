@@ -1,5 +1,4 @@
-#ifndef PARSE_HELPERS_HPP
-#define PARSE_HELPERS_HPP
+#pragma once
 
 #include <cstdio>
 #include <optional>
@@ -69,7 +68,7 @@ inline std::vector<Node::ptr> parse_trees(std::string_view script)
 			trees.push_back(std::move(result.tree));
 		}
 		popfile(sh);
-	} catch (const dash::ParseError &) {
+	} catch (const shell::ParseError &) {
 		popfile(sh);
 		throw;
 	}
@@ -146,5 +145,3 @@ inline Node::Command *as_cmd(Node *n)
 }
 
 } /* namespace parse_test */
-
-#endif

@@ -37,12 +37,15 @@
  */
 
 #include <csignal>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <string_view>
+
 #include <unistd.h>
-#include <cstdio>
+
+#include <libshell.hpp>
 
 #include "jobs.h"
 #include "shell.h"

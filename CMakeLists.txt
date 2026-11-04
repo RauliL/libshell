@@ -16,12 +16,12 @@ include(CheckSymbolExists)
 
 set(CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 
+option(BUILD_EXAMPLES "Whether to build example programs or not" OFF)
 option(WITH_LINENO "Track LINENO" ON)
 option(ENABLE_FNMATCH "Use fnmatch(3) from libc" OFF)
 option(ENABLE_GLOB "Use glob(3) from libc" OFF)
 option(ENABLE_TEE "Use tee(2) when it is available" ON)
 option(ENABLE_MEMFD_CREATE "Use memfd_create(3) when it is available" ON)
-option(ENABLE_STATIC "Link the shell statically" OFF)
 
 function(dash_have_header header variable)
   check_include_file_cxx("${header}" "${variable}")
@@ -162,7 +162,10 @@ else()
   set(USE_MEMFD_CREATE 0)
 endif()
 
-configure_file(config.h.cmake config.h)
+configure_file(
+  config.hpp.in
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/libshell/config.hpp"
+)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -175,21 +178,28 @@ set(EXPECTED_BUILD_PACKAGE OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(expected)
 
 set(DASH_COMPILE_DEFS BSD=1 SHELL _GNU_SOURCE)
-set(DASH_INCLUDE_DIRS
+set(
+  DASH_INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_SOURCE_DIR}/src"
-  "${CMAKE_CURRENT_BINARY_DIR}")
+  "${CMAKE_CURRENT_BINARY_DIR}"
+)
 
 function(dash_configure_tool target)
   target_compile_definitions("${target}" PRIVATE ${DASH_COMPILE_DEFS})
   target_include_directories("${target}" PRIVATE ${DASH_INCLUDE_DIRS})
-  target_compile_options("${target}" PRIVATE -Wall
-    "SHELL:-include ${CMAKE_CURRENT_BINARY_DIR}/config.h")
+  target_compile_options(
+    "${target}"
+    PRIVATE
+      -Wall
+      "SHELL:-include libshell/config.hpp"
+  )
   # result.h (via parser.h / arith.h) needs tl::expected headers
   target_link_libraries("${target}" PRIVATE expected)
 endfunction()
 
-set(DASH_SOURCES
+set(
+  DASH_SOURCES
   src/alias.cpp
   src/arith.cpp
   src/builtins.cpp
@@ -238,70 +248,47 @@ add_custom_command(
 )
 
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
-         "${CMAKE_CURRENT_BINARY_DIR}/syntax.h"
-  COMMAND mksyntax
-  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  DEPENDS mksyntax
-  COMMENT "Generating syntax tables"
+  OUTPUT
+    "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
+    "${CMAKE_CURRENT_BINARY_DIR}/syntax.h"
+  COMMAND
+    mksyntax
+  WORKING_DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}"
+  DEPENDS
+    mksyntax
+  COMMENT
+    "Generating syntax tables"
 )
 
 set_source_files_properties(
   ${DASH_SOURCES}
   "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
-  PROPERTIES OBJECT_DEPENDS
-  "${CMAKE_CURRENT_BINARY_DIR}/syntax.h")
+  PROPERTIES
+    OBJECT_DEPENDS
+      "${CMAKE_CURRENT_BINARY_DIR}/syntax.h"
+)
 
-set(DASH_GENERATED_SOURCES
+set(
+  DASH_GENERATED_SOURCES
   "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
 )
 
-add_library(dash_lib STATIC
-  ${DASH_SOURCES}
-  ${DASH_GENERATED_SOURCES}
+add_library(
+  dash_lib
+  STATIC
+    ${DASH_SOURCES}
+    ${DASH_GENERATED_SOURCES}
 )
 dash_configure_tool(dash_lib)
 target_link_libraries(dash_lib PUBLIC expected)
 
-add_executable(dash src/dash_main.cpp)
-target_link_libraries(dash PRIVATE dash_lib)
-dash_configure_tool(dash)
-if(ENABLE_STATIC)
-  target_link_options(dash PRIVATE -static)
+if(BUILD_EXAMPLES)
+  add_subdirectory(examples)
 endif()
-
-install(TARGETS dash RUNTIME DESTINATION bin)
-
-include(CTest)
 if(BUILD_TESTING)
-  FetchContent_Declare(
-    Catch2
-    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG v3.8.1
-  )
-  FetchContent_MakeAvailable(Catch2)
-
-  add_executable(parse_tests
-    tests/parse/parse_tests.cpp
-    tests/parse/ast_tests.cpp
-  )
-  target_include_directories(parse_tests PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests/parse")
-  target_compile_definitions(parse_tests PRIVATE
-    "PARSE_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/parse\"")
-  target_link_libraries(parse_tests PRIVATE dash_lib Catch2::Catch2WithMain)
-  dash_configure_tool(parse_tests)
-
-  add_executable(arith_tests
-    tests/arith/arith_eval_tests.cpp
-  )
-  target_link_libraries(arith_tests PRIVATE dash_lib Catch2::Catch2WithMain)
-  dash_configure_tool(arith_tests)
-
-  list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")
-  include(Catch)
-  catch_discover_tests(parse_tests)
-  catch_discover_tests(arith_tests)
+  enable_testing()
+  add_subdirectory(tests)
 endif()

@@ -31,15 +31,15 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include <climits>
+#include <cstdlib>
+#include <cstring>
+#include <optional>
+#include <string>
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <stdlib.h>
-#include <string.h>
-#include <string>
 #include <unistd.h>
-#include <limits.h>
-#include <optional>
 #ifdef __CYGWIN__
 #include <sys/cygwin.h>
 #endif

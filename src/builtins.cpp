@@ -1,12 +1,12 @@
 /*
  * Builtin command table. Lookups use an unordered_map of name → entry.
  */
-
-#include "builtins.h"
-
 #include <unordered_map>
 
+#include <libshell.hpp>
+
 #include "alias.h"
+#include "builtins.h"
 #include "cd.h"
 #include "eval.h"
 #include "jobs.h"
