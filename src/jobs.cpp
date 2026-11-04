@@ -85,7 +85,7 @@
 #define DOWAIT_WAITCMD_ALL 4
 
 static void set_curjob(ShellContext &sh, Job *, unsigned);
-static int sprint_status(char *, int);
+static std::string sprint_status(int);
 static void freejob(ShellContext &sh, Job *);
 static shell::Result<Job *> getjob(ShellContext &sh, const char *);
 static void forkchild(ShellContext &sh, Job *, Node *, int);
@@ -242,26 +242,24 @@ usage:
 
 /*
  * Text for a signal that killed the job waited on.  SIGINT and SIGPIPE
- * are not reported.  Returns 0 when there is nothing to print.
+ * are not reported.  Returns an empty string when there is nothing to print.
  */
-static int
-sprint_status(char *os, int status)
+static std::string
+sprint_status(int status)
 {
-	char *s = os;
-	int st;
-
 	if (WIFEXITED(status))
-		return 0;
+		return {};
 
-	st = WTERMSIG(status);
+	int st = WTERMSIG(status);
 	if (st == SIGINT || st == SIGPIPE)
-		return 0;
-	s = stpncpy(s, strsignal(st), 32);
+		return {};
+
+	std::string s(strsignal(st));
 #ifdef WCOREDUMP
 	if (WCOREDUMP(status))
-		s = stpcpy(s, " (core dumped)");
+		s += " (core dumped)";
 #endif
-	return s - os;
+	return s;
 }
 
 /*
@@ -667,12 +665,10 @@ out:
 	INTON_DEFER;
 
 	if (thisjob && thisjob == job) {
-		char s[48 + 1];
-		int len = sprint_status(s, status);
+		std::string s = sprint_status(status);
 
-		if (len) {
-			s[len] = '\n';
-			s[len + 1] = 0;
+		if (!s.empty()) {
+			s.push_back('\n');
 			sh.out2->write(sh, s);
 		}
 	}

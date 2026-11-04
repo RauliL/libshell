@@ -1,5 +1,3 @@
-#ifndef SYSTEM_H
-#define SYSTEM_H
 /*
  * Copyright (c) 2004
  *	Herbert Xu <herbert@gondor.apana.org.au>.  All rights reserved.
@@ -27,10 +25,12 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#pragma once
 
 #include <climits>
 #include <csignal>
 #include <cstddef>
+
 #include <sys/types.h>
 
 struct ShellContext;
@@ -70,32 +70,12 @@ static inline int memfd_create(const char *name, unsigned int flags)
 void *mempcpy(void *, const void *, size_t);
 #endif
 
-#ifndef HAVE_STPCPY
-char *stpcpy(char *, const char *);
-#endif
-
 #ifndef HAVE_STRCHRNUL
 char *strchrnul(const char *, int);
 #endif
 
 #ifndef HAVE_STRSIGNAL
 char *strsignal(int);
-#endif
-
-#ifndef HAVE_STRTOD
-static inline double strtod(const char *nptr, char **endptr)
-{
-	*endptr = (char *)nptr;
-	return 0;
-}
-#endif
-
-#ifndef HAVE_STRTOIMAX
-#define strtoimax strtoll
-#endif
-
-#ifndef HAVE_STRTOUMAX
-#define strtoumax strtoull
 #endif
 
 #ifndef HAVE_BSEARCH
@@ -117,10 +97,6 @@ static inline int killpg(pid_t pid, int signal)
 #ifndef HAVE_SYSCONF
 #define _SC_CLK_TCK 2
 long sysconf(int) __attribute__((__noreturn__));
-#endif
-
-#if !HAVE_DECL_ISBLANK
-int isblank(int c);
 #endif
 
 #ifndef HAVE_TEE
@@ -195,4 +171,3 @@ static inline void globfree64(glob64_t *pglob)
 #define uninitialized_var(x) x = x
 
 unsigned conv_escape(ShellContext &sh, char *str, char *out, bool mbchar);
-#endif

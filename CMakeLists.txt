@@ -43,13 +43,6 @@ if(HAVE_PATHS_H)
   dash_have_symbol(_PATH_TTY paths.h HAVE_DECL__PATH_TTY)
 endif()
 
-dash_have_symbol(isblank cctype HAVE_DECL_ISBLANK)
-if(HAVE_DECL_ISBLANK)
-  set(HAVE_DECL_ISBLANK 1)
-else()
-  set(HAVE_DECL_ISBLANK 0)
-endif()
-
 function(dash_probe variable includes code)
   set(source "${includes}\nint main() { ${code} }\n")
   check_cxx_source_compiles("${source}" "${variable}")
@@ -64,8 +57,6 @@ dash_probe(HAVE_GETPWNAM "#include <pwd.h>"
   "return getpwnam(\"root\") == nullptr;")
 dash_probe(HAVE_GETRLIMIT "#include <sys/resource.h>"
   "struct rlimit r; return getrlimit(RLIMIT_NOFILE, &r);")
-dash_probe(HAVE_ISALPHA "#include <cctype>"
-  "return std::isalpha(static_cast<unsigned char>('a'));")
 dash_probe(HAVE_KILLPG "#include <csignal>"
   "return killpg(0, 0);")
 dash_probe(HAVE_MEMFD_CREATE "#include <sys/mman.h>"
@@ -76,18 +67,10 @@ dash_probe(HAVE_MEMPCPY "#include <cstring>"
   "char d[2]; return mempcpy(d, \"a\", 1) == nullptr;")
 dash_probe(HAVE_SIGSETMASK "#include <csignal>"
   "return sigsetmask(0);")
-dash_probe(HAVE_STPCPY "#include <cstring>"
-  "char d[2]; return stpcpy(d, \"\") == nullptr;")
 dash_probe(HAVE_STRCHRNUL "#include <cstring>"
   "return strchrnul(\"a\", 'b') == nullptr;")
 dash_probe(HAVE_STRSIGNAL "#include <cstring>"
   "return strsignal(0) == nullptr;")
-dash_probe(HAVE_STRTOD "#include <cstdlib>"
-  "char *end = nullptr; return std::strtod(\"1\", &end) == 0;")
-dash_probe(HAVE_STRTOIMAX "#include <cinttypes>"
-  "char *end = nullptr; return std::strtoimax(\"1\", &end, 10) == 0;")
-dash_probe(HAVE_STRTOUMAX "#include <cinttypes>"
-  "char *end = nullptr; return std::strtoumax(\"1\", &end, 10) == 0;")
 dash_probe(HAVE_SYSCONF "#include <unistd.h>"
   "return sysconf(_SC_CLK_TCK) == 0;")
 dash_probe(HAVE_TEE "#include <fcntl.h>"

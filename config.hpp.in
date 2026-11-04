@@ -18,18 +18,13 @@
 #cmakedefine HAVE_FACCESSAT 1
 #cmakedefine HAVE_GETPWNAM 1
 #cmakedefine HAVE_GETRLIMIT 1
-#cmakedefine HAVE_ISALPHA 1
 #cmakedefine HAVE_KILLPG 1
 #cmakedefine HAVE_MEMFD_CREATE 1
 #cmakedefine HAVE_MEMPCPY 1
 #cmakedefine HAVE_MEMRCHR 1
 #cmakedefine HAVE_SIGSETMASK 1
-#cmakedefine HAVE_STPCPY 1
 #cmakedefine HAVE_STRCHRNUL 1
 #cmakedefine HAVE_STRSIGNAL 1
-#cmakedefine HAVE_STRTOD 1
-#cmakedefine HAVE_STRTOIMAX 1
-#cmakedefine HAVE_STRTOUMAX 1
 #cmakedefine HAVE_SYSCONF 1
 #cmakedefine HAVE_TEE 1
 #cmakedefine HAVE_WAIT3 1
@@ -40,7 +35,6 @@
 #cmakedefine WITH_LINENO 1
 #cmakedefine PRIdMAX "${PRIdMAX}"
 
-#define HAVE_DECL_ISBLANK ${HAVE_DECL_ISBLANK}
 #define HAVE_F_DUPFD_CLOEXEC ${HAVE_F_DUPFD_CLOEXEC}
 #define USE_TEE ${USE_TEE}
 #define USE_MEMFD_CREATE ${USE_MEMFD_CREATE}

@@ -224,8 +224,10 @@ public:
 
 		if (std::isdigit(c)) {
 			char *after = nullptr;
-			intmax_t val = strtoimax(cur_, &after, 0);
+			auto val = std::strtoimax(cur_, &after, 0);
+
 			cur_ = after;
+
 			return Token{Token::Type::Num, val};
 		}
 

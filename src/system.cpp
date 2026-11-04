@@ -25,38 +25,9 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-
-#ifndef HAVE_ISALPHA
-#define isalnum _isalnum
-#define iscntrl _iscntrl
-#define islower _islower
-#define isspace _isspace
-#define isalpha _isalpha
-#define isdigit _isdigit
-#define isprint _isprint
-#define isupper _isupper
-#define isblank _isblank
-#define isgraph _isgraph
-#define ispunct _ispunct
-#define isxdigit _isxdigit
-#include <ctype.h>
-#undef isalnum
-#undef iscntrl
-#undef islower
-#undef isspace
-#undef isalpha
-#undef isdigit
-#undef isprint
-#undef isupper
-#undef isblank
-#undef isgraph
-#undef ispunct
-#undef isxdigit
-#endif
-
+#include <csignal>
+#include <cstring>
 #include <format>
-#include <signal.h>
-#include <string.h>
 
 #include "error.h"
 #include "system.h"
@@ -65,15 +36,6 @@
 void *mempcpy(void *dest, const void *src, size_t n)
 {
 	return memcpy(dest, src, n) + n;
-}
-#endif
-
-#ifndef HAVE_STPCPY
-char *stpcpy(char *dest, const char *src)
-{
-	size_t len = strlen(src);
-	dest[len] = 0;
-	return mempcpy(dest, src, len);
 }
 #endif
 
@@ -128,74 +90,5 @@ long sysconf(int name)
 {
 	fprintf(stderr, "no sysconf for: %d\n", name);
 	_exit(2);
-}
-#endif
-
-#ifndef HAVE_ISALPHA
-int isalnum(int c) {
-	return _isalnum(c);
-}
-
-
-int iscntrl(int c) {
-	return _iscntrl(c);
-}
-
-
-int islower(int c) {
-	return _islower(c);
-}
-
-
-int isspace(int c) {
-	return _isspace(c);
-}
-
-
-int isalpha(int c) {
-	return _isalpha(c);
-}
-
-
-int isdigit(int c) {
-	return _isdigit(c);
-}
-
-
-int isprint(int c) {
-	return _isprint(c);
-}
-
-
-int isupper(int c) {
-	return _isupper(c);
-}
-
-
-#if HAVE_DECL_ISBLANK
-int isblank(int c) {
-	return _isblank(c);
-}
-#endif
-
-
-int isgraph(int c) {
-	return _isgraph(c);
-}
-
-
-int ispunct(int c) {
-	return _ispunct(c);
-}
-
-
-int isxdigit(int c) {
-	return _isxdigit(c);
-}
-#endif
-
-#if !HAVE_DECL_ISBLANK
-int isblank(int c) {
-	return c == ' ' || c == '\t';
 }
 #endif

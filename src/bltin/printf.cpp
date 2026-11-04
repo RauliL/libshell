@@ -519,7 +519,7 @@ getuintmax(ShellContext &sh, int sign)
 		goto out;
 
 	errno = 0;
-	val = sign ? strtoimax(cp, &ep, 0) : strtoumax(cp, &ep, 0);
+	val = sign ? std::strtoimax(cp, &ep, 0) : std::strtoumax(cp, &ep, 0);
 	check_conversion(sh, cp, ep);
 out:
 	return val;
@@ -540,7 +540,7 @@ getdouble(ShellContext &sh)
 		return (unsigned char) cp[1];
 
 	errno = 0;
-	val = strtod(cp, &ep);
+	val = std::strtod(cp, &ep);
 	check_conversion(sh, cp, ep);
 	return val;
 }
