@@ -35,7 +35,6 @@ endfunction()
 
 dash_have_header(alloca.h HAVE_ALLOCA_H)
 dash_have_header(paths.h HAVE_PATHS_H)
-dash_have_header(sys/wait.h HAVE_SYS_WAIT_H)
 
 if(HAVE_PATHS_H)
   dash_have_symbol(_PATH_BSHELL paths.h HAVE_DECL__PATH_BSHELL)
@@ -49,16 +48,12 @@ function(dash_probe variable includes code)
   set("${variable}" "${${variable}}" PARENT_SCOPE)
 endfunction()
 
-dash_probe(HAVE_BSEARCH "#include <cstdlib>"
-  "const char *k = \"a\"; return std::bsearch(&k, &k, 1, sizeof k, nullptr) == nullptr;")
 dash_probe(HAVE_FACCESSAT "#include <fcntl.h>\n#include <unistd.h>"
   "return faccessat(AT_FDCWD, \"/\", F_OK, 0);")
 dash_probe(HAVE_GETPWNAM "#include <pwd.h>"
   "return getpwnam(\"root\") == nullptr;")
 dash_probe(HAVE_GETRLIMIT "#include <sys/resource.h>"
   "struct rlimit r; return getrlimit(RLIMIT_NOFILE, &r);")
-dash_probe(HAVE_KILLPG "#include <csignal>"
-  "return killpg(0, 0);")
 dash_probe(HAVE_MEMFD_CREATE "#include <sys/mman.h>"
   "return memfd_create(\"dash\", 0);")
 dash_probe(HAVE_MEMRCHR "#include <cstring>"

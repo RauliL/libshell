@@ -13,12 +13,9 @@
 
 #cmakedefine HAVE_ALLOCA_H 1
 #cmakedefine HAVE_PATHS_H 1
-#cmakedefine HAVE_SYS_WAIT_H 1
-#cmakedefine HAVE_BSEARCH 1
 #cmakedefine HAVE_FACCESSAT 1
 #cmakedefine HAVE_GETPWNAM 1
 #cmakedefine HAVE_GETRLIMIT 1
-#cmakedefine HAVE_KILLPG 1
 #cmakedefine HAVE_MEMFD_CREATE 1
 #cmakedefine HAVE_MEMPCPY 1
 #cmakedefine HAVE_MEMRCHR 1

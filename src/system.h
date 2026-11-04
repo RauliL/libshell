@@ -78,22 +78,6 @@ char *strchrnul(const char *, int);
 char *strsignal(int);
 #endif
 
-#ifndef HAVE_BSEARCH
-void *bsearch(const void *, const void *, size_t, size_t,
-	      int (*)(const void *, const void *));
-#endif
-
-#ifndef HAVE_KILLPG
-static inline int killpg(pid_t pid, int signal)
-{
-#ifdef DEBUG
-	if (pid < 0)
-		abort();
-#endif
-	return kill(-pid, signal);
-}
-#endif
-
 #ifndef HAVE_SYSCONF
 #define _SC_CLK_TCK 2
 long sysconf(int) __attribute__((__noreturn__));
