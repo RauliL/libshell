@@ -43,7 +43,6 @@
 struct backcmd;
 struct alias;
 struct synstack;
-struct ifs_state;
 struct builtincmd;
 struct cmdentry;
 enum limtype : int;
@@ -108,15 +107,7 @@ struct ShellContext {
 	};
 	struct var *vartab[39] = {};
 
-	const std::vector<Node::ptr> *argbackq = nullptr;
-	std::size_t argbackq_i = 0;
-	struct ifsregion ifsfirst = {};
-	struct ifsregion *ifslastp = nullptr;
-	ArgList exparg;
-	char ifsmap[128] = {};
-	const char *ncifs = nullptr;
-	size_t ifsmb0len = 0;
-	std::wstring wcifs;
+	ExpandState expand;
 
 	int evalskip = 0;
 	int skipcount = 0;

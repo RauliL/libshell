@@ -229,8 +229,8 @@ expandarg(ShellContext &sh, Node *arg, ArgList *alist, int flag)
 	ExpandBuf eb;
 	char *p;
 
-	sh.argbackq = &as<Node::Arg>(arg)->backquote;
-	sh.argbackq_i = 0;
+	sh.expand.argbackq = &as<Node::Arg>(arg)->backquote;
+	sh.expand.argbackq_i = 0;
 	eb.start();
 	TRY_SHV(argstr(sh, eb, as<Node::Arg>(arg)->text.data(), flag));
 	p = (eb.commit_to(eb.dest));
@@ -259,8 +259,8 @@ expandarg_to_string(ShellContext &sh, Node *arg, int flag)
 {
 	ExpandBuf eb;
 
-	sh.argbackq = &as<Node::Arg>(arg)->backquote;
-	sh.argbackq_i = 0;
+	sh.expand.argbackq = &as<Node::Arg>(arg)->backquote;
+	sh.expand.argbackq_i = 0;
 	eb.start();
 	TRY_SHV(argstr(sh, eb, as<Node::Arg>(arg)->text.data(), flag));
 	eb.putc_nul(eb.dest);
@@ -401,7 +401,7 @@ addquote:
 			p = TRY_SH(evalvar(sh, eb, p, flag | inquotes));
 			goto start;
 		case CTLBACKQ:
-			TRY_SHV(expbackq(sh, eb, (*sh.argbackq)[sh.argbackq_i].get(), flag | inquotes));
+			TRY_SHV(expbackq(sh, eb, (*sh.expand.argbackq)[sh.expand.argbackq_i].get(), flag | inquotes));
 			goto start;
 		case CTLARI:
 			p = TRY_SH(expari(sh, eb, p, flag | inquotes));
@@ -460,40 +460,40 @@ lose:
 shell::Result<void>
 removerecordregions(ShellContext &sh, int endoff)
 {
-	if (sh.ifslastp == NULL)
+	if (sh.expand.ifslastp == NULL)
 		return {};
 
-	if (sh.ifsfirst.endoff > endoff) {
-		while (sh.ifsfirst.next != NULL) {
+	if (sh.expand.ifsfirst.endoff > endoff) {
+		while (sh.expand.ifsfirst.next != NULL) {
 			struct ifsregion *ifsp;
 			INTOFF;
-			ifsp = sh.ifsfirst.next->next;
-			ckfree(sh.ifsfirst.next);
-			sh.ifsfirst.next = ifsp;
+			ifsp = sh.expand.ifsfirst.next->next;
+			ckfree(sh.expand.ifsfirst.next);
+			sh.expand.ifsfirst.next = ifsp;
 			INTON;
 		}
-		if (sh.ifsfirst.begoff > endoff)
-			sh.ifslastp = NULL;
+		if (sh.expand.ifsfirst.begoff > endoff)
+			sh.expand.ifslastp = NULL;
 		else {
-			sh.ifslastp = &sh.ifsfirst;
-			sh.ifsfirst.endoff = endoff;
+			sh.expand.ifslastp = &sh.expand.ifsfirst;
+			sh.expand.ifsfirst.endoff = endoff;
 		}
 		return {};
 	}
 
-	sh.ifslastp = &sh.ifsfirst;
-	while (sh.ifslastp->next && sh.ifslastp->next->begoff < endoff)
-		sh.ifslastp=sh.ifslastp->next;
-	while (sh.ifslastp->next != NULL) {
+	sh.expand.ifslastp = &sh.expand.ifsfirst;
+	while (sh.expand.ifslastp->next && sh.expand.ifslastp->next->begoff < endoff)
+		sh.expand.ifslastp=sh.expand.ifslastp->next;
+	while (sh.expand.ifslastp->next != NULL) {
 		struct ifsregion *ifsp;
 		INTOFF;
-		ifsp = sh.ifslastp->next->next;
-		ckfree(sh.ifslastp->next);
-		sh.ifslastp->next = ifsp;
+		ifsp = sh.expand.ifslastp->next->next;
+		ckfree(sh.expand.ifslastp->next);
+		sh.expand.ifslastp->next = ifsp;
 		INTON;
 	}
-	if (sh.ifslastp->endoff > endoff)
-		sh.ifslastp->endoff = endoff;
+	if (sh.expand.ifslastp->endoff > endoff)
+		sh.expand.ifslastp->endoff = endoff;
 	return {};
 }
 
@@ -606,7 +606,7 @@ read:
 		eb.base() + startloc));
 
 out:
-	sh.argbackq_i++;
+	sh.expand.argbackq_i++;
 	return {};
 }
 
@@ -1117,8 +1117,8 @@ numvar:
 #endif
 		seplen &= ~(flags >> CHAR_BIT);
 		if (!seplen)
-			seps = sh.ncifs;
-		seplen = ((seplen - 1) & (sh.ifsmb0len - 1)) + 1;
+			seps = sh.expand.ncifs;
+		seplen = ((seplen - 1) & (sh.expand.ifsmb0len - 1)) + 1;
 param:
 		if (sh.shellparam.p.empty())
 			return -1;
@@ -1178,19 +1178,19 @@ recordregion(ShellContext &sh, int start, int end, int nulonly)
 {
 	struct ifsregion *ifsp;
 
-	if (sh.ifslastp == NULL) {
-		ifsp = &sh.ifsfirst;
+	if (sh.expand.ifslastp == NULL) {
+		ifsp = &sh.expand.ifsfirst;
 	} else {
 		INTOFF;
 		ifsp = (struct ifsregion *)ckmalloc(sh, sizeof (struct ifsregion));
 		ifsp->next = NULL;
-		sh.ifslastp->next = ifsp;
+		sh.expand.ifslastp->next = ifsp;
 		INTON_DEFER;
 	}
-	sh.ifslastp = ifsp;
-	sh.ifslastp->begoff = start;
-	sh.ifslastp->endoff = end;
-	sh.ifslastp->nulonly = nulonly;
+	sh.expand.ifslastp = ifsp;
+	sh.expand.ifslastp->begoff = start;
+	sh.expand.ifslastp->endoff = end;
+	sh.expand.ifslastp->nulonly = nulonly;
 }
 
 static unsigned
@@ -1201,7 +1201,7 @@ ifsisifs(ShellContext &sh, const char *p, unsigned ml, const char *ifs)
 	wchar_t wc = *p;
 	wchar_t ifs0;
 
-	if (likely(ifs[0]) && unlikely(!sh.wcifs.empty())) {
+	if (likely(ifs[0]) && unlikely(!sh.expand.wcifs.empty())) {
 		if (wc & 0x80) {
 			mbstate_t mbst = {};
 			wchar_t wc2;
@@ -1211,8 +1211,8 @@ ifsisifs(ShellContext &sh, const char *p, unsigned ml, const char *ifs)
 			wc = wc2;
 		}
 
-		isifs = sh.wcifs.find(wc) != std::wstring::npos;
-		ifs0 = sh.wcifs[0];
+		isifs = sh.expand.wcifs.find(wc) != std::wstring::npos;
+		ifs0 = sh.expand.wcifs[0];
 	} else if (likely(!ml)) {
 		isifs = strchr(ifs, wc);
 		ifs0 = ifs[0];
@@ -1332,11 +1332,11 @@ ifsbreakup(ShellContext &sh, char *string, int maxargs, ArgList *alist)
 	ifst.r = NULL;
 	ifst.start = string;
 	ifst.maxargs = maxargs;
-	if (sh.ifslastp != NULL) {
+	if (sh.expand.ifslastp != NULL) {
 		ifst.ifsspc = 0;
 		nulonly = 0;
-		realifs = sh.ncifs;
-		ifsp = &sh.ifsfirst;
+		realifs = sh.expand.ncifs;
+		ifsp = &sh.expand.ifsfirst;
 		do {
 			int afternul;
 
@@ -1358,14 +1358,14 @@ ifsbreakup(ShellContext &sh, char *string, int maxargs, ArgList *alist)
 
 					if ((x.qw & 0x8080808080808080))
 						break;
-					if (sh.ifsmap[x.b[0]] |
-					    sh.ifsmap[x.b[1]] |
-					    sh.ifsmap[x.b[2]] |
-					    sh.ifsmap[x.b[3]] |
-					    sh.ifsmap[x.b[4]] |
-					    sh.ifsmap[x.b[5]] |
-					    sh.ifsmap[x.b[6]] |
-					    sh.ifsmap[x.b[7]])
+					if (sh.expand.ifsmap[x.b[0]] |
+					    sh.expand.ifsmap[x.b[1]] |
+					    sh.expand.ifsmap[x.b[2]] |
+					    sh.expand.ifsmap[x.b[3]] |
+					    sh.expand.ifsmap[x.b[4]] |
+					    sh.expand.ifsmap[x.b[5]] |
+					    sh.expand.ifsmap[x.b[6]] |
+					    sh.expand.ifsmap[x.b[7]])
 						break;
 					p += 8;
 				}
@@ -1401,7 +1401,7 @@ add:
 void
 ifsfree(ShellContext &sh)
 {
-	struct ifsregion *p = sh.ifsfirst.next;
+	struct ifsregion *p = sh.expand.ifsfirst.next;
 
 	if (!p)
 		goto out;
@@ -1413,11 +1413,11 @@ ifsfree(ShellContext &sh)
 		ckfree(p);
 		p = ifsp;
 	} while (p);
-	sh.ifsfirst.next = NULL;
+	sh.expand.ifsfirst.next = NULL;
 	INTON_DEFER;
 
 out:
-	sh.ifslastp = NULL;
+	sh.expand.ifslastp = NULL;
 }
 
 void
@@ -1433,16 +1433,16 @@ changeifs(ShellContext &sh, std::string_view ifs_in)
 
 	if (!ifsset())
 		ifs = defifs;
-	sh.ncifs = ifs;
+	sh.expand.ncifs = ifs;
 
-	memset(sh.ifsmap, 0, sizeof(sh.ifsmap));
+	memset(sh.expand.ifsmap, 0, sizeof(sh.expand.ifsmap));
 
 	for (p = ifs;; p++) {
 		unsigned c = (unsigned char)*p;
 
 		mb |= c >> 7;
 		if (!(c >> 7))
-			sh.ifsmap[c] = 1;
+			sh.expand.ifsmap[c] = 1;
 
 		if (c == 0)
 			break;
@@ -1450,7 +1450,7 @@ changeifs(ShellContext &sh, std::string_view ifs_in)
 		len++;
 	}
 
-	sh.ifsmb0len = !!len;
+	sh.expand.ifsmb0len = !!len;
 
 	if (!mb)
 		goto out;
@@ -1458,7 +1458,7 @@ changeifs(ShellContext &sh, std::string_view ifs_in)
 	ml = mbrlen(ifs, len, &mbs);
 	if (ml == -2 || ml == -1)
 		ml = 1;
-	sh.ifsmb0len = ml;
+	sh.expand.ifsmb0len = ml;
 
 	nwcifs.assign(len + 1, L'\0');
 	p = ifs;
@@ -1471,12 +1471,12 @@ changeifs(ShellContext &sh, std::string_view ifs_in)
 	}
 
 out:
-	sh.wcifs = std::move(nwcifs);
+	sh.expand.wcifs = std::move(nwcifs);
 }
 
 /*
  * Expand shell metacharacters.  At this point, the only control characters
- * should be escapes.  The results are stored in the list sh.exparg.
+ * should be escapes.  The results are stored in the list sh.expand.exparg.
  */
 
 #ifdef __GLIBC__
@@ -1528,12 +1528,12 @@ expandmeta_glob(ShellContext &sh, ArgList &strs)
 			if ((pglob.gl_flags & (GLOB_NOMAGIC | GLOB_NOCHECK)) ==
 			    (GLOB_NOMAGIC | GLOB_NOCHECK))
 				goto nometa2;
-			sh.exparg.clear();
+			sh.expand.exparg.clear();
 			addglob(sh, &pglob);
 			out.insert(out.end(),
-				   std::make_move_iterator(sh.exparg.begin()),
-				   std::make_move_iterator(sh.exparg.end()));
-			sh.exparg.clear();
+				   std::make_move_iterator(sh.expand.exparg.begin()),
+				   std::make_move_iterator(sh.expand.exparg.end()));
+			sh.expand.exparg.clear();
 			globfree64(&pglob);
 			INTON_DEFER;
 			break;
@@ -1590,12 +1590,12 @@ expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &strs)
 		p = preglob(sh, s.c_str(), RMESCAPE_ALLOC | RMESCAPE_HEAP);
 		len = strlen(p);
 
-		sh.exparg.clear();
+		sh.expand.exparg.clear();
 		expmeta(sh, eb, p, len, 0);
 		if (p != s.c_str())
 			ckfree(p);
 		INTON;
-		if (sh.exparg.empty()) {
+		if (sh.expand.exparg.empty()) {
 			/*
 			 * no matches
 			 */
@@ -1603,14 +1603,14 @@ nometa:
 			rmescapes(s.data());
 			out.push_back(std::move(s));
 		} else {
-			std::sort(sh.exparg.begin(), sh.exparg.end(),
+			std::sort(sh.expand.exparg.begin(), sh.expand.exparg.end(),
 				  [](const std::string &a, const std::string &b) {
 					  return strcoll(a.c_str(), b.c_str()) < 0;
 				  });
 			out.insert(out.end(),
-				   std::make_move_iterator(sh.exparg.begin()),
-				   std::make_move_iterator(sh.exparg.end()));
-			sh.exparg.clear();
+				   std::make_move_iterator(sh.expand.exparg.begin()),
+				   std::make_move_iterator(sh.expand.exparg.end()));
+			sh.expand.exparg.clear();
 		}
 	}
 	strs = std::move(out);
@@ -1620,7 +1620,7 @@ nometa:
 static void
 addfname_common(ShellContext &sh, char *name)
 {
-	sh.exparg.emplace_back(name);
+	sh.expand.exparg.emplace_back(name);
 }
 
 static char *
@@ -2126,8 +2126,8 @@ casematch(ShellContext &sh, Node *pattern, char *val)
 	ExpandBuf eb;
 	int result;
 
-	sh.argbackq = &as<Node::Arg>(pattern)->backquote;
-	sh.argbackq_i = 0;
+	sh.expand.argbackq = &as<Node::Arg>(pattern)->backquote;
+	sh.expand.argbackq_i = 0;
 	eb.start();
 	TRY_SHV(argstr(sh, eb, as<Node::Arg>(pattern)->text.data(), EXP_TILDE | EXP_CASE));
 	ifsfree(sh);

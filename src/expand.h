@@ -36,18 +36,38 @@
  *	@(#)expand.h	8.2 (Berkeley) 5/4/95
  */
 
-#include <inttypes.h>
+#include <cstddef>
 #include <string>
 #include <string_view>
 #include <vector>
+#include <cwchar>
+
+#include "nodes.h"
 
 using ArgList = std::vector<std::string>;
 
 struct ifsregion {
-	struct ifsregion *next;
-	int begoff;
-	int endoff;
-	int nulonly;
+	struct ifsregion *next = nullptr;
+	int begoff = 0;
+	int endoff = 0;
+	int nulonly = 0;
+};
+
+/**
+ * Word-expansion scratch and IFS lookup cache for one shell.
+ * Region/argbackq/exparg state is reset around each expandarg;
+ * ifsmap/ncifs/wcifs track the current IFS value.
+ */
+struct ExpandState {
+	const std::vector<Node::ptr> *argbackq = nullptr;
+	std::size_t argbackq_i = 0;
+	ifsregion ifsfirst{};
+	ifsregion *ifslastp = nullptr;
+	ArgList exparg;
+	char ifsmap[128] = {};
+	const char *ncifs = nullptr;
+	std::size_t ifsmb0len = 0;
+	std::wstring wcifs;
 };
 
 struct mbpair {
@@ -70,8 +90,6 @@ struct mbpair {
 #define EXP_KEEPNUL	0x200	/* do not skip NUL characters */
 #define EXP_DISCARD	0x400	/* discard result of expansion */
 
-
-struct Node;
 
 struct ShellContext;
 #include "error.h"
