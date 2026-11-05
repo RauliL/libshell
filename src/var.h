@@ -55,7 +55,7 @@ struct ShellContext;
 enum class VarFlag : std::size_t {
 	exported,	/* variable is exported */
 	readonly,	/* variable cannot be modified */
-	str_fixed,	/* variable struct is statically allocated */
+	str_fixed,	/* permanent map entry; do not erase on unset */
 	unset,		/* the variable is not set */
 	nofunc,		/* don't call the callback function */
 	full,		/* pass value suitable for putenv */
@@ -172,10 +172,9 @@ static_assert(std::is_trivially_destructible_v<VarFlags>);
 
 
 struct var {
-	struct var *next;		/* next entry in hash list */
 	VarFlags flags;
 	std::string text;		/* name=value (owned; empty value when unset) */
-	void (*func)(ShellContext &, std::string_view);
+	void (*func)(ShellContext &, std::string_view) = nullptr;
 					/* function to be called when  */
 					/* the variable gets set/unset */
 };
@@ -193,36 +192,25 @@ struct LocalVarFrame {
 };
 
 
-/* varinit / defifsvar live on ShellContext; macros require &sh. */
-
-#define vifs (sh.varinit[0])
-#define vpath (&vifs)[1]
-#define vps1 (&vpath)[1]
-#define vps2 (&vps1)[1]
-#define vps4 (&vps2)[1]
-#define voptind (&vps4)[1]
-#ifdef WITH_LINENO
-#define vlineno (&voptind)[1]
-#endif
+/* Value helpers use ShellContext &sh from the enclosing scope. */
 
 extern const char defpathvar[];
-#define defifs (sh.defifsvar + 4)
+inline constexpr char defifs[] = " \t\n";
 #define defpath (defpathvar + 36)
 
 /*
- * The following macros access the values of the above variables.
- * They have to skip over the name.  They return the null string
- * for unset variables.
+ * The following macros access builtin variable values.  They skip over
+ * the name= prefix.  Builtins are always present in sh.vars after initvar.
  */
 
-#define ifsval()	(vifs.text.c_str() + 4)
-#define ifsset()	(!vifs.flags.test(VarFlag::unset))
-#define pathval()	(vpath.text.c_str() + 5)
-#define ps1val()	(vps1.text.c_str() + 4)
-#define ps2val()	(vps2.text.c_str() + 4)
-#define ps4val()	(vps4.text.c_str() + 4)
-#define optindval()	(voptind.text.c_str() + 7)
-#define linenoval()	(vlineno.text.c_str() + 7)
+#define ifsval()	(sh.vars.at("IFS").text.c_str() + 4)
+#define ifsset()	(!sh.vars.at("IFS").flags.test(VarFlag::unset))
+#define pathval()	(sh.vars.at("PATH").text.c_str() + 5)
+#define ps1val()	(sh.vars.at("PS1").text.c_str() + 4)
+#define ps2val()	(sh.vars.at("PS2").text.c_str() + 4)
+#define ps4val()	(sh.vars.at("PS4").text.c_str() + 4)
+#define optindval()	(sh.vars.at("OPTIND").text.c_str() + 7)
+#define linenoval()	(sh.vars.at("LINENO").text.c_str() + 7)
 
 struct ShellContext;
 void initvar(ShellContext &sh);

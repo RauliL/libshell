@@ -65,15 +65,8 @@
 #include "system.h"
 
 
-#define VTABSIZE 39
-
-
 const char defpathvar[] =
 	"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-
-
-
-
 
 
 void
@@ -98,14 +91,15 @@ changelocale(ShellContext &, std::string_view val)
 	setlocale(LC_ALL, nullstr);
 }
 
-/* Some macros in var.h depend on the order, add new variables to the end. */
-
-
-
-
-static struct var ** hashvar(ShellContext &sh, std::string_view);
 static int vpcmp(const void *, const void *);
-static struct var ** findvar(ShellContext &sh, std::string_view);
+static struct var *findvar(ShellContext &sh, std::string_view name);
+
+/* Name part of "name" or "name=value". */
+static std::string_view
+varname(std::string_view s)
+{
+	return s.substr(0, s.find('='));
+}
 
 /*
  * Initialize the varable symbol tables and import the environment
@@ -133,8 +127,8 @@ INIT {
 		}
 	}
 
-	setvareq(sh, sh.defifsvar);
-	setvareq(sh, sh.defoptindvar);
+	setvareq(sh, "IFS= \t\n");
+	setvareq(sh, "OPTIND=1");
 
 	setvareq(sh, std::format("PPID={}", getppid()));
 
@@ -173,29 +167,48 @@ varfunc(ShellContext &sh, struct var *vp)
 }
 
 /*
- * This routine initializes the builtin variables.  It is called when the
- * shell is initialized.
+ * Seed permanent builtin variables.  Called when the shell is initialized.
  */
 
 void
 initvar(ShellContext &sh)
 {
-	struct var *vp;
-	struct var *end;
-	struct var **vpp;
+	auto add = [&](VarFlags flags, const char *text,
+		       void (*func)(ShellContext &, std::string_view)) {
+		std::string nameeq(text);
+		std::string name(varname(nameeq));
+		var v;
+		v.flags = flags;
+		v.text = std::move(nameeq);
+		v.func = func;
+		sh.vars.emplace(std::move(name), std::move(v));
+	};
 
-	vp = sh.varinit;
-	end = vp + sizeof(sh.varinit) / sizeof(sh.varinit[0]);
-	do {
-		vpp = hashvar(sh, vp->text.c_str());
-		vp->next = *vpp;
-		*vpp = vp;
-	} while (++vp < end);
+	add(VarFlag::str_fixed, "IFS= \t\n", changeifs);
+	add(VarFlag::str_fixed, defpathvar, changepath);
+	add(VarFlag::str_fixed, "PS1=$ ", nullptr);
+	add(VarFlag::str_fixed, "PS2=> ", nullptr);
+	add(VarFlag::str_fixed, "PS4=+ ", nullptr);
+	add(VarFlag::str_fixed | VarFlag::nofunc, "OPTIND=1", getoptsreset);
+#ifdef WITH_LINENO
+	add(VarFlag::str_fixed, "LINENO=", nullptr);
+#endif
+	add(VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_ALL=",
+	    changelocale);
+	add(VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_COLLATE=",
+	    changelocale);
+	add(VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_CTYPE=",
+	    changelocale);
+	add(VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_NUMERIC=",
+	    changelocale);
+	add(VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LANG=",
+	    changelocale);
+
 	/*
 	 * PS1 depends on uid
 	 */
 	if (!geteuid())
-		vps1.text = "PS1=# ";
+		sh.vars.at("PS1").text = "PS1=# ";
 }
 
 /*
@@ -257,19 +270,20 @@ setvareq(ShellContext &sh, std::string s, VarFlags flags)
 		VarFlag::exported | VarFlag::readonly | VarFlag::str_fixed |
 		VarFlag::unset;
 
-	struct var *vp, **vpp;
-
 	if (aflag)
 		flags |= VarFlag::exported;
-	vpp = findvar(sh, s.c_str());
-	vp = *vpp;
-	if (vp) {
+
+	std::string name(varname(s));
+	auto it = sh.vars.find(name);
+	struct var *vp = nullptr;
+
+	if (it != sh.vars.end()) {
 		VarFlags keep;
 
+		vp = &it->second;
 		if (vp->flags.test(VarFlag::readonly)) {
-			const char *n = vp->text.c_str();
 			return sh_error(sh, "{}: is read only",
-				 std::string_view(n, strchrnul(n, '=') - n));
+					std::string_view(name));
 		}
 
 		if ((flags & special) != VarFlag::unset)
@@ -277,29 +291,28 @@ setvareq(ShellContext &sh, std::string s, VarFlags flags)
 		else if (vp->flags.test(VarFlag::str_fixed))
 			keep = VarFlag::str_fixed;
 		else {
-			*vpp = vp->next;
-			delete vp;
-			vp = nullptr;
-			goto out;
+			sh.vars.erase(it);
+			return nullptr;
 		}
 
 		flags |= vp->flags & keep;
+		vp->text = std::move(s);
+		vp->flags = flags;
 	} else {
 		if ((flags & special) == VarFlag::unset)
-			goto out;
-		/* not found */
-		vp = new var;
-		vp->next = *vpp;
-		vp->func = NULL;
-		*vpp = vp;
+			return nullptr;
+		var v;
+		v.text = std::move(s);
+		v.flags = flags;
+		auto [placed, inserted] = sh.vars.emplace(std::move(name),
+							  std::move(v));
+		(void)inserted;
+		vp = &placed->second;
 	}
-	vp->text = std::move(s);
-	vp->flags = flags;
 
 	if (!flags.test(VarFlag::nofunc))
 		varfunc(sh, vp);
 
-out:
 	return vp;
 }
 
@@ -310,13 +323,12 @@ out:
 char *
 lookupvar(ShellContext &sh, std::string_view name)
 {
-	struct var *v;
+	struct var *v = findvar(sh, name);
 
-	if ((v = *findvar(sh, name)) && !v->flags.test(VarFlag::unset)) {
+	if (v && !v->flags.test(VarFlag::unset)) {
 #ifdef WITH_LINENO
-		if (v == &vlineno) {
+		if (name == "LINENO")
 			v->text = std::format("LINENO={}", sh.lineno);
-		}
 #endif
 		return const_cast<char *>(strchrnul(v->text.c_str(), '=')) + 1;
 	}
@@ -338,18 +350,14 @@ lookupvarint(ShellContext &sh, std::string_view name)
 std::vector<char *>
 listvars(ShellContext &sh, VarFlags on, VarFlags off)
 {
-	struct var **vpp;
-	struct var *vp;
-	VarFlags mask;
+	VarFlags mask = on | off;
 	std::vector<char *> list;
 
-	vpp = sh.vartab;
-	mask = on | off;
-	do {
-		for (vp = *vpp ; vp ; vp = vp->next)
-			if ((vp->flags & mask) == on)
-				list.push_back(const_cast<char *>(vp->text.c_str()));
-	} while (++vpp < sh.vartab + VTABSIZE);
+	for (auto &[name, vp] : sh.vars) {
+		(void)name;
+		if ((vp.flags & mask) == on)
+			list.push_back(const_cast<char *>(vp.text.c_str()));
+	}
 	list.push_back(nullptr);
 	return list;
 }
@@ -418,7 +426,7 @@ exportcmd(ShellContext &sh, int argc, char **argv)
 			if ((p = strchr(name, '=')) != NULL) {
 				p++;
 			} else {
-				if ((vp = *findvar(sh, name))) {
+				if ((vp = findvar(sh, name))) {
 					vp->flags |= flag;
 					continue;
 				}
@@ -475,7 +483,7 @@ mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
 	} else {
 		auto eq = name.find('=');
 
-		vp = *findvar(sh, name);
+		vp = findvar(sh, name);
 		if (vp == nullptr) {
 			if (eq != std::string_view::npos)
 				vp = TRY_SH(setvareq(sh, std::string(name),
@@ -601,18 +609,6 @@ unsetvar(ShellContext &sh, const std::string &s)
 
 
 /*
- * Find the appropriate entry in the hash table from the name.
- */
-
-static struct var **
-hashvar(ShellContext &sh, std::string_view p)
-{
-	return &sh.vartab[hashval(p) % VTABSIZE];
-}
-
-
-
-/*
  * Compares two strings up to the first = or end.  Either side may use
  * '=' as the name terminator.
  */
@@ -650,15 +646,9 @@ vpcmp(const void *a, const void *b)
 	return varcmp(*(const char **)a, *(const char **)b);
 }
 
-static struct var **
+static struct var *
 findvar(ShellContext &sh, std::string_view name)
 {
-	struct var **vpp;
-
-	for (vpp = hashvar(sh, name); *vpp; vpp = &(*vpp)->next) {
-		if (varequal((*vpp)->text, name)) {
-			break;
-		}
-	}
-	return vpp;
+	auto it = sh.vars.find(std::string(varname(name)));
+	return it != sh.vars.end() ? &it->second : nullptr;
 }

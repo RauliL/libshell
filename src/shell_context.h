@@ -48,14 +48,8 @@ struct builtincmd;
 struct cmdentry;
 enum limtype : int;
 
-struct ShellContext;
-
-void changeifs(ShellContext &sh, std::string_view val);
-void changepath(ShellContext &sh, std::string_view val);
-void getoptsreset(ShellContext &sh, std::string_view val);
-void changelocale(ShellContext &sh, std::string_view val);
-
 struct ShellContext {
+
 	using signal_map_type = std::unordered_map<int, std::string_view>;
 
 	struct output output{BUFSIZ, 1};
@@ -79,34 +73,9 @@ struct ShellContext {
 	std::vector<Job *> job_order;	/* current job first */
 	pid_t backgndpid = 0;
 	int vforked = 0;
-	char defifsvar[sizeof("IFS= \t\n")] = "IFS= \t\n";
-	char defoptindvar[sizeof("OPTIND=1")] = "OPTIND=1";
 	int lineno = 0;
 	std::vector<LocalVarFrame> localvar_stack;
-
-	static constexpr int varinit_len =
-		6
-#ifdef WITH_LINENO
-		+ 1
-#endif
-		+ 5;
-	struct var varinit[varinit_len] = {
-		{ nullptr, VarFlag::str_fixed, defifsvar, changeifs },
-		{ nullptr, VarFlag::str_fixed, defpathvar, changepath },
-		{ nullptr, VarFlag::str_fixed, "PS1=$ ", nullptr },
-		{ nullptr, VarFlag::str_fixed, "PS2=> ", nullptr },
-		{ nullptr, VarFlag::str_fixed, "PS4=+ ", nullptr },
-		{ nullptr, VarFlag::str_fixed | VarFlag::nofunc, defoptindvar, getoptsreset },
-#ifdef WITH_LINENO
-		{ nullptr, VarFlag::str_fixed, "LINENO=", nullptr },
-#endif
-		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_ALL=", changelocale },
-		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_COLLATE=", changelocale },
-		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_CTYPE=", changelocale },
-		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LC_NUMERIC=", changelocale },
-		{ nullptr, VarFlag::str_fixed | VarFlag::full | VarFlag::unset, "LANG=", changelocale },
-	};
-	struct var *vartab[39] = {};
+	std::unordered_map<std::string, var> vars;
 
 	ExpandState expand;
 
