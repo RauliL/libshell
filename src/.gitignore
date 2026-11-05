@@ -1,8 +1,0 @@
-*.o
-dash
-init.c
-init.cpp
-mkinit
-mksyntax
-syntax.[ch]
-syntax.cpp
