@@ -70,7 +70,7 @@ exraise(ShellContext &sh, shell::Error e)
 	if (sh.vforked)
 		_exit(sh.exitstatus);
 
-	INTOFF;
+	INTOFF(sh);
 
 	sh.exception = e;
 

@@ -466,11 +466,11 @@ removerecordregions(ShellContext &sh, int endoff)
 	if (sh.expand.ifsfirst.endoff > endoff) {
 		while (sh.expand.ifsfirst.next != NULL) {
 			struct ifsregion *ifsp;
-			INTOFF;
+			INTOFF(sh);
 			ifsp = sh.expand.ifsfirst.next->next;
 			ckfree(sh.expand.ifsfirst.next);
 			sh.expand.ifsfirst.next = ifsp;
-			INTON;
+			INTON(sh);
 		}
 		if (sh.expand.ifsfirst.begoff > endoff)
 			sh.expand.ifslastp = NULL;
@@ -486,11 +486,11 @@ removerecordregions(ShellContext &sh, int endoff)
 		sh.expand.ifslastp=sh.expand.ifslastp->next;
 	while (sh.expand.ifslastp->next != NULL) {
 		struct ifsregion *ifsp;
-		INTOFF;
+		INTOFF(sh);
 		ifsp = sh.expand.ifslastp->next->next;
 		ckfree(sh.expand.ifslastp->next);
 		sh.expand.ifslastp->next = ifsp;
-		INTON;
+		INTON(sh);
 	}
 	if (sh.expand.ifslastp->endoff > endoff)
 		sh.expand.ifslastp->endoff = endoff;
@@ -559,7 +559,7 @@ expbackq(ShellContext &sh, ExpandBuf &eb, Node *cmd, int flag)
 	if (flag & EXP_DISCARD)
 		goto out;
 
-	INTOFF;
+	INTOFF(sh);
 	startloc = eb.dest - eb.base();
 	{
 		std::size_t su = eb.used;
@@ -590,7 +590,7 @@ read:
 		close(in.fd);
 		sh.back_exitstatus = TRY_SH(waitforjob(sh, in.jp));
 	}
-	INTON;
+	INTON(sh);
 
 	/* Eat all trailing newlines */
 	dest = eb.dest;
@@ -1181,11 +1181,11 @@ recordregion(ShellContext &sh, int start, int end, int nulonly)
 	if (sh.expand.ifslastp == NULL) {
 		ifsp = &sh.expand.ifsfirst;
 	} else {
-		INTOFF;
+		INTOFF(sh);
 		ifsp = (struct ifsregion *)ckmalloc(sizeof (struct ifsregion));
 		ifsp->next = NULL;
 		sh.expand.ifslastp->next = ifsp;
-		INTON_DEFER;
+		INTON_DEFER(sh);
 	}
 	sh.expand.ifslastp = ifsp;
 	sh.expand.ifslastp->begoff = start;
@@ -1406,7 +1406,7 @@ ifsfree(ShellContext &sh)
 	if (!p)
 		goto out;
 
-	INTOFF;
+	INTOFF(sh);
 	do {
 		struct ifsregion *ifsp;
 		ifsp = p->next;
@@ -1414,7 +1414,7 @@ ifsfree(ShellContext &sh)
 		p = ifsp;
 	} while (p);
 	sh.expand.ifsfirst.next = NULL;
-	INTON_DEFER;
+	INTON_DEFER(sh);
 
 out:
 	sh.expand.ifslastp = NULL;
@@ -1483,7 +1483,7 @@ out:
 static void *
 opendir_interruptible(ShellContext &sh, const char *pathname)
 {
-	if (int_pending()) {
+	if (int_pending(sh)) {
 		sh.suppressint = 0;
 		onint(sh);
 	}
@@ -1518,7 +1518,7 @@ expandmeta_glob(ShellContext &sh, ArgList &strs)
 		pglob.gl_stat = stat64;
 #endif
 
-		INTOFF;
+		INTOFF(sh);
 		p = preglob(sh, s.c_str(), RMESCAPE_HEAP);
 		i = glob64(p, GLOB_ALTDIRFUNC | GLOB_NOMAGIC, 0, &pglob);
 		if (p != s.c_str())
@@ -1535,12 +1535,12 @@ expandmeta_glob(ShellContext &sh, ArgList &strs)
 				   std::make_move_iterator(sh.expand.exparg.end()));
 			sh.expand.exparg.clear();
 			globfree64(&pglob);
-			INTON_DEFER;
+			INTON_DEFER(sh);
 			break;
 		case GLOB_NOMATCH:
 nometa2:
 			globfree64(&pglob);
-			INTON_DEFER;
+			INTON_DEFER(sh);
 nometa:
 			rmescapes(s.data());
 			out.push_back(std::move(s));
@@ -1586,7 +1586,7 @@ expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &strs)
 		if (!strpbrk(s.c_str(), "*?]") || !strcmp(s.c_str(), "]"))
 			goto nometa;
 
-		INTOFF;
+		INTOFF(sh);
 		p = preglob(sh, s.c_str(), RMESCAPE_ALLOC | RMESCAPE_HEAP);
 		len = strlen(p);
 
@@ -1594,7 +1594,7 @@ expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &strs)
 		expmeta(sh, eb, p, len, 0);
 		if (p != s.c_str())
 			ckfree(p);
-		INTON;
+		INTON(sh);
 		if (sh.expand.exparg.empty()) {
 			/*
 			 * no matches
@@ -1779,7 +1779,7 @@ expmeta(ShellContext &sh, ExpandBuf &eb, char *name, unsigned name_len, size_t e
 			enddir = cp + expdir_len;
 		}
 check_int:
-		if (int_pending())
+		if (int_pending(sh))
 			break;
 	}
 	*zeroedp = c;

@@ -89,7 +89,7 @@ RESET {
 	c = PEOF;
 	if (sh.input.top->nextc - sh.input.top->buf > sh.input.top->unget)
 		c = sh.input.top->nextc[-sh.input.top->unget - 1];
-	while (c != '\n' && c != PEOF && !int_pending())
+	while (c != '\n' && c != PEOF && !int_pending(sh))
 		c = pgetc(sh, sh.input);
 }
 
@@ -192,14 +192,14 @@ stdin_tee(ShellContext &sh, InputStack &in, void *buf, int nr)
 static void
 release_pending_aliases(ShellContext &sh, parsefile &pf)
 {
-	INTOFF;
+	INTOFF(sh);
 	for (alias *ap : pf.pending_alias_release) {
 		ap->flag &= ~ALIASINUSE;
 		if (ap->flag & ALIASDEAD)
 			unalias(sh, ap->name);
 	}
 	pf.pending_alias_release.clear();
-	INTON_DEFER;
+	INTON_DEFER(sh);
 }
 
 
@@ -344,14 +344,14 @@ eof:
 
 	q = in.current->nextc;
 
-	INTOFF;
+	INTOFF(sh);
 	{
 		int nr = q - in.current->nextc;
 		more = preadfd(sh, in);
 		q = in.current->nextc + nr;
 		if (more <= 0) {
 			in.current->nleft = 0;
-			INTON_DEFER;
+			INTON_DEFER(sh);
 			goto eof;
 		}
 	}
@@ -359,7 +359,7 @@ eof:
 	q += more;
 	in.current->nleft = q - in.current->nextc - 1;
 	*q = '\0';
-	INTON_DEFER;
+	INTON_DEFER(sh);
 
 	if (vflag) {
 		out2str(in.current->nextc);
@@ -397,9 +397,9 @@ pungetc(ShellContext &sh, InputStack &in)
 void
 pushstring(ShellContext &sh, InputStack &in, char *s, alias *ap)
 {
-	size_t len = strlen(s);
+	const auto len = std::strlen(s);
 
-	INTOFF;
+	INTOFF(sh);
 	in.current->string_stack.push_back(StringPush{
 		.prev_string = in.current->nextc,
 		.prev_nleft = in.current->nleft,
@@ -412,15 +412,15 @@ pushstring(ShellContext &sh, InputStack &in, char *s, alias *ap)
 	in.current->nextc = s;
 	in.current->nleft = static_cast<int>(len);
 	in.current->unget = 0;
-	INTON_DEFER;
+	INTON_DEFER(sh);
 }
 
 static void
 popstring(ShellContext &sh, InputStack &in)
 {
-	StringPush sp = in.current->string_stack.back();
+	auto sp = in.current->string_stack.back();
 
-	INTOFF;
+	INTOFF(sh);
 	if (sp.ap && in.current->nextc > sp.string) {
 		if (in.current->nextc[-1] == ' ' ||
 		    in.current->nextc[-1] == '\t') {
@@ -434,7 +434,7 @@ popstring(ShellContext &sh, InputStack &in)
 	in.current->string_stack.pop_back();
 	if (sp.ap)
 		in.current->pending_alias_release.push_back(sp.ap);
-	INTON_DEFER;
+	INTON_DEFER(sh);
 }
 
 /*
@@ -448,7 +448,7 @@ setinputfile(ShellContext &sh, InputStack &in, std::string_view fname, int flags
 	int fd;
 	std::string path(fname);
 
-	INTOFF;
+	INTOFF(sh);
 	fd = TRY_SH(sh_open(sh, path.c_str(), O_RDONLY, flags & INPUT_NOFILE_OK));
 	if (fd < 0)
 		goto out;
@@ -456,7 +456,8 @@ setinputfile(ShellContext &sh, InputStack &in, std::string_view fname, int flags
 		fd = TRY_SH(savefd(sh, fd, fd));
 	setinputfd(sh, in, fd, flags & INPUT_PUSH_FILE);
 out:
-	INTON;
+	INTON(sh);
+
 	return fd;
 }
 
@@ -484,12 +485,12 @@ setinputfd(ShellContext &sh, InputStack &in, int fd, int push)
 void
 setinputstring(ShellContext &sh, InputStack &in, char *string)
 {
-	INTOFF;
+	INTOFF(sh);
 	pushfile(sh, in);
 	in.current->nextc = string;
-	in.current->nleft = strlen(string);
+	in.current->nleft = std::strlen(string);
 	in.current->eof = 2;
-	INTON_DEFER;
+	INTON_DEFER(sh);
 }
 
 
@@ -500,10 +501,10 @@ setinputstring(ShellContext &sh, InputStack &in, char *string)
  */
 
 static void
-pushfile(ShellContext &sh, InputStack &in)
+pushfile(ShellContext &, InputStack &in)
 {
-	(void)sh;
 	auto *pf = new parsefile{};
+
 	pf->prev = in.current;
 	pf->linno = 1;
 	pf->fd = -1;
@@ -513,11 +514,10 @@ pushfile(ShellContext &sh, InputStack &in)
 void
 pushstdin(ShellContext &sh, InputStack &in)
 {
-	(void)sh;
-	INTOFF;
+	INTOFF(sh);
 	in.base.prev = in.current;
 	in.current = &in.base;
-	INTON_DEFER;
+	INTON_DEFER(sh);
 }
 
 void
@@ -525,7 +525,7 @@ popfile(ShellContext &sh, InputStack &in)
 {
 	parsefile *pf = in.current;
 
-	INTOFF;
+	INTOFF(sh);
 	if (pf == &in.base) {
 		in.current = pf->prev;
 		pf->prev = nullptr;
@@ -546,7 +546,7 @@ popfile(ShellContext &sh, InputStack &in)
 	delete pf;
 
 out:
-	INTON_DEFER;
+	INTON_DEFER(sh);
 }
 
 
@@ -573,7 +573,7 @@ flush_input(ShellContext &sh, InputStack &in)
 {
 	int left = in.base.nleft;
 
-	INTOFF;
+	INTOFF(sh);
 	if (in.stdin.seekable && left)
 		lseek(0, -left, SEEK_CUR);
 	else if (in.stdin.pending > left) {
@@ -581,7 +581,7 @@ flush_input(ShellContext &sh, InputStack &in)
 		in.stdin.pending = 0;
 	}
 	in.base.nleft = 0;
-	INTON_DEFER;
+	INTON_DEFER(sh);
 }
 
 void

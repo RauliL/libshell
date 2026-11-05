@@ -114,7 +114,7 @@ redirect(ShellContext &sh, Node *redir, int flags)
 	if (!redir)
 		return {};
 	sv = nullptr;
-	INTOFF;
+	INTOFF(sh);
 	if (likely(flags & REDIR_PUSH))
 		sv = &sh.redirlist.back();
 	n = redir;
@@ -151,7 +151,7 @@ redirect(ShellContext &sh, Node *redir, int flags)
 
 		TRY_SHV(dupredirect(sh, n, newfd));
 	} while ((n = as<Node::RedirList>(n)->next.get()));
-	INTON;
+	INTON(sh);
 	if (flags & REDIR_SAVEFD2 && sv->renamed[2] >= 0)
 		sh.preverrout.fd = sv->renamed[2];
 	return {};
@@ -363,7 +363,7 @@ out:
 shell::Result<void>
 popredir(ShellContext &sh, int drop)
 {
-	INTOFF;
+	INTOFF(sh);
 	RedirFrame rp = std::move(sh.redirlist.back());
 	sh.redirlist.pop_back();
 	for (int i = 0; i < 10; i++) {
@@ -389,7 +389,8 @@ popredir(ShellContext &sh, int drop)
 			break;
 		}
 	}
-	INTON;
+	INTON(sh);
+
 	return {};
 }
 
@@ -450,15 +451,17 @@ shell::Result<int>
 redirectsafe(ShellContext &sh, Node *redir, int flags)
 {
 	int err = 0;
-	int saveint;
+	int saveint = sh.suppressint;
 
-	SAVEINT(saveint);
 	if (auto r = redirect(sh, redir, flags); !r) {
 		sh.exception = r.error();
 		err = r.error() == shell::Error::Generic ? 2 : static_cast<int>(r.error());
 	}
 	TRY_SHV(restore_handler_expandarg(sh, err));
-	RESTOREINT(saveint);
+	barrier();
+	if ((sh.suppressint = saveint) == 0 && sh.intpending)
+		return onint(sh);
+
 	return err;
 }
 

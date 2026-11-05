@@ -221,10 +221,10 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 		symbolic_mode = 1;
 	}
 
-	INTOFF;
+	INTOFF(sh);
 	mask = umask(0);
 	umask(mask);
-	INTON;
+	INTON(sh);
 
 	if ((ap = *sh.bopt.argptr) == NULL) {
 		if (symbolic_mode) {

@@ -325,13 +325,14 @@ shiftcmd(ShellContext &sh, int argc, char **argv)
 		n = TRY_SH(number(sh, argv[1]));
 	if (static_cast<std::size_t>(n) > sh.shellparam.p.size())
 		return sh_error(sh, "can't shift that many");
-	INTOFF;
+	INTOFF(sh);
 	sh.shellparam.p.erase(sh.shellparam.p.begin(),
 			      sh.shellparam.p.begin() + n);
 	sh.shellparam.optind = 1;
 	sh.shellparam.optoff = -1;
-	INTON;
-	return 0;
+	INTON(sh);
+
+	return EXIT_SUCCESS;
 }
 
 
@@ -345,14 +346,15 @@ setcmd(ShellContext &sh, int argc, char **argv)
 {
 	if (argc == 1)
 		return showvars(sh, nullstr, {}, VarFlag::unset);
-	INTOFF;
+	INTOFF(sh);
 	TRY_SHV(options(sh, 0, nullptr));
 	optschanged(sh);
 	if (*sh.bopt.argptr != NULL) {
 		setparam(sh, sh.bopt.argptr);
 	}
-	INTON;
-	return 0;
+	INTON(sh);
+
+	return EXIT_SUCCESS;
 }
 
 

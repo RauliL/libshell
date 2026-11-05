@@ -269,11 +269,11 @@ sprint_status(int status)
 static void
 freejob(ShellContext &sh, Job *jp)
 {
-	INTOFF;
+	INTOFF(sh);
 	set_curjob(sh, jp, CUR_DELETE);
 	if (jp->slot < sh.jobs.size())
 		sh.jobs[jp->slot].reset();
-	INTON_DEFER;
+	INTON_DEFER(sh);
 }
 
 
@@ -627,7 +627,7 @@ waitone(ShellContext &sh, int block, Job *job)
 	Job *thisjob = nullptr;
 	Job::State state = Job::State::Done;
 
-	INTOFF;
+	INTOFF(sh);
 	TRACE(("dowait(%d) called\n", block));
 	pid = waitproc(sh, block, &status);
 	TRACE(("wait returns pid %d, status=%d\n", pid, status));
@@ -662,10 +662,10 @@ gotjob:
 		thisjob->state = state;
 	}
 out:
-	INTON_DEFER;
+	INTON_DEFER(sh);
 
 	if (thisjob && thisjob == job) {
-		std::string s = sprint_status(status);
+		auto s = sprint_status(status);
 
 		if (!s.empty()) {
 			s.push_back('\n');

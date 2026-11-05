@@ -68,7 +68,7 @@ setalias(ShellContext &sh, const char *name, const char *val)
 
 	app = __lookupalias(sh, name);
 	ap = *app;
-	INTOFF;
+	INTOFF(sh);
 	if (ap) {
 		ap->flag &= ~ALIASDEAD;
 	} else {
@@ -79,7 +79,8 @@ setalias(ShellContext &sh, const char *name, const char *val)
 	}
 	ap->name.assign(name, namelen);
 	ap->val = val;
-	INTON;
+	INTON(sh);
+
 	return {};
 }
 
@@ -91,9 +92,9 @@ unalias(ShellContext &sh, std::string_view name)
 	app = __lookupalias(sh, name);
 
 	if (*app) {
-		INTOFF;
+		INTOFF(sh);
 		*app = freealias(sh, *app);
-		INTON;
+		INTON(sh);
 		return 0;
 	}
 
@@ -103,20 +104,19 @@ unalias(ShellContext &sh, std::string_view name)
 static shell::Result<void>
 rmaliases(ShellContext &sh)
 {
-	struct alias *ap, **app;
-	int i;
+	INTOFF(sh);
+	for (int i = 0; i < ATABSIZE; i++) {
+		alias **app = &sh.atab[i];
 
-	INTOFF;
-	for (i = 0; i < ATABSIZE; i++) {
-		app = &sh.atab[i];
-		for (ap = *app; ap; ap = *app) {
+		for (alias *ap = *app; ap; ap = *app) {
 			*app = freealias(sh, *app);
 			if (ap == *app) {
 				app = &ap->next;
 			}
 		}
 	}
-	INTON;
+	INTON(sh);
+
 	return {};
 }
 

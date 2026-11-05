@@ -236,9 +236,9 @@ setvar(ShellContext &sh, const std::string &name, std::optional<std::string> val
 	if (val)
 		nameeq += *val;
 
-	INTOFF;
+	INTOFF(sh);
 	struct var *vp = TRY_SH(setvareq(sh, std::move(nameeq), flags));
-	INTON;
+	INTON(sh);
 
 	return vp;
 }
@@ -476,7 +476,7 @@ mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
 	localvar lv;
 	struct var *vp;
 
-	INTOFF;
+	INTOFF(sh);
 	if (name == "-") {
 		lv.text.assign(sh.opts.list, sizeof(sh.opts.list));
 		vp = nullptr;
@@ -502,7 +502,8 @@ mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
 	}
 	lv.vp = vp;
 	sh.localvar_stack.back().vars.push_back(std::move(lv));
-	INTON;
+	INTON(sh);
+
 	return {};
 }
 
@@ -515,7 +516,7 @@ mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
 static shell::Result<void>
 poplocalvars(ShellContext &sh)
 {
-	INTOFF;
+	INTOFF(sh);
 	LocalVarFrame frame = std::move(sh.localvar_stack.back());
 	sh.localvar_stack.pop_back();
 
@@ -535,7 +536,8 @@ poplocalvars(ShellContext &sh)
 				varfunc(sh, vp);
 		}
 	}
-	INTON;
+	INTON(sh);
+
 	return {};
 }
 
@@ -546,13 +548,15 @@ poplocalvars(ShellContext &sh)
 shell::Result<std::size_t>
 pushlocalvars(ShellContext &sh, int push)
 {
-	std::size_t stop = sh.localvar_stack.size();
+	const auto stop = sh.localvar_stack.size();
+
 	if (!push)
 		return stop;
 
-	INTOFF;
+	INTOFF(sh);
 	sh.localvar_stack.emplace_back();
-	INTON;
+	INTON(sh);
+
 	return stop;
 }
 

@@ -509,7 +509,7 @@ evalsubshell(ShellContext &sh, const Node *n, EvalFlags flags)
 		sh.lineno -= sh.funcline - 1;
 
 	TRY_SHV(expredir(sh, as<Node::Redir>(n)->redirect.get()));
-	INTOFF;
+	INTOFF(sh);
 	if (!backgnd && flags.test(EvalFlag::exit) && !have_traps(sh)) {
 		forkreset(sh, NULL);
 		goto nofork;
@@ -520,7 +520,7 @@ evalsubshell(ShellContext &sh, const Node *n, EvalFlags flags)
 		if (backgnd)
 			flags.reset(EvalFlag::tested);
 nofork:
-		INTON;
+		INTON(sh);
 		TRY_SHV(redirect(sh, as<Node::Redir>(n)->redirect.get(), 0));
 		evaltreenr(sh, as<Node::Redir>(n)->n.get(), flags);
 		/* never returns */
@@ -528,7 +528,8 @@ nofork:
 	status = 0;
 	if (! backgnd)
 		status = TRY_SH(waitforjob(sh, jp));
-	INTON;
+	INTON(sh);
+
 	return status;
 }
 
@@ -589,7 +590,7 @@ evalpipe(ShellContext &sh, const Node::Pipe *n, EvalFlags flags)
 	TRACE(("evalpipe(0x%lx) called\n", (long)n));
 	pipelen = static_cast<int>(n->cmdlist.size());
 	flags.set(EvalFlag::exit);
-	INTOFF;
+	INTOFF(sh);
 	jp = makejob(sh, pipelen);
 	prevfd = -1;
 	for (std::size_t i = 0; i < n->cmdlist.size(); i++) {
@@ -604,7 +605,7 @@ evalpipe(ShellContext &sh, const Node::Pipe *n, EvalFlags flags)
 			}
 		}
 		if (TRY_SH(forkshell(sh, jp, cmd, n->backgnd)) == 0) {
-			INTON;
+			INTON(sh);
 			if (pip[1] >= 0) {
 				close(pip[0]);
 			}
@@ -629,7 +630,7 @@ evalpipe(ShellContext &sh, const Node::Pipe *n, EvalFlags flags)
 		status = TRY_SH(waitforjob(sh, jp));
 		TRACE(("evalpipe:  job done exit status %d\n", status));
 	}
-	INTON;
+	INTON(sh);
 
 	return status;
 }
@@ -662,7 +663,7 @@ evalbackcmd(ShellContext &sh, Node *n, struct backcmd *result)
 	pid = TRY_SH(forkshell(sh, jp, n, FORK_NOJOB));
 	sh.tpip[0] = -1;
 	if (pid == 0) {
-		FORCEINTON;
+		FORCEINTON(sh);
 		close(pip[0]);
 		if (pip[1] != 1) {
 			dup2(pip[1], 1);
@@ -679,6 +680,7 @@ evalbackcmd(ShellContext &sh, Node *n, struct backcmd *result)
 out:
 	TRACE(("evalbackcmd done: fd=%d buflen=%zu jp=0x%x\n",
 		result->fd, result->buf.size(), result->jp));
+
 	return {};
 }
 
@@ -924,7 +926,7 @@ bail:
 
 		/* Fork off a child process if necessary. */
 		if (!flags.test(EvalFlag::exit) || have_traps(sh)) {
-			INTOFF;
+			INTOFF(sh);
 			jp = TRY_SH(vforkexec(sh, cmd, argv, path, cmdentry.u.index));
 			break;
 		}
@@ -946,7 +948,7 @@ bail:
 	}
 
 	status = TRY_SH(waitforjob(sh, jp));
-	FORCEINTON;
+	FORCEINTON(sh);
 
 out:
 	if (cmd->redirect)
@@ -1013,7 +1015,7 @@ evalfun(ShellContext &sh, const std::shared_ptr<Node> &func, int argc, char **ar
 	bool failed = false;
 	shell::Error fail_err;
 
-	INTOFF;
+	INTOFF(sh);
 	sh.funcline = as<Node::Defun>(func)->linno;
 	sh.loopnest = 0;
 	barrier();
@@ -1035,11 +1037,11 @@ evalfun(ShellContext &sh, const std::shared_ptr<Node> &func, int argc, char **ar
 			failed = true;
 		}
 	}
-	INTOFF;
+	INTOFF(sh);
 	sh.loopnest = saveloopnest;
 	sh.funcline = savefuncline;
 	sh.shellparam = std::move(saveparam);
-	INTON;
+	INTON(sh);
 	sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
 	if (failed)
 		return tl::unexpected(fail_err);

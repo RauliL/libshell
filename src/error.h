@@ -52,54 +52,51 @@
 
 /*
  * Interrupt deferral macros require ShellContext &sh in scope.
- * INTON/FORCEINTON/RESTOREINT return from the enclosing ShellResult
+ * INTON/FORCEINTON return from the enclosing ShellResult
  * function when a deferred SIGINT must unwind (via onint → exraise).
  */
 struct ShellContext;
 tl::unexpected<shell::Error> onint(ShellContext &sh);
 
 #define barrier() ({ __asm__ __volatile__ ("": : :"memory"); })
-#define INTOFF \
+#define INTOFF(sh) \
 	({ \
-		sh.suppressint++; \
+		(sh).suppressint++; \
 		barrier(); \
 		0; \
 	})
 #ifdef REALLY_SMALL
 shell::Result<void> __inton(ShellContext &sh);
-#define INTON \
+#define INTON(sh) \
 	do { \
-		if (auto _r = __inton(sh); !_r) \
+		if (const auto _r = __inton((sh)); !_r) \
 			return _r.error(); \
 	} while (0)
 #else
-#define INTON \
+#define INTON(sh) \
 	do { \
 		barrier(); \
-		if (--sh.suppressint == 0 && sh.intpending) \
-			return onint(sh); \
+		if (--(sh).suppressint == 0 && (sh).intpending) \
+			return onint((sh)); \
 	} while (0)
 #endif
-#define FORCEINTON \
+#define FORCEINTON(sh) \
 	do { \
 		barrier(); \
-		sh.suppressint = 0; \
-		if (sh.intpending) \
+		(sh).suppressint = 0; \
+		if ((sh).intpending) \
 			return onint(sh); \
 	} while (0)
-#define SAVEINT(v) ((v) = sh.suppressint)
-#define RESTOREINT(v) \
-	do { \
-		barrier(); \
-		if (((sh.suppressint = (v)) == 0) && sh.intpending) \
-			return onint(sh); \
-	} while (0)
-#define CLEAR_PENDING_INT sh.intpending = 0
-#define int_pending() sh.intpending
+
+#define int_pending(sh) (sh).intpending
 
 /* For void helpers that cannot return ShellResult: drop suppressint and
  * leave intpending set so a later ShellResult INTON/FORCEINTON unwinds. */
-#define INTON_DEFER 	do { 		barrier(); 		--sh.suppressint; 	} while (0)
+#define INTON_DEFER(sh) \
+	do { \
+		barrier(); \
+		--(sh).suppressint; \
+	} while (0)
 
 /* Avoid `.error()` in macros: bltin.h `#define error(...)` would rewrite it. */
 template <typename T>

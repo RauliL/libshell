@@ -104,7 +104,8 @@ trapcmd(ShellContext &sh, int argc, char **argv)
                 ));
 			}
 		}
-		return 0;
+
+		return EXIT_SUCCESS;
 	}
 	if (sh.ptrap)
 		TRY_SHV(clear_traps(sh, NULL));
@@ -115,9 +116,10 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 	while (*ap) {
 		if ((signo = decode_signal(sh, *ap, 0)) < 0) {
             sh.out2->write(sh, std::format("trap: {}: bad trap\n", *ap));
-			return 1;
+
+			return EXIT_FAILURE;
 		}
-		INTOFF;
+		INTOFF(sh);
 		if (sh.trap[signo] && !sh.trap[signo]->empty())
 			sh.trapcnt--;
 		if (action) {
@@ -133,10 +135,11 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 		}
 		if (signo != 0)
 			setsignal(sh, signo);
-		INTON;
+		INTON(sh);
 		ap++;
 	}
-	return 0;
+
+	return EXIT_SUCCESS;
 }
 
 shell::Result<void>
@@ -144,7 +147,7 @@ clear_traps(ShellContext &sh, const Node *n)
 {
 	const auto simplecmd = issimplecmd(n, builtin_trap.name);
 
-	INTOFF;
+	INTOFF(sh);
 	for (int i = 0; i < NSIG; i++) {
 		if (sh.trap[i] && !sh.trap[i]->empty()) {
 			auto otp = std::move(sh.trap[i]);
@@ -157,7 +160,8 @@ clear_traps(ShellContext &sh, const Node *n)
 	}
 	sh.trapcnt = 0;
 	sh.ptrap = simplecmd;
-	INTON;
+	INTON(sh);
+
 	return {};
 }
 

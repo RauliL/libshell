@@ -262,8 +262,9 @@ xvsnprintf(ShellContext &sh, char *outbuf, size_t length, const char *fmt, va_li
 	}
 #endif
 
-	INTOFF;
+	INTOFF(sh);
 	ret = vsnprintf(outbuf, length, fmt, ap);
-	INTON_DEFER;
+	INTON_DEFER(sh);
+
 	return ret;
 }

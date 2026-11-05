@@ -170,7 +170,7 @@ docd(ShellContext &sh, const char *dest, int flags)
 
 	TRACE(("docd(\"%s\", %d) called\n", dest, flags));
 
-	INTOFF;
+	INTOFF(sh);
 	if (!(flags & CD_PHYSICAL)) {
 		auto up = updatepwd(sh, dest);
 		if (!up)
@@ -188,7 +188,8 @@ docd(ShellContext &sh, const char *dest, int flags)
 			 1));
 	hashcd(sh);
 out:
-	INTON;
+	INTON(sh);
+
 	return err;
 }
 
@@ -306,13 +307,17 @@ pwdcmd(ShellContext &sh, int argc, char **argv)
 }
 
 shell::Result<void>
-setpwd(ShellContext &sh, std::optional<std::string_view> val, int setold,
-       bool refresh_phys)
+setpwd(
+	ShellContext &sh,
+	std::optional<std::string_view> val,
+	int setold,
+	bool refresh_phys
+)
 {
 	if (setold)
 		TRY_SHV(setvar(sh, "OLDPWD", sh.cwd.curdir, VarFlag::exported));
 
-	INTOFF;
+	INTOFF(sh);
 	if (refresh_phys) {
 		sh.cwd.physdir = getpwd(sh);
 	} else {
@@ -324,7 +329,8 @@ setpwd(ShellContext &sh, std::optional<std::string_view> val, int setold,
 			sh.cwd.curdir = *val;
 		}
 	}
-	INTON;
+	INTON(sh);
 	TRY_SHV(setvar(sh, "PWD", sh.cwd.curdir, VarFlag::exported));
+
 	return {};
 }

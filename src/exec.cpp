@@ -472,11 +472,11 @@ loop:
 			entry->u.index = idx;
 			return {};
 		}
-		INTOFF;
+		INTOFF(sh);
 		cmdp = cmdlookup(sh, name, 1);
 		cmdp->cmdtype = CMDNORMAL;
 		cmdp->param.index = idx;
-		INTON;
+		INTON(sh);
 		goto success;
 	}
 
@@ -495,11 +495,11 @@ builtin_success:
 		entry->u.cmd = bcmd;
 		return {};
 	}
-	INTOFF;
+	INTOFF(sh);
 	cmdp = cmdlookup(sh, name, 1);
 	cmdp->cmdtype = CMDBUILTIN;
 	cmdp->param.cmd = bcmd;
-	INTON;
+	INTON(sh);
 success:
 	cmdp->rehash = false;
 	entry->cmdtype = cmdp->cmdtype;
@@ -573,11 +573,14 @@ changepath(ShellContext &sh, std::string_view newval)
 static void
 clearcmdentry(ShellContext &sh)
 {
-	INTOFF;
-	std::erase_if(sh.cmdtable, [&](const auto &entry) {
-		return hash_affected(entry.second, sh.builtinloc);
-	});
-	INTON_DEFER;
+	INTOFF(sh);
+	std::erase_if(
+		sh.cmdtable,
+		[&](const auto &entry) -> bool {
+			return hash_affected(entry.second, sh.builtinloc);
+		}
+	);
+	INTON_DEFER(sh);
 }
 
 
@@ -612,9 +615,9 @@ cmdlookup(ShellContext &sh, const char *name, int add)
 static void
 delete_cmd_entry(ShellContext &sh, const char *name)
 {
-	INTOFF;
+	INTOFF(sh);
 	sh.cmdtable.erase(name);
-	INTON_DEFER;
+	INTON_DEFER(sh);
 }
 
 
@@ -645,11 +648,11 @@ defun(ShellContext &sh, const Node::Defun *func)
 {
 	struct cmdentry entry;
 
-	INTOFF;
+	INTOFF(sh);
 	entry.cmdtype = CMDFUNCTION;
 	entry.u.func = std::shared_ptr<Node>(func->clone());
 	addcmdentry(sh, func->text.c_str(), &entry);
-	INTON_DEFER;
+	INTON_DEFER(sh);
 }
 
 
