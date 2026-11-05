@@ -1962,12 +1962,12 @@ getprompt(ShellContext &sh, void *unused)
 		return "<internal prompt error>";
 #endif
 	case 0:
-		return nullstr;
+		return {};
 	case 1:
-		prompt = ps1val();
+		prompt = ps1val(sh);
 		break;
 	case 2:
-		prompt = ps2val();
+		prompt = ps2val(sh);
 		break;
 	}
 

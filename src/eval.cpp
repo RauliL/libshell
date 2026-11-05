@@ -88,7 +88,7 @@ static shell::Result<int> bltincmd(ShellContext &sh, int, char **);
 
 
 static const struct builtincmd bltin = {
-	.name = nullstr,
+	.name = "",
 	.builtin = bltincmd,
 	.flags = BUILTIN_REGULAR,
 };
@@ -799,7 +799,7 @@ evalcommand(ShellContext &sh, const Node::Command *cmd, EvalFlags flags)
 		xtrace_end = args.size();
 		for (;;) {
 			TRY_SHV(find_command(sh, args[arg0].data(), &cmdentry,
-				     cmd_flag | DO_REGBLTIN, pathval()));
+				     cmd_flag | DO_REGBLTIN, pathval(sh)));
 
 			vlocal++;
 
@@ -888,7 +888,7 @@ bail:
 
 		out = &sh.preverrout;
 		sh.inps4 = 1;
-		out->write(sh, expandstr(sh, ps4val()));
+		out->write(sh, expandstr(sh, ps4val(sh)));
 		sh.inps4 = 0;
 		sep = 0;
 		sep = eprintlist(sh, out, vars, sep);
@@ -906,7 +906,7 @@ bail:
 	/* Now locate the command. */
 	if (cmdentry.cmdtype != CMDBUILTIN ||
 	    !(cmdentry.u.cmd->flags & BUILTIN_REGULAR)) {
-		path = unlikely(path) ? path : pathval();
+		path = unlikely(path) ? path : pathval(sh);
 		TRY_SHV(find_command(sh, argv[0], &cmdentry, cmd_flag | DO_ERR, path));
 	}
 
@@ -1066,7 +1066,7 @@ prehash(ShellContext &sh, Node *n)
 		if (endofname(as<Node::Arg>(as<Node::Command>(n)->args)->text) ==
 		    as<Node::Arg>(as<Node::Command>(n)->args)->text.size())
 			TRY_SHV(find_command(sh, as<Node::Arg>(as<Node::Command>(n)->args)->text.data(), &entry, 0,
-				     pathval()));
+				     pathval(sh)));
 	return {};
 }
 
@@ -1169,9 +1169,10 @@ execcmd(ShellContext &sh, int argc, char **argv)
 		mflag = 0;
 		optschanged(sh);
 		flush_input(sh);
-		shellexec(sh, argv + 1, pathval(), 0);
+		shellexec(sh, argv + 1, pathval(sh), 0);
 	}
-	return 0;
+
+	return EXIT_SUCCESS;
 }
 
 

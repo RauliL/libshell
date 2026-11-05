@@ -200,17 +200,14 @@ inline constexpr char defifs[] = " \t\n";
 
 /*
  * The following macros access builtin variable values.  They skip over
- * the name= prefix.  Builtins are always present in sh.vars after initvar.
+ * the name= prefix.  Builtins are always present in sh.variables after initvar.
  */
 
-#define ifsval()	(sh.vars.at("IFS").text.c_str() + 4)
-#define ifsset()	(!sh.vars.at("IFS").flags.test(VarFlag::unset))
-#define pathval()	(sh.vars.at("PATH").text.c_str() + 5)
-#define ps1val()	(sh.vars.at("PS1").text.c_str() + 4)
-#define ps2val()	(sh.vars.at("PS2").text.c_str() + 4)
-#define ps4val()	(sh.vars.at("PS4").text.c_str() + 4)
-#define optindval()	(sh.vars.at("OPTIND").text.c_str() + 7)
-#define linenoval()	(sh.vars.at("LINENO").text.c_str() + 7)
+#define ifsset(sh)	(!(sh).variables.at("IFS").flags.test(VarFlag::unset))
+#define pathval(sh)	((sh).variables.at("PATH").text.c_str() + 5)
+#define ps1val(sh)	((sh).variables.at("PS1").text.c_str() + 4)
+#define ps2val(sh)	((sh).variables.at("PS2").text.c_str() + 4)
+#define ps4val(sh)	((sh).variables.at("PS4").text.c_str() + 4)
 
 struct ShellContext;
 void initvar(ShellContext &sh);
@@ -238,24 +235,3 @@ shell::Result<std::size_t> pushlocalvars(ShellContext &sh, int push);
 shell::Result<void> unwindlocalvars(ShellContext &sh, std::size_t stop);
 shell::Result<int> unsetcmd(ShellContext &sh, int, char **);
 shell::Result<void> unsetvar(ShellContext &sh, const std::string &);
-int varcmp(std::string_view, std::string_view);
-
-static inline unsigned int hashval(std::string_view p)
-{
-	if (p.empty())
-		return 0;
-
-	unsigned int h = static_cast<unsigned char>(p[0]) << 4;
-	for (std::size_t i = 0;; ++i) {
-		h += static_cast<unsigned char>(p[i]);
-		if (i + 1 >= p.size() || p[i + 1] == '=')
-			break;
-	}
-	return h;
-}
-
-
-static inline int varequal(std::string_view a, std::string_view b)
-{
-	return !varcmp(a, b);
-}

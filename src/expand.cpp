@@ -1064,7 +1064,7 @@ varvalue(ShellContext &sh, ExpandBuf &eb, char *name, int varflags, unsigned fla
 	}
 
 	flags &= discard ? ~QUOTES_ESC : ~0;
-	seps = nullstr;
+	seps = "";
 	seplen = flags & EXP_FULL;
 	start = eb.dest - eb.base();
 
@@ -1343,7 +1343,7 @@ ifsbreakup(ShellContext &sh, char *string, int maxargs, ArgList *alist)
 			p = string + ifsp->begoff;
 			afternul = nulonly;
 			nulonly = ifsp->nulonly;
-			ifst.ifs = nulonly ? nullstr : realifs;
+			ifst.ifs = nulonly ? "" : realifs;
 			ifst.ifsspc = 0;
 			for (;;) {
 				char *p0 = p;
@@ -1431,7 +1431,7 @@ changeifs(ShellContext &sh, std::string_view ifs_in)
 	size_t ml;
 	const char *ifs = ifs_in.data();
 
-	if (!ifsset())
+	if (!ifsset(sh))
 		ifs = defifs;
 	sh.expand.ncifs = ifs;
 
@@ -2135,25 +2135,23 @@ casematch(ShellContext &sh, Node *pattern, char *val)
 	return result;
 }
 
-/*
+/**
  * Our own itoa().
  */
-
-static size_t
-cvtnum(ShellContext &sh, ExpandBuf &eb, intmax_t num, int flags)
+static std::size_t
+cvtnum(ShellContext &sh, ExpandBuf &eb, std::intmax_t num, int flags)
 {
 	auto buf = std::format("{}", num);
+
 	return memtodest(sh, eb, buf.c_str(), buf.size(), flags);
 }
 
 static tl::unexpected<shell::Error>
 varunset(ShellContext &sh, const char *end, const char *var, const char *umsg, int varflags)
 {
-	const char *msg;
-	const char *tail;
+	const char *msg = "parameter not set";
+	const char *tail = "";
 
-	tail = nullstr;
-	msg = "parameter not set";
 	if (umsg) {
 		if (*end == (char)CTLENDVAR) {
 			if (varflags & VSNUL)

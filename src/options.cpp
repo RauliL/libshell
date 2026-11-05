@@ -345,7 +345,7 @@ shell::Result<int>
 setcmd(ShellContext &sh, int argc, char **argv)
 {
 	if (argc == 1)
-		return showvars(sh, nullstr, {}, VarFlag::unset);
+		return showvars(sh, "", {}, VarFlag::unset);
 	INTOFF(sh);
 	TRY_SHV(options(sh, 0, nullptr));
 	optschanged(sh);
@@ -378,7 +378,7 @@ getoptscmd(ShellContext &sh, int argc, char **argv)
 {
 	char **optbase;
 
-	TRY_SHV(nextopt(sh, nullstr));
+	TRY_SHV(nextopt(sh, ""));
 	argc -= sh.bopt.argptr - argv - 1;
 	argv = sh.bopt.argptr - 1;
 	std::vector<char *> shell_ptrs;
@@ -476,7 +476,7 @@ atend:
 		TRY_SHV(setvar(sh, "OPTARG", p));
 		p = NULL;
 	} else
-		TRY_SHV(setvar(sh, "OPTARG", nullstr));
+		TRY_SHV(setvar(sh, "OPTARG", ""));
 
 out:
 	ind = optnext - optfirst + 1;

@@ -48,11 +48,11 @@ struct PrintfState {
 	int rval = 0;
 };
 
-static int conv_escape_str(ShellContext &sh, char *, std::string &);
+static int conv_escape_str(ShellContext &sh, const char *, std::string &);
 static int getchr(PrintfState &);
 static double getdouble(ShellContext &sh, PrintfState &);
-static uintmax_t getuintmax(ShellContext &sh, PrintfState &, int);
-static char *getstr(PrintfState &);
+static std::uintmax_t getuintmax(ShellContext &sh, PrintfState &, int);
+static const char *getstr(PrintfState &);
 static std::string mklong(const char *, const char *);
 static void check_conversion(ShellContext &sh, PrintfState &, const char *,
 			     const char *);
@@ -99,7 +99,7 @@ static void check_conversion(ShellContext &sh, PrintfState &, const char *,
 
 
 static shell::Result<int>
-print_escape_str(ShellContext &sh, const char *f, int *param, int *array, char *s)
+print_escape_str(ShellContext &sh, const char *f, int *param, int *array, const char *s)
 {
 	int done;
 	int total;
@@ -139,7 +139,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 	int ch;
 	PrintfState st;
 
-	TRY_SHV(nextopt(sh, nullstr));
+	TRY_SHV(nextopt(sh, ""));
 
 	argv = sh.bopt.argptr;
 	format = *argv;
@@ -220,8 +220,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 			case 'b':
 				*fmt = 's';
 				/* escape if a \c was encountered */
-				if (TRY_SH(print_escape_str(sh, start, param, array,
-						     getstr(st))))
+				if (TRY_SH(print_escape_str(sh, start, param, array, getstr(st))))
 					goto out;
 				*fmt = 'b';
 				break;
@@ -231,13 +230,13 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 				break;
 			}
 			case 's': {
-				char *p = getstr(st);
+				const char *p = getstr(st);
 				PF(start, p);
 				break;
 			}
 			case 'd':
 			case 'i': {
-				uintmax_t p = getuintmax(sh, st, 1);
+                std::uintmax_t p = getuintmax(sh, st, 1);
 				std::string longfmt = mklong(start, fmt);
 				PF(longfmt.c_str(), p);
 				break;
@@ -246,7 +245,7 @@ printfcmd(ShellContext &sh, int argc, char *argv[])
 			case 'u':
 			case 'x':
 			case 'X': {
-				uintmax_t p = getuintmax(sh, st, 0);
+                std::uintmax_t p = getuintmax(sh, st, 0);
 				std::string longfmt = mklong(start, fmt);
 				PF(longfmt.c_str(), p);
 				break;
@@ -280,7 +279,7 @@ out:
  *	Halts processing string if a \c escape is encountered.
  */
 static int
-conv_escape_str(ShellContext &sh, char *str, std::string &out)
+conv_escape_str(ShellContext &sh, const char *str, std::string &out)
 {
 	int c;
 
@@ -326,10 +325,10 @@ putchar:
  * Print "standard" escape characters
  */
 unsigned
-conv_escape(ShellContext &sh, char *str0, char *out0, bool mbchar)
+conv_escape(ShellContext &sh, const char *str0, char *out0, bool mbchar)
 {
 	char *out = out0;
-	char *str = str0;
+	const char *str = str0;
 	unsigned value;
 	int och;
 	int ch;
@@ -496,17 +495,18 @@ getchr(PrintfState &st)
 	return val;
 }
 
-static char *
+static const char *
 getstr(PrintfState &st)
 {
-	char *val = nullstr;
+	const char *val = "";
 
 	if (*st.gargv)
 		val = *st.gargv++;
+
 	return val;
 }
 
-static uintmax_t
+static std::uintmax_t
 getuintmax(ShellContext &sh, PrintfState &st, int sign)
 {
 	uintmax_t val = 0;
@@ -582,7 +582,7 @@ echocmd(ShellContext &sh, int argc, char **argv)
 		if (!s || !*++argv)
 			fmt = lastfmt;
 
-		nonl = TRY_SH(print_escape_str(sh, fmt, NULL, NULL, s ?: nullstr));
+		nonl = TRY_SH(print_escape_str(sh, fmt, NULL, NULL, s ? s : ""));
 	} while (!nonl && *argv);
 	return 0;
 }

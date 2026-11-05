@@ -285,7 +285,7 @@ waitcmd(ShellContext &sh, int argc, char **argv)
 	int retval;
 	Job *jp;
 
-	TRY_SHV(nextopt(sh, nullstr));
+	TRY_SHV(nextopt(sh, ""));
 	retval = 0;
 
 	argv = sh.bopt.argptr;

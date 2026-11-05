@@ -88,11 +88,11 @@ changelocale(ShellContext &, std::string_view val)
 		std::string name(val);
 		unsetenv(name.c_str());
 	}
-	setlocale(LC_ALL, nullstr);
+	setlocale(LC_ALL, "");
 }
 
 static int vpcmp(const void *, const void *);
-static struct var *findvar(ShellContext &sh, std::string_view name);
+static var *findvar(ShellContext &sh, std::string_view name);
 
 /* Name part of "name" or "name=value". */
 static std::string_view
@@ -178,10 +178,11 @@ initvar(ShellContext &sh)
 		std::string nameeq(text);
 		std::string name(varname(nameeq));
 		var v;
+
 		v.flags = flags;
 		v.text = std::move(nameeq);
 		v.func = func;
-		sh.vars.emplace(std::move(name), std::move(v));
+		sh.variables.emplace(std::move(name), std::move(v));
 	};
 
 	add(VarFlag::str_fixed, "IFS= \t\n", changeifs);
@@ -208,7 +209,7 @@ initvar(ShellContext &sh)
 	 * PS1 depends on uid
 	 */
 	if (!geteuid())
-		sh.vars.at("PS1").text = "PS1=# ";
+		sh.variables.at("PS1").text = "PS1=# ";
 }
 
 /*
@@ -274,10 +275,10 @@ setvareq(ShellContext &sh, std::string s, VarFlags flags)
 		flags |= VarFlag::exported;
 
 	std::string name(varname(s));
-	auto it = sh.vars.find(name);
+	auto it = sh.variables.find(name);
 	struct var *vp = nullptr;
 
-	if (it != sh.vars.end()) {
+	if (it != std::end(sh.variables)) {
 		VarFlags keep;
 
 		vp = &it->second;
@@ -291,7 +292,8 @@ setvareq(ShellContext &sh, std::string s, VarFlags flags)
 		else if (vp->flags.test(VarFlag::str_fixed))
 			keep = VarFlag::str_fixed;
 		else {
-			sh.vars.erase(it);
+			sh.variables.erase(it);
+
 			return nullptr;
 		}
 
@@ -304,8 +306,7 @@ setvareq(ShellContext &sh, std::string s, VarFlags flags)
 		var v;
 		v.text = std::move(s);
 		v.flags = flags;
-		auto [placed, inserted] = sh.vars.emplace(std::move(name),
-							  std::move(v));
+		auto [placed, inserted] = sh.variables.emplace(std::move(name), std::move(v));
 		(void)inserted;
 		vp = &placed->second;
 	}
@@ -323,7 +324,7 @@ setvareq(ShellContext &sh, std::string s, VarFlags flags)
 char *
 lookupvar(ShellContext &sh, std::string_view name)
 {
-	struct var *v = findvar(sh, name);
+	auto v = findvar(sh, name);
 
 	if (v && !v->flags.test(VarFlag::unset)) {
 #ifdef WITH_LINENO
@@ -338,7 +339,9 @@ lookupvar(ShellContext &sh, std::string_view name)
 shell::Result<intmax_t>
 lookupvarint(ShellContext &sh, std::string_view name)
 {
-	return atomax(sh, lookupvar(sh, name) ?: nullstr, 0);
+	const auto var = lookupvar(sh, name);
+
+	return atomax(sh, var ? var : "", 0);
 }
 
 
@@ -353,7 +356,7 @@ listvars(ShellContext &sh, VarFlags on, VarFlags off)
 	VarFlags mask = on | off;
 	std::vector<char *> list;
 
-	for (auto &[name, vp] : sh.vars) {
+	for (auto &[name, vp] : sh.variables) {
 		(void)name;
 		if ((vp.flags & mask) == on)
 			list.push_back(const_cast<char *>(vp.text.c_str()));
@@ -391,7 +394,7 @@ showvars(ShellContext &sh, std::string_view prefix, VarFlags on, VarFlags off)
 
 		p = strchrnul(*ep, '=');
 		std::string quoted;
-		q = nullstr;
+		q = "";
 		if (*p) {
 			quoted = single_quote(++p);
 			q = quoted.c_str();
@@ -413,7 +416,6 @@ showvars(ShellContext &sh, std::string_view prefix, VarFlags on, VarFlags off)
 shell::Result<int>
 exportcmd(ShellContext &sh, int argc, char **argv)
 {
-	struct var *vp;
 	char *name;
 	const char *p;
 	char **aptr;
@@ -426,7 +428,7 @@ exportcmd(ShellContext &sh, int argc, char **argv)
 			if ((p = strchr(name, '=')) != NULL) {
 				p++;
 			} else {
-				if ((vp = findvar(sh, name))) {
+				if (auto vp = findvar(sh, name)) {
 					vp->flags |= flag;
 					continue;
 				}
@@ -612,20 +614,22 @@ unsetvar(ShellContext &sh, const std::string &s)
 
 
 
-/*
+/**
  * Compares two strings up to the first = or end.  Either side may use
  * '=' as the name terminator.
  */
-
-int
+static int
 varcmp(std::string_view p, std::string_view q)
 {
 	auto at = [](std::string_view s, std::size_t i, bool map_eq) {
 		if (i >= s.size())
 			return 0;
+
 		int c = static_cast<unsigned char>(s[i]);
+
 		if (map_eq && c == '=')
 			return 0;
+
 		return c;
 	};
 
@@ -633,6 +637,7 @@ varcmp(std::string_view p, std::string_view q)
 	std::size_t j = 0;
 	int c = at(p, 0, false);
 	int d = at(q, 0, false);
+
 	while (c == d) {
 		if (!c)
 			return 0;
@@ -641,6 +646,7 @@ varcmp(std::string_view p, std::string_view q)
 		c = at(p, i, true);
 		d = at(q, j, true);
 	}
+
 	return c - d;
 }
 
@@ -650,9 +656,10 @@ vpcmp(const void *a, const void *b)
 	return varcmp(*(const char **)a, *(const char **)b);
 }
 
-static struct var *
+static var *
 findvar(ShellContext &sh, std::string_view name)
 {
-	auto it = sh.vars.find(std::string(varname(name)));
-	return it != sh.vars.end() ? &it->second : nullptr;
+	auto it = sh.variables.find(std::string(varname(name)));
+
+	return it != std::end(sh.variables) ? &it->second : nullptr;
 }

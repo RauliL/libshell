@@ -126,7 +126,7 @@ readcmdfile(ShellContext &sh, std::string_view name)
 static shell::Result<std::string>
 find_dot_file(ShellContext &sh, char *basename)
 {
-	const char *path = pathval();
+	const char *path = pathval(sh);
 	struct stat64 statb;
 
 	/* don't try this for absolute or relative paths */
@@ -150,7 +150,7 @@ dotcmd(ShellContext &sh, int argc, char **argv)
 {
 	int status = 0;
 
-	TRY_SHV(nextopt(sh, nullstr));
+	TRY_SHV(nextopt(sh, ""));
 	argv = sh.bopt.argptr;
 
 	if (*argv) {

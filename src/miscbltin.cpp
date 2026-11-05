@@ -91,7 +91,7 @@ readcmd_handle_line(ShellContext &sh, ExpandBuf &eb, char *s, int ac, char **ap)
 		if (i >= fields.size()) {
 			/* nullify remaining arguments */
 			do {
-				TRY_SHV(setvar(sh, *ap, nullstr));
+				TRY_SHV(setvar(sh, *ap, ""));
 			} while (*++ap);
 
 			return {};

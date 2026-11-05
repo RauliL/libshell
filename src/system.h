@@ -154,4 +154,4 @@ static inline void globfree64(glob64_t *pglob)
  */
 #define uninitialized_var(x) x = x
 
-unsigned conv_escape(ShellContext &sh, char *str, char *out, bool mbchar);
+unsigned conv_escape(ShellContext &sh, const char *str, char *out, bool mbchar);

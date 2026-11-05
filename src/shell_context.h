@@ -49,7 +49,8 @@ struct cmdentry;
 enum limtype : int;
 
 struct ShellContext {
-
+	using alias_map_type = std::unordered_map<std::string, std::shared_ptr<alias>>;
+	using variable_map_type = std::unordered_map<std::string, var>;
 	using signal_map_type = std::unordered_map<int, std::string_view>;
 
 	struct output output{BUFSIZ, 1};
@@ -75,7 +76,7 @@ struct ShellContext {
 	int vforked = 0;
 	int lineno = 0;
 	std::vector<LocalVarFrame> localvar_stack;
-	std::unordered_map<std::string, var> vars;
+	variable_map_type variables;
 
 	ExpandState expand;
 
@@ -108,7 +109,7 @@ struct ShellContext {
 	std::unordered_map<std::string, tblentry> cmdtable;
 	int builtinloc = -1;
 
-	std::unordered_map<std::string, std::shared_ptr<alias>> aliases;
+	alias_map_type aliases;
 	std::vector<RedirFrame> redirlist;
 	unsigned closed_redirs = 0;
 	CdState cwd;

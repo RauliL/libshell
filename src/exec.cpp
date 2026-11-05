@@ -287,7 +287,7 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 		tblentry *cmdp = cmdlookup(sh, name, 0);
 		if (cmdp && hash_affected(*cmdp, sh.builtinloc))
 			delete_cmd_entry(sh, name);
-		TRY_SHV(find_command(sh, name, &entry, DO_ERR, pathval()));
+		TRY_SHV(find_command(sh, name, &entry, DO_ERR, pathval(sh)));
 		if (entry.cmdtype == CMDUNKNOWN)
 			c = 1;
 		sh.bopt.argptr++;
@@ -304,7 +304,7 @@ printentry(ShellContext &sh, const std::string &cmdname, const tblentry &cmdp)
 	std::string name;
 
 	idx = cmdp.param.index;
-	path = pathval();
+	path = pathval(sh);
 	do {
 		padvance(sh, &path, cmdname.c_str(), name);
 	} while (--idx >= 0);
@@ -366,7 +366,7 @@ absfail:
 		return {};
 	}
 
-	updatetbl = (path == pathval());
+	updatetbl = (path == pathval(sh));
 	if (!updatetbl)
 		act |= DO_ALTPATH;
 
@@ -679,7 +679,7 @@ typecmd(ShellContext &sh, int argc, char **argv)
 {
 	int err = 0;
 
-	TRY_SHV(nextopt(sh, nullstr));
+	TRY_SHV(nextopt(sh, ""));
 	while (*sh.bopt.argptr) {
 		err |= TRY_SH(describe_command(sh, sh.out1, *sh.bopt.argptr++, NULL, 1));
 	}
@@ -718,7 +718,7 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 	 * a tracked alias.
 	 */
 	if (path == NULL) {
-		path = pathval();
+		path = pathval(sh);
 		cmdp = cmdlookup(sh, command, 0);
 	} else {
 		cmdp = NULL;

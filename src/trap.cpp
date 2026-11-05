@@ -92,7 +92,7 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 	char **ap;
 	int signo;
 
-	TRY_SHV(nextopt(sh, nullstr));
+	TRY_SHV(nextopt(sh, ""));
 	ap = sh.bopt.argptr;
 	if (!*ap) {
 		for (signo = 0 ; signo < NSIG ; signo++) {

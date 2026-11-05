@@ -110,7 +110,7 @@ cdcmd(ShellContext &sh, int argc, char **argv)
 		flags |= CD_PRINT;
 	}
 	if (!dest)
-		dest = nullstr;
+		dest = "";
 	if (*dest == '/')
 		goto step6;
 	if (*dest == '.') {
