@@ -1,8 +1,8 @@
 /*-
  * Copyright (c) 1993
- *	The Regents of the University of California.  All rights reserved.
+ *	The Regents of the University of California. All rights reserved.
  * Copyright (c) 1997-2005
- *	Herbert Xu <herbert@gondor.apana.org.au>.  All rights reserved.
+ *	Herbert Xu <herbert@gondor.apana.org.au>. All rights reserved.
  *
  * This code is derived from software contributed to Berkeley by
  * Kenneth Almquist.
@@ -22,7 +22,7 @@
  * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -32,7 +32,9 @@
  * SUCH DAMAGE.
  */
 #include <cstring>
+#include <memory>
 #include <string>
+#include <string_view>
 
 #include "shell.h"
 #include "shell_context.h"
@@ -46,39 +48,27 @@
 #include "syntax.h"
 #include "var.h"
 
-#define ATABSIZE 39
-
 static shell::Result<void> setalias(ShellContext &sh, const char *, const char *);
-static struct alias * freealias(ShellContext &sh, struct alias *);
-static struct alias ** __lookupalias(ShellContext &sh, std::string_view);
 
 static shell::Result<void>
 setalias(ShellContext &sh, const char *name, const char *val)
 {
-	struct alias *ap, **app;
 	const char *p = name;
-	size_t namelen;
 
 	do {
 		if (BASESYNTAX[(signed char)*p] != CWORD)
 			return sh_error(sh, "Invalid alias name: {}", name);
 	} while (*++p != '=');
 
-	namelen = static_cast<size_t>(val - name - 1); /* bytes before '=' */
+	size_t namelen = static_cast<size_t>(val - name - 1); /* bytes before '=' */
+	std::string key(name, namelen);
 
-	app = __lookupalias(sh, name);
-	ap = *app;
 	INTOFF(sh);
-	if (ap) {
-		ap->flag &= ~ALIASDEAD;
-	} else {
-		ap = new alias;
-		ap->flag = 0;
-		ap->next = nullptr;
-		*app = ap;
-	}
-	ap->name.assign(name, namelen);
-	ap->val = val;
+	auto &slot = sh.aliases[key];
+	if (!slot)
+		slot = std::make_shared<alias>();
+	slot->name = std::move(key);
+	slot->val = val;
 	INTON(sh);
 
 	return {};
@@ -87,72 +77,59 @@ setalias(ShellContext &sh, const char *name, const char *val)
 shell::Result<int>
 unalias(ShellContext &sh, std::string_view name)
 {
-	struct alias **app;
-
-	app = __lookupalias(sh, name);
-
-	if (*app) {
-		INTOFF(sh);
-		*app = freealias(sh, *app);
-		INTON(sh);
-		return 0;
-	}
-
-	return 1;
+	INTOFF(sh);
+	const bool found = sh.aliases.erase(std::string(name)) != 0;
+	INTON(sh);
+	return found ? 0 : 1;
 }
 
 static shell::Result<void>
 rmaliases(ShellContext &sh)
 {
 	INTOFF(sh);
-	for (int i = 0; i < ATABSIZE; i++) {
-		alias **app = &sh.atab[i];
-
-		for (alias *ap = *app; ap; ap = *app) {
-			*app = freealias(sh, *app);
-			if (ap == *app) {
-				app = &ap->next;
-			}
-		}
-	}
+	sh.aliases.clear();
 	INTON(sh);
 
 	return {};
 }
 
-struct alias *
-lookupalias(ShellContext &sh, std::string_view name, int check)
+std::shared_ptr<alias>
+lookupalias(ShellContext &sh, std::string_view name, bool check)
 {
-	struct alias *ap = *__lookupalias(sh, name);
-
-	if (check && ap && (ap->flag & ALIASINUSE))
-		return (NULL);
-	return (ap);
+	auto it = sh.aliases.find(std::string(name));
+	if (it == sh.aliases.end())
+		return nullptr;
+	const auto &ap = it->second;
+	if (check && ap->in_use)
+		return nullptr;
+	return ap;
 }
 
 shell::Result<int>
 aliascmd(ShellContext &sh, int argc, char **argv)
 {
-	char *n, *v;
-	int ret = 0;
-	struct alias *ap;
+	char *n;
+	int ret = EXIT_SUCCESS;
 
 	if (argc == 1) {
-		int i;
+		for (const auto &entry : sh.aliases) {
+			printalias(sh, *entry.second);
+		}
 
-		for (i = 0; i < ATABSIZE; i++)
-			for (ap = sh.atab[i]; ap; ap = ap->next) {
-				printalias(sh, ap);
-			}
-		return 0;
+		return EXIT_SUCCESS;
 	}
 	while ((n = *++argv) != NULL) {
-		if (!*n || !(v = strchr(n + 1, '='))) {
-			if ((ap = *__lookupalias(sh, n)) == NULL) {
-                sh.out2->write(sh, std::format("{}: {} not found\n", "alias", n));
-				ret = 1;
-			} else
-				printalias(sh, ap);
+		char *v;
+
+		if (!*n || !(v = std::strchr(n + 1, '='))) {
+			const auto ap = lookupalias(sh, n, false);
+
+			if (!ap) {
+				sh.out2->write(sh, std::format("alias: {} not found\n", n));
+				ret = EXIT_FAILURE;
+			} else {
+				printalias(sh, *ap);
+			}
 		} else {
 			TRY_SHV(setalias(sh, n, v + 1));
 		}
@@ -169,52 +146,22 @@ unaliascmd(ShellContext &sh, int argc, char **argv)
 	while ((i = TRY_SH(nextopt(sh, "a"))) != '\0') {
 		if (i == 'a') {
 			TRY_SHV(rmaliases(sh));
-			return 0;
+
+			return EXIT_SUCCESS;
 		}
 	}
 	for (i = 0; *sh.bopt.argptr; sh.bopt.argptr++) {
 		if (TRY_SH(unalias(sh, *sh.bopt.argptr))) {
-            sh.out2->write(sh, std::format("{}: {} not found\n", "unalias", *sh.bopt.argptr));
-			i = 1;
+			sh.out2->write(sh, std::format("unalias: {} not found\n", *sh.bopt.argptr));
+			i = EXIT_FAILURE;
 		}
 	}
 
 	return i;
 }
 
-static struct alias *
-freealias(ShellContext &sh, struct alias *ap)
+void
+printalias(ShellContext &sh, const alias &ap)
 {
-	struct alias *next;
-
-	if (ap->flag & ALIASINUSE) {
-		ap->flag |= ALIASDEAD;
-		return ap;
-	}
-
-	next = ap->next;
-	delete ap;
-	return next;
-}
-
-void __attribute__((noinline))
-printalias(ShellContext &sh, const alias *ap)
-{
-	out1str(std::format("{}={}\n", ap->name, single_quote(ap->val)));
-}
-
-static struct alias **
-__lookupalias(ShellContext &sh, std::string_view name)
-{
-	struct alias **app;
-
-	app = &sh.atab[hashval(name) % ATABSIZE];
-
-	for (; *app; app = &(*app)->next) {
-		if (varequal(name, (*app)->name)) {
-			break;
-		}
-	}
-
-	return app;
+	sh.out1->write(sh, std::format("{}={}\n", ap.name, single_quote(ap.val)));
 }

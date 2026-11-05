@@ -36,12 +36,14 @@
 #pragma once
 
 #include <climits>
+#include <memory>
 #include <string_view>
 #include <vector>
 
 #include <sys/types.h>
 #include <termios.h>
 
+#include "alias.h"
 #include "error.h"
 
 #define PUNGETC_MAX (MB_LEN_MAX > 16 ? MB_LEN_MAX : 16)
@@ -55,17 +57,16 @@ enum {
 	INPUT_NOFILE_OK = 2,
 };
 
-struct alias;
-
 /*
  * One pushed string overlay on a parsefile (alias text or parser
  * re-injection).  Saved cursor state is restored when the string is
- * exhausted.
+ * exhausted.  A non-null ap keeps the alias alive for the push and
+ * sets alias::in_use.
  */
 struct StringPush {
 	char *prev_string = nullptr;
 	int prev_nleft = 0;
-	alias *ap = nullptr;	/* non-null if this push is an alias expansion */
+	std::shared_ptr<alias> ap;	/* set if this push is an alias expansion */
 	char *string = nullptr;	/* start of the pushed text */
 	int unget = 0;
 };
@@ -83,8 +84,8 @@ struct parsefile {
 	char *buf = nullptr;		/* input buffer */
 	std::vector<StringPush> string_stack;
 
-	/* Aliases whose ALIASINUSE bit is cleared on the next pgetc. */
-	std::vector<alias *> pending_alias_release;
+	/* Aliases whose in_use flag is cleared on the next pgetc. */
+	std::vector<std::shared_ptr<alias>> pending_alias_release;
 
 	/* Number of outstanding calls to pungetc. */
 	int unget = 0;
@@ -136,7 +137,8 @@ int pgetc(ShellContext &sh, InputStack &in);
 int pgetc_eoa(ShellContext &sh, InputStack &in);
 void pungetc(ShellContext &sh, InputStack &in);
 void pungetn(InputStack &in, int);
-void pushstring(ShellContext &sh, InputStack &in, char *, alias *);
+void pushstring(ShellContext &sh, InputStack &in, char *,
+		std::shared_ptr<alias> = nullptr);
 shell::Result<int> setinputfile(ShellContext &sh, InputStack &in,
 				    std::string_view, int);
 void setinputstring(ShellContext &sh, InputStack &in, char *);
@@ -153,7 +155,7 @@ int pgetc(ShellContext &sh);
 int pgetc_eoa(ShellContext &sh);
 void pungetc(ShellContext &sh);
 void pungetn(ShellContext &sh, int);
-void pushstring(ShellContext &sh, char *, alias *);
+void pushstring(ShellContext &sh, char *, std::shared_ptr<alias> = nullptr);
 shell::Result<int> setinputfile(ShellContext &sh, std::string_view, int);
 void setinputstring(ShellContext &sh, char *);
 void pushstdin(ShellContext &sh);

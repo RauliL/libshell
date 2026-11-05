@@ -893,10 +893,10 @@ top:
 	}
 
 	if (kwd & CHKALIAS) {
-		struct alias *ap;
-		if ((ap = lookupalias(sh, sh.parse.wordtext, 1)) != NULL) {
+		if (auto ap = lookupalias(sh, sh.parse.wordtext, true)) {
 			if (!ap->val.empty()) {
-				pushstring(sh, ap->val.data(), ap);
+				char *text = ap->val.data();
+				pushstring(sh, text, std::move(ap));
 			}
 			goto top;
 		}

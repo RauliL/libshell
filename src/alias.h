@@ -1,8 +1,8 @@
 /*-
  * Copyright (c) 1993
- *	The Regents of the University of California.  All rights reserved.
+ *	The Regents of the University of California. All rights reserved.
  * Copyright (c) 1997-2005
- *	Herbert Xu <herbert@gondor.apana.org.au>.  All rights reserved.
+ *	Herbert Xu <herbert@gondor.apana.org.au>. All rights reserved.
  *
  * This code is derived from software contributed to Berkeley by
  * Kenneth Almquist.
@@ -22,7 +22,7 @@
  * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -35,23 +35,29 @@
  */
 #pragma once
 
+#include <memory>
 #include <string>
+#include <string_view>
 
 #include "error.h"
 
-#define ALIASINUSE	1
-#define ALIASDEAD	2
-
+/*
+ * Alias expansion pushes val onto the input stack, so the alias object must
+ * outlive that push. ShellContext::aliases owns shared_ptrs; the input stack
+ * holds additional shared_ptrs for the duration of expansion. Unalias only
+ * erases the map entry — in-flight expansions keep the object alive.
+ *
+ * in_use blocks recursive expansion of the same alias (POSIX).
+ */
 struct alias {
-	struct alias *next;
-	std::string name;	/* name only */
-	std::string val;	/* value only */
-	int flag;
+	std::string name;
+	std::string val;
+	bool in_use = false;
 };
 
 struct ShellContext;
-struct alias *lookupalias(ShellContext &sh, std::string_view, int);
+std::shared_ptr<alias> lookupalias(ShellContext &sh, std::string_view, bool check);
 shell::Result<int> aliascmd(ShellContext &sh, int, char **);
 shell::Result<int> unaliascmd(ShellContext &sh, int, char **);
 shell::Result<int> unalias(ShellContext &sh, std::string_view);
-void printalias(ShellContext &sh, const struct alias *);
+void printalias(ShellContext &sh, const alias &);

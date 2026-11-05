@@ -26,6 +26,7 @@
 #include <sys/resource.h>
 #include <sys/types.h>
 
+#include "alias.h"
 #include "cd.h"
 #include "error.h"
 #include "exec.h"
@@ -42,7 +43,6 @@
 #include "var.h"
 
 struct backcmd;
-struct alias;
 struct synstack;
 struct builtincmd;
 struct cmdentry;
@@ -108,7 +108,7 @@ struct ShellContext {
 	std::unordered_map<std::string, tblentry> cmdtable;
 	int builtinloc = -1;
 
-	struct alias *atab[39] = {};
+	std::unordered_map<std::string, std::shared_ptr<alias>> aliases;
 	std::vector<RedirFrame> redirlist;
 	unsigned closed_redirs = 0;
 	CdState cwd;

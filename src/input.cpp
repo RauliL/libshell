@@ -193,11 +193,11 @@ static void
 release_pending_aliases(ShellContext &sh, parsefile &pf)
 {
 	INTOFF(sh);
-	for (alias *ap : pf.pending_alias_release) {
-		ap->flag &= ~ALIASINUSE;
-		if (ap->flag & ALIASDEAD)
-			unalias(sh, ap->name);
-	}
+	for (auto &ap : pf.pending_alias_release)
+		ap->in_use = false;
+	/* Dropping the shared_ptrs may destroy aliases already removed
+	 * from ShellContext::aliases via unalias.
+	 */
 	pf.pending_alias_release.clear();
 	INTON_DEFER(sh);
 }
@@ -395,7 +395,7 @@ pungetc(ShellContext &sh, InputStack &in)
  * We handle aliases this way.
  */
 void
-pushstring(ShellContext &sh, InputStack &in, char *s, alias *ap)
+pushstring(ShellContext &sh, InputStack &in, char *s, std::shared_ptr<alias> ap)
 {
 	const auto len = std::strlen(s);
 
@@ -408,7 +408,7 @@ pushstring(ShellContext &sh, InputStack &in, char *s, alias *ap)
 		.unget = in.current->unget,
 	});
 	if (ap)
-		ap->flag |= ALIASINUSE;
+		ap->in_use = true;
 	in.current->nextc = s;
 	in.current->nleft = static_cast<int>(len);
 	in.current->unget = 0;
@@ -426,14 +426,13 @@ popstring(ShellContext &sh, InputStack &in)
 		    in.current->nextc[-1] == '\t') {
 			sh.parse.checkkwd |= CHKALIAS;
 		}
-		/* Alias values are owned by the alias; do not free here. */
 	}
 	in.current->nextc = sp.prev_string;
 	in.current->nleft = sp.prev_nleft;
 	in.current->unget = sp.unget;
 	in.current->string_stack.pop_back();
 	if (sp.ap)
-		in.current->pending_alias_release.push_back(sp.ap);
+		in.current->pending_alias_release.push_back(std::move(sp.ap));
 	INTON_DEFER(sh);
 }
 
@@ -625,9 +624,9 @@ pungetn(ShellContext &sh, int n)
 }
 
 void
-pushstring(ShellContext &sh, char *s, alias *ap)
+pushstring(ShellContext &sh, char *s, std::shared_ptr<alias> ap)
 {
-	pushstring(sh, sh.input, s, ap);
+	pushstring(sh, sh.input, s, std::move(ap));
 }
 
 shell::Result<int>

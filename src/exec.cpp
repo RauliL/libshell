@@ -692,8 +692,6 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 {
 	struct cmdentry entry;
 	struct tblentry *cmdp;
-	const struct alias *ap;
-
 	if (verbose) {
 		out->write(sh, command);
 	}
@@ -705,12 +703,12 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 	}
 
 	/* Then look at the aliases */
-	if ((ap = lookupalias(sh, command, 0)) != NULL) {
+	if (auto ap = lookupalias(sh, command, false)) {
 		if (verbose) {
 			out->write(sh, std::format(" is an alias for {}", ap->val));
 		} else {
 			out->write(sh, "alias ");
-			printalias(sh, ap);
+			printalias(sh, *ap);
 			return 0;
 		}
 		goto out;
