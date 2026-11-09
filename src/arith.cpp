@@ -10,7 +10,6 @@
 #include <variant>
 
 #include "error.h"
-#include "shell_context.h"
 #include "var.h"
 
 using namespace shell;

@@ -31,10 +31,13 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <format>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -46,16 +49,13 @@
  * The cd and pwd commands.
  */
 
-#include "shell_context.h"
-#include "var.h"
-#include "options.h"
-#include "output.h"
+#include "cd.h"
 #include "error.h"
 #include "exec.h"
-#include "cd.h"
-#include <cerrno>
-#include <format>
-#include <utility>
+#include "options.h"
+#include "output.h"
+#include "shell.h"
+#include "var.h"
 
 #define CD_PHYSICAL 1
 #define CD_PRINT 2

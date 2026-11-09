@@ -1,14 +1,10 @@
-#include "shell_context.h"
-
-#include <unistd.h>
+#include <libshell.hpp>
 
 #include "cd.h"
-#include "error.h"
 #include "init.h"
 #include "main.h"
 #include "options.h"
 #include "trap.h"
-#include <string_view>
 
 using namespace shell;
 

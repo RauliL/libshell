@@ -17,7 +17,6 @@
 #include "parse_error.h"
 #include "parser.h"
 #include "shell.h"
-#include "shell_context.h"
 
 using namespace shell;
 

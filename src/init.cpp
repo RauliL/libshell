@@ -2,14 +2,12 @@
  * Shell lifecycle: construct-time init and reset paths formerly generated
  * by mkinit from scattered INIT/RESET blocks.
  */
-
-#include "init.h"
-
-#include "expand.h"
 #include "eval.h"
+#include "expand.h"
+#include "init.h"
 #include "input.h"
 #include "redir.h"
-#include "shell_context.h"
+#include "shell.h"
 #include "trap.h"
 #include "var.h"
 

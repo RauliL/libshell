@@ -31,11 +31,19 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include "./config.hpp"
+
+#include <cerrno>
+#include <cstdio>	/* defines BUFSIZ */
+#include <cstdlib>
+#include <cstring>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <utility>
 
 #include <fcntl.h>
-#include <stdio.h>	/* defines BUFSIZ */
-#include <stdlib.h>
-#include <string.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -50,12 +58,6 @@
 #include "redir.h"
 #include "shell.h"
 #include "syntax.h"
-#include <cerrno>
-#include <cstring>
-#include <memory>
-#include <string>
-#include <string_view>
-#include <utility>
 
 using namespace shell;
 

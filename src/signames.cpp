@@ -3,12 +3,11 @@
  * matches the host platform without a build-time generator.
  */
 #include <csignal>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "mystring.h"
-#include "shell_context.h"
-#include <optional>
-#include <string_view>
 
 using namespace shell;
 

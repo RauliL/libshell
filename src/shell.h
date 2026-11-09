@@ -33,9 +33,9 @@
  *
  *	@(#)shell.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
 
-#ifndef SHELL_H
-#define SHELL_H
+#include <libshell.hpp>
 
 /*
  * The follow should be set to reflect the type of system you have:
@@ -88,6 +88,16 @@ static inline int max_int_length(int bytes)
 	return (bytes * 8 - 1) * 0.30102999566398119521 + 14;
 }
 
-#include "shell_context.h"
+namespace shell {
 
-#endif
+void init_signal_names(Context &sh);
+
+inline const char *bltinlookup(Context &sh, std::string_view name)
+{
+	if (auto value = sh.get_var(name))
+		return value->data();
+
+	return nullptr;
+}
+
+}

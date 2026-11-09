@@ -1,5 +1,3 @@
-#ifndef EXPAND_H
-#define EXPAND_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,20 +33,12 @@
  *
  *	@(#)expand.h	8.2 (Berkeley) 5/4/95
  */
-
-#include <cstddef>
-#include <string>
-#include <string_view>
-#include <type_traits>
-#include <vector>
-#include <cwchar>
+#pragma once
 
 #include <libshell.hpp>
 
-#include "nodes.h"
-
 #include "error.h"
-
+#include "nodes.h"
 
 namespace shell {
 
@@ -216,5 +206,3 @@ Result<void> restore_handler_expandarg(Context &sh, int err);
 void changeifs(Context &sh, std::string_view);
 
 } // namespace shell
-
-#endif

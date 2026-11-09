@@ -1,5 +1,3 @@
-#ifndef EVAL_H
-#define EVAL_H
 /*-
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -35,16 +33,13 @@
  *
  *	@(#)eval.h	8.2 (Berkeley) 5/4/95
  */
+#pragma once
 
 #include <string>
 
 #include <libshell.hpp>
 
-#include <bitset>
-#include <cstddef>
-#include <type_traits>
 #include "error.h"
-
 
 namespace shell {
 
@@ -54,14 +49,9 @@ struct backcmd {		/* result of evalbackcmd */
 	Job *jp = nullptr;	/* job structure for command */
 };
 
-
-
-
 Result<int> evaltree(Context &sh, Node *, EvalFlags);
 Result<void> evalbackcmd(Context &sh, Node *, struct backcmd *);
 /** Clear eval skip/loop state and close the temporary pipe on unwind. */
 void eval_exitreset(Context &sh);
 
 } // namespace shell
-
-#endif
