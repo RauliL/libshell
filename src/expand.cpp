@@ -69,7 +69,6 @@
 #include "expand.h"
 #include "expand_buf.h"
 #include "jobs.h"
-#include "memalloc.h"
 #include "mystring.h"
 #include "nodes.h"
 #include "options.h"
@@ -92,8 +91,7 @@ namespace shell {
 
 #define RMESCAPE_ALLOC	0x1	/* Allocate a new string */
 #define RMESCAPE_GLOB	0x2	/* Add backslashes for glob */
-#define RMESCAPE_GROW	0x8	/* Grow ExpandBuf instead of malloc */
-#define RMESCAPE_HEAP	0x10	/* Malloc strings */
+#define RMESCAPE_GROW	0x8	/* Grow ExpandBuf instead of a std::string */
 
 /* Add CTLESC when necessary. */
 #define QUOTES_ESC	(EXP_FULL | EXP_CASE)
@@ -144,12 +142,15 @@ tl::unexpected<Error> varunset(Context &sh, const char *, const char *, const ch
 /*
  * Prepare a pattern for a glob(3) call.
  *
- * Returns a possibly malloc'd string (caller frees if != pattern).
+ * When a new string is allocated, it is written into *heap (or into *eb
+ * when RMESCAPE_GROW is set). The returned pointer aliases pattern, *eb,
+ * or *heap and is valid for as long as that storage lives.
  */
 
 namespace {
 inline char *
-preglob(Context &sh, const char *pattern, int flag, ExpandBuf *eb = nullptr)
+preglob(Context &sh, const char *pattern, int flag, ExpandBuf *eb = nullptr,
+	std::string *heap = nullptr)
 {
 	if (FNMATCH_IS_ENABLED) {
 		if (!flag)
@@ -157,7 +158,7 @@ preglob(Context &sh, const char *pattern, int flag, ExpandBuf *eb = nullptr)
 		flag |= RMESCAPE_ALLOC;
 	}
 	flag |= RMESCAPE_GLOB;
-	return _rmescapes(sh, const_cast<char *>(pattern), flag, eb);
+	return _rmescapes(sh, const_cast<char *>(pattern), flag, eb, heap);
 }
 
 size_t
@@ -1470,6 +1471,7 @@ expandmeta_glob(Context &sh, ArgList &strs)
 		const char *p;
 		glob64_t pglob;
 		int i;
+		std::string preg;
 
 		if (sh.opts.noglob())
 			goto nometa;
@@ -1486,10 +1488,8 @@ expandmeta_glob(Context &sh, ArgList &strs)
 #endif
 
 		INTOFF(sh);
-		p = preglob(sh, s.c_str(), RMESCAPE_HEAP);
+		p = preglob(sh, s.c_str(), 0, nullptr, &preg);
 		i = glob64(p, GLOB_ALTDIRFUNC | GLOB_NOMAGIC, 0, &pglob);
-		if (p != s.c_str())
-			ckfree(p);
 		switch (i) {
 		case 0:
 			if ((pglob.gl_flags & (GLOB_NOMAGIC | GLOB_NOCHECK)) ==
@@ -1548,6 +1548,7 @@ expandmeta(Context &sh, ExpandBuf &eb, ArgList &strs)
 	for (std::string &s : strs) {
 		char *p;
 		unsigned len;
+		std::string preg;
 
 		if (sh.opts.noglob())
 			goto nometa;
@@ -1555,13 +1556,11 @@ expandmeta(Context &sh, ExpandBuf &eb, ArgList &strs)
 			goto nometa;
 
 		INTOFF(sh);
-		p = preglob(sh, s.c_str(), RMESCAPE_ALLOC | RMESCAPE_HEAP);
+		p = preglob(sh, s.c_str(), RMESCAPE_ALLOC, nullptr, &preg);
 		len = strlen(p);
 
 		sh.expand.exparg.clear();
 		expmeta(sh, eb, p, len, 0);
-		if (p != s.c_str())
-			ckfree(p);
 		INTON(sh);
 		if (sh.expand.exparg.empty()) {
 			/*
@@ -1784,7 +1783,9 @@ namespace {
 inline int
 patmatch(Context &sh, char *pattern, const char *string, ExpandBuf *eb)
 {
-	return pmatch(sh, preglob(sh, pattern, 0, eb), string);
+	std::string preg;
+	return pmatch(sh, preglob(sh, pattern, 0, eb, eb ? nullptr : &preg),
+		      string);
 }
 
 __attribute__((noinline)) int
@@ -1979,7 +1980,7 @@ breakloop:
  */
 
 char *
-_rmescapes(Context &sh, char *str, int flag, ExpandBuf *eb)
+_rmescapes(Context &sh, char *str, int flag, ExpandBuf *eb, std::string *heap)
 {
 	char *p, *q, *r;
 	int notescaped;
@@ -2010,7 +2011,12 @@ _rmescapes(Context &sh, char *str, int flag, ExpandBuf *eb)
 			str = eb->base() + strloc;
 			p = str + len;
 		} else {
-			r = ckmalloc(fulllen);
+			/*
+			 * Pattern lives outside ExpandBuf; caller provides
+			 * a std::string that owns the unescaped copy.
+			 */
+			heap->assign(fulllen, '\0');
+			r = heap->data();
 		}
 		q = r;
 		if (len > 0) {

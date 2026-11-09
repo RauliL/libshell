@@ -195,8 +195,9 @@ Result<void> expandarg(Context &sh, Node *, ArgList *, ExpandFlags);
 Result<std::string> expandarg_to_string(Context &sh, Node *,
 					      ExpandFlags);
 struct ExpandBuf;
-#define rmescapes(p) _rmescapes(sh, (p), 0, nullptr)
-char *_rmescapes(Context &sh, char *, int, ExpandBuf *eb = nullptr);
+#define rmescapes(p) _rmescapes(sh, (p), 0)
+char *_rmescapes(Context &sh, char *, int, ExpandBuf *eb = nullptr,
+		 std::string *heap = nullptr);
 Result<int> casematch(Context &sh, Node *, char *);
 void recordregion(Context &sh, int, int, int);
 Result<void> removerecordregions(Context &sh, int);

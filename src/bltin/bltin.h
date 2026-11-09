@@ -43,7 +43,6 @@
 #include "../shell.h"
 #include "../mystring.h"
 #include "../options.h"
-#include "../memalloc.h"
 #include "../output.h"
 #include "../error.h"
 #include <stdio.h>

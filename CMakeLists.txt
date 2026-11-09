@@ -195,7 +195,6 @@ set(
   src/input.cpp
   src/jobs.cpp
   src/main.cpp
-  src/memalloc.cpp
   src/miscbltin.cpp
   src/mystring.cpp
   src/options.cpp

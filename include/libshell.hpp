@@ -254,8 +254,7 @@ struct Frame {
 };
 
 /**
- * Buffered writer for a file descriptor. Owns its buffer via std::vector;
- * allocation does not go through Context / ckmalloc.
+ * Buffered writer for a file descriptor. Owns its buffer via std::vector.
  *
  * bufsize == 0 means unbuffered (writes go straight to the fd / sink).
  * Otherwise the buffer is allocated lazily on first write.
