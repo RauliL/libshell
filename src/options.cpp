@@ -55,6 +55,10 @@
 #include "error.h"
 #include "mystring.h"
 
+using namespace shell;
+
+namespace shell {
+
 			/* value of $0 */
 	/* current positional parameters */
 			/* argument list for builtin commands */
@@ -63,7 +67,8 @@
 
 			/* argument to -c option */
 
-static const char *const optnames[NOPTS] = {
+namespace {
+const char *const optnames[NOPTS] = {
 	"errexit",
 	"noglob",
 	"ignoreeof",
@@ -80,6 +85,8 @@ static const char *const optnames[NOPTS] = {
 	"pipefail",
 	"debug",
 };
+} // namespace
+
 
 const char optletters[NOPTS] = {
 	'e',
@@ -102,18 +109,21 @@ const char optletters[NOPTS] = {
 
 
 
-static shell::Result<int> options(Context &sh, int,
+namespace {
+Result<int> options(Context &sh, int,
 				  std::optional<std::string> *minusc);
-static shell::Result<void> minus_o(Context &sh, char *, int);
-static shell::Result<void> setoption(Context &sh, int, int);
-static shell::Result<int> getopts(Context &sh, char *, char *, char **);
+Result<void> minus_o(Context &sh, char *, int);
+Result<void> setoption(Context &sh, int, int);
+Result<int> getopts(Context &sh, char *, char *, char **);
+} // namespace
+
 
 
 /*
  * Process the shell command line arguments.
  */
 
-shell::Result<ProcArgsResult>
+Result<ProcArgsResult>
 procargs(Context &sh, char **xargv)
 {
 	int i;
@@ -181,7 +191,8 @@ optschanged(Context &sh)
  * to the argument list; we advance it past the options.
  */
 
-static shell::Result<int>
+namespace {
+Result<int>
 options(Context &sh, int cmdline, std::optional<std::string> *minusc)
 {
 	char *p;
@@ -230,7 +241,7 @@ options(Context &sh, int cmdline, std::optional<std::string> *minusc)
 	return login;
 }
 
-static shell::Result<void>
+Result<void>
 minus_o(Context &sh, char *name, int val)
 {
 	if (!name) {
@@ -261,7 +272,7 @@ minus_o(Context &sh, char *name, int val)
 }
 
 
-static shell::Result<void>
+Result<void>
 setoption(Context &sh, int flag, int val)
 {
 	int i;
@@ -273,6 +284,8 @@ setoption(Context &sh, int flag, int val)
 		}
 	return sh_error(sh, "Illegal option -{}", flag);
 }
+} // namespace
+
 
 void
 Context::set_arg0(std::string name)
@@ -291,7 +304,7 @@ Context::set_args(std::span<const std::string_view> args)
 	shellparam.optoff = -1;
 }
 
-shell::Result<void>
+Result<void>
 Context::set_option(std::string_view name, bool enabled)
 {
 	for (int i = 0; i < NOPTS; i++) {
@@ -304,7 +317,7 @@ Context::set_option(std::string_view name, bool enabled)
 	return sh_error(*this, "Illegal option -o {}", name);
 }
 
-shell::Result<void>
+Result<void>
 Context::set_option(char letter, bool enabled)
 {
 	TRY_SHV(setoption(*this, letter, enabled ? 1 : 0));
@@ -347,7 +360,7 @@ setparam(Context &sh, char **argv)
  */
 
 void
-freeparam(Context &sh, shparam *param)
+freeparam(Context &sh, ShellParam *param)
 {
 	param->p.clear();
 }
@@ -358,7 +371,7 @@ freeparam(Context &sh, shparam *param)
  * The shift builtin command.
  */
 
-shell::Result<int>
+Result<int>
 shiftcmd(Context &sh, int argc, char **argv)
 {
 	int n = 1;
@@ -383,11 +396,11 @@ shiftcmd(Context &sh, int argc, char **argv)
  * The set command builtin.
  */
 
-shell::Result<int>
+Result<int>
 setcmd(Context &sh, int argc, char **argv)
 {
 	if (argc == 1)
-		return showvars(sh, "", {}, shell::Variable::Flag::Unset);
+		return showvars(sh, "", {}, Variable::Flag::Unset);
 	INTOFF(sh);
 	TRY_SHV(options(sh, 0, nullptr));
 	optschanged(sh);
@@ -415,7 +428,7 @@ getoptsreset(Context &sh, std::string_view value)
  * then it's the first time getopts has been called.
  */
 
-shell::Result<int>
+Result<int>
 getoptscmd(Context &sh, int argc, char **argv)
 {
 	char **optbase;
@@ -448,7 +461,8 @@ getoptscmd(Context &sh, int argc, char **argv)
 	return getopts(sh, argv[1], argv[2], optbase);
 }
 
-static shell::Result<int>
+namespace {
+Result<int>
 getopts(Context &sh, char *optstr, char *optvar, char **optfirst)
 {
 	char *p, *q;
@@ -522,7 +536,7 @@ atend:
 
 out:
 	ind = optnext - optfirst + 1;
-	TRY_SHV(sh.set_int_var("OPTIND", ind, shell::Variable::Flag::NoFunc));
+	TRY_SHV(sh.set_int_var("OPTIND", ind, Variable::Flag::NoFunc));
 	s[0] = c;
 	s[1] = '\0';
 	TRY_SHV(setvar(sh, optvar, s));
@@ -532,6 +546,8 @@ out:
 
 	return done;
 }
+} // namespace
+
 
 /*
  * XXX - should get rid of.  have all builtins use getopt(3).  the
@@ -544,7 +560,7 @@ out:
  * end of input.
  */
 
-shell::Result<int>
+Result<int>
 nextopt(Context &sh, std::string_view optstring)
 {
 	char *p;
@@ -579,3 +595,5 @@ nextopt(Context &sh, std::string_view optstring)
 	sh.bopt.optptr = p;
 	return c;
 }
+
+} // namespace shell

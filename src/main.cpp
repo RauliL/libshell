@@ -55,15 +55,24 @@
 #include "exec.h"
 #include "parse_error.h"
 
-static shell::Result<std::string> find_dot_file(Context &sh, char *);
+
+using namespace shell;
+
+
+namespace shell {
+
+namespace {
+Result<std::string> find_dot_file(Context &sh, char *);
+} // namespace
+
 
 /*
  * Read and execute commands until EOF.  No prompting or other interactive
  * behaviour — used for scripts, -c companions, `.`, and sourced files.
- * shell::Error::Generic is converted to an exit status at this boundary; shell::Error::Exit/EXEND/EXINT
+ * Error::Generic is converted to an exit status at this boundary; Error::Exit/EXEND/EXINT
  * propagate as ShellResult errors to the driver.
  */
-shell::Result<int>
+Result<int>
 cmdloop(Context &sh)
 {
 	int status = 0;
@@ -80,12 +89,12 @@ cmdloop(Context &sh)
 			auto r = evaltree(sh, n, {});
 			if (!r) {
 				sh.exception = r.error();
-				if (r.error() == shell::Error::Generic)
+				if (r.error() == Error::Generic)
 					return sh.exitstatus;
 				return r;
 			}
 			status = *r;
-		} catch (const shell::ParseError &e) {
+		} catch (const ParseError &e) {
 			report_parse_error(sh, e);
 			return sh.exitstatus;
 		}
@@ -104,8 +113,8 @@ cmdloop(Context &sh)
  * Top-level interactive parse/eval loop: prompting, ignoreeof, and
  * recovering from parse errors at the prompt.
  */
-shell::Result<int>
-shell::Context::run_interactive()
+Result<int>
+Context::run_interactive()
 {
 	Context &sh = *this;
 	int status = 0;
@@ -137,7 +146,7 @@ shell::Context::run_interactive()
 
 				if (!r) {
 					sh.exception = r.error();
-					if (r.error() == shell::Error::Generic) {
+					if (r.error() == Error::Generic) {
 						skip = sh.evalskip;
 						if (skip) {
 							sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
@@ -150,7 +159,7 @@ shell::Context::run_interactive()
 				if (n)
 					status = *r;
 			}
-		} catch (const shell::ParseError &e) {
+		} catch (const ParseError &e) {
 			report_parse_error(sh, e);
 			skip = sh.evalskip;
 			if (skip) {
@@ -173,7 +182,7 @@ shell::Context::run_interactive()
 /*
  * Read a file containing shell functions / commands.
  */
-shell::Result<void>
+Result<void>
 readcmdfile(Context &sh, std::string_view name)
 {
 	TRY_SHV(setinputfile(sh, name, INPUT_PUSH_FILE));
@@ -188,7 +197,8 @@ readcmdfile(Context &sh, std::string_view name)
  * Take commands from a file.  To be compatible we should do a path
  * search for the file, which is necessary to find sub-commands.
  */
-static shell::Result<std::string>
+namespace {
+Result<std::string>
 find_dot_file(Context &sh, char *basename)
 {
 	const char *path = pathval(sh);
@@ -209,8 +219,10 @@ find_dot_file(Context &sh, char *basename)
 	/* not found in the PATH */
 	return sh_error(sh, "{}: not found", basename);
 }
+} // namespace
 
-shell::Result<int>
+
+Result<int>
 dotcmd(Context &sh, int argc, char **argv)
 {
 	int status = 0;
@@ -235,11 +247,13 @@ dotcmd(Context &sh, int argc, char **argv)
 	return status;
 }
 
-shell::Result<int>
+Result<int>
 exitcmd(Context &sh, int argc, char **argv)
 {
 	if (argc > 1)
 		sh.savestatus = TRY_SH(number(sh, argv[1]));
 
-	return exraise(sh, shell::Error::Exit);
+	return exraise(sh, Error::Exit);
 }
+
+} // namespace shell

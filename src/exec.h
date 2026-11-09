@@ -41,12 +41,22 @@
 
 #include "nodes.h"
 
-using cmdparam = shell::CommandParam;
-using tblentry = shell::TableEntry;
+
+
+struct stat64;
+
+/* action to find_command() */
+#define DO_ERR		0x01	/* prints errors */
+#define DO_ABS		0x02	/* checks absolute paths */
+#define DO_NOFUNC	0x04	/* don't return shell functions, for command */
+#define DO_ALTPATH	0x08	/* using alternate path */
+#define DO_REGBLTIN	0x10	/* regular built-ins and functions only */
+
+namespace shell {
 
 struct cmdentry {
-	shell::TableEntry::Type type = shell::TableEntry::Type::Unknown;
-	cmdparam u;
+	TableEntry::Type type = TableEntry::Type::Unknown;
+	CommandParam u;
 };
 
 
@@ -57,30 +67,29 @@ struct cmdentry {
 #define DO_ALTPATH	0x08	/* using alternate path */
 #define DO_REGBLTIN	0x10	/* regular built-ins and functions only */
 
-using Context = shell::Context;
-using Node = shell::Node;
 
 extern const char *pathopt;	/* set by padvance */
 
-struct stat64;
 
 void shellexec(Context &, char **, const char *, int);
 int padvance_magic(Context &sh, const char **path, const char *name,
 		   int magic, std::string &out);
-shell::Result<void> find_command(Context &, char *, struct cmdentry *, int, const char *);
+Result<void> find_command(Context &, char *, struct cmdentry *, int, const char *);
 void hashcd(Context &);
 void changepath(Context &, std::string_view);
 void defun(Context &, const DefunNode *);
 void unsetfunc(Context &, std::string_view);
-shell::Result<int> hashcmd(Context &sh, int, char **);
-shell::Result<int> typecmd(Context &sh, int, char **);
-shell::Result<int> commandcmd(Context &sh, int, char **);
+Result<int> hashcmd(Context &sh, int, char **);
+Result<int> typecmd(Context &sh, int, char **);
+Result<int> commandcmd(Context &sh, int, char **);
 
 int test_file_access(Context &sh, const char *path, int mode);
-int test_access(const struct stat64 *sp, int stmode);
+int test_access(const struct ::stat64 *sp, int stmode);
 
 inline int padvance(Context &sh, const char **path, const char *name,
 		    std::string &out)
 {
 	return padvance_magic(sh, path, name, 1, out);
 }
+
+} // namespace shell

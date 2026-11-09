@@ -4,6 +4,12 @@
 #include "parser.h"
 #include "syntax.h"
 
+
+using namespace shell;
+
+
+namespace shell {
+
 namespace {
 
 /* Character-class bitflags (only used while building is_type). */
@@ -109,3 +115,5 @@ const std::array<char, syn_table_size> dqsyntax = make_dqsyntax();
 const std::array<char, syn_table_size> sqsyntax = make_sqsyntax();
 const std::array<char, syn_table_size> arisyntax = make_arisyntax();
 const std::array<char, syn_table_size> is_type = make_is_type();
+
+} // namespace shell

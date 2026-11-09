@@ -40,6 +40,11 @@
 #include <string>
 #include <string_view>
 
+#include "error.h"
+
+
+namespace shell {
+
 #ifdef HAVE_FNMATCH
 #define FNMATCH_IS_ENABLED 1
 #ifdef HAVE_GLOB
@@ -57,16 +62,15 @@ extern const char dolatstr[];
 extern const char cqchars[];
 #define qchars (cqchars + 1)
 
-#include "error.h"
 
-namespace shell { struct Context; }
-using Context = shell::Context;
 char *prefix(const char *, const char *);
-tl::unexpected<shell::Error> badnum(Context &sh, std::string_view s);
-shell::Result<intmax_t> atomax(Context &sh, std::string_view, int);
-shell::Result<intmax_t> atomax10(Context &sh, std::string_view);
-shell::Result<int> number(Context &sh, std::string_view);
+tl::unexpected<Error> badnum(Context &sh, std::string_view s);
+Result<intmax_t> atomax(Context &sh, std::string_view, int);
+Result<intmax_t> atomax10(Context &sh, std::string_view);
+Result<int> number(Context &sh, std::string_view);
 bool is_number(std::string_view);
 std::string single_quote(std::string_view);
 int pstrcmp(const void *, const void *);
 std::string ascii_upper(std::string_view);
+
+} // namespace shell

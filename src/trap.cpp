@@ -61,13 +61,22 @@
 #define S_HARD_IGN 4		/* signal is ignored permenantly */
 #define S_RESET 5		/* temporary - to reset a hard ignored sig */
 
-static void signal_entry(int signo)
+
+using namespace shell;
+
+
+namespace shell {
+
+namespace {
+void signal_entry(int signo)
 {
 	if (Context::signaled)
 		onsig(*Context::signaled, signo);
 }
 
-static int decode_signum(Context &sh, std::string_view);
+int decode_signum(Context &sh, std::string_view);
+} // namespace
+
 
 void
 init_traps(Context &sh)
@@ -76,7 +85,7 @@ init_traps(Context &sh)
 	setsignal(sh, SIGCHLD);
 }
 
-shell::Result<int>
+Result<int>
 trapcmd(Context &sh, int argc, char **argv)
 {
 	const char *action;
@@ -133,7 +142,7 @@ trapcmd(Context &sh, int argc, char **argv)
 	return EXIT_SUCCESS;
 }
 
-shell::Result<void>
+Result<void>
 clear_traps(Context &sh, const Node *n)
 {
 	const auto simplecmd = issimplecmd(n, builtin_trap.name);
@@ -259,7 +268,7 @@ onsig(Context &sh, int signo)
 	}
 }
 
-shell::Result<void>
+Result<void>
 dotrap(Context &sh)
 {
 	char *q;
@@ -325,7 +334,8 @@ exitshell(Context &sh)
 	/* NOTREACHED */
 }
 
-static int
+namespace {
+int
 decode_signum(Context &sh, std::string_view string)
 {
 	int signo = -1;
@@ -340,6 +350,8 @@ decode_signum(Context &sh, std::string_view string)
 
 	return signo;
 }
+} // namespace
+
 
 int
 decode_signal(Context &sh, std::string_view string, int minsig)
@@ -360,3 +372,5 @@ sigblockall(Context &sh, sigset_t *oldmask)
 	sigfillset(&mask);
 	sigprocmask(SIG_SETMASK, &mask, oldmask);
 }
+
+} // namespace shell

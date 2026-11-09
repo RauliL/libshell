@@ -67,7 +67,16 @@
 #include "parser.h"
 #include "system.h"
 
-static int varcmp(std::string_view p, std::string_view q);
+
+using namespace shell;
+
+
+namespace shell {
+
+namespace {
+int varcmp(std::string_view p, std::string_view q);
+} // namespace
+
 
 const char defpathvar[] =
 	"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
@@ -95,14 +104,20 @@ changelocale(Context &, std::string_view val)
 	setlocale(LC_ALL, "");
 }
 
-static shell::Variable *findvar(const Context &sh, std::string_view name);
+namespace {
+Variable *findvar(const Context &sh, std::string_view name);
+} // namespace
+
 
 /* Name part of "name" or "name=value". */
-static std::string_view
+namespace {
+std::string_view
 varname(std::string_view s)
 {
 	return s.substr(0, s.find('='));
 }
+} // namespace
+
 
 /*
  * Initialize the varable symbol tables and import the environment
@@ -119,7 +134,7 @@ init_shell_vars(Context &sh)
 		std::string_view ev(*envp);
 		auto n = endofname(ev);
 		if (n > 0 && n < ev.size() && ev[n] == '=') {
-			setvareq(sh, *envp, shell::Variable::Flag::Exported);
+			setvareq(sh, *envp, Variable::Flag::Exported);
 		}
 	}
 
@@ -138,7 +153,8 @@ init_shell_vars(Context &sh)
 	setpwd(sh, pwd, 0);
 }
 
-static inline std::string_view
+namespace {
+inline std::string_view
 varvalue(std::string_view s)
 {
 	const auto pos = s.find('=');
@@ -149,17 +165,19 @@ varvalue(std::string_view s)
 	return s.substr(pos + 1);
 }
 
-static void
-varfunc(Context &sh, shell::Variable *vp)
+void
+varfunc(Context &sh, Variable *vp)
 {
 	if (!vp->func)
 		return;
 
 	std::string_view s = vp->text;
-	if (!vp->flags.test(shell::Variable::Flag::Full))
+	if (!vp->flags.test(Variable::Flag::Full))
 		s = varvalue(vp->text);
 	vp->func(sh, s);
 }
+} // namespace
+
 
 /*
  * Seed permanent builtin variables.  Called when the shell is initialized.
@@ -169,13 +187,13 @@ void
 initvar(Context &sh)
 {
 	auto add = [&](
-		const shell::Variable::Flags &flags,
+		const Variable::Flags &flags,
 		const char *text,
-		shell::Variable::callback_type func
+		Variable::callback_type func
 	) {
 		std::string nameeq(text);
 		std::string name(varname(nameeq));
-		shell::Variable v;
+		Variable v;
 
 		v.flags = flags;
 		v.text = std::move(nameeq);
@@ -183,24 +201,24 @@ initvar(Context &sh)
 		sh.variables.emplace(std::move(name), std::move(v));
 	};
 
-	add(shell::Variable::Flag::StrFixed, "IFS= \t\n", changeifs);
-	add(shell::Variable::Flag::StrFixed, defpathvar, changepath);
-	add(shell::Variable::Flag::StrFixed, "PS1=$ ", nullptr);
-	add(shell::Variable::Flag::StrFixed, "PS2=> ", nullptr);
-	add(shell::Variable::Flag::StrFixed, "PS4=+ ", nullptr);
-	add(shell::Variable::Flag::StrFixed | shell::Variable::Flag::NoFunc, "OPTIND=1", getoptsreset);
+	add(Variable::Flag::StrFixed, "IFS= \t\n", changeifs);
+	add(Variable::Flag::StrFixed, defpathvar, changepath);
+	add(Variable::Flag::StrFixed, "PS1=$ ", nullptr);
+	add(Variable::Flag::StrFixed, "PS2=> ", nullptr);
+	add(Variable::Flag::StrFixed, "PS4=+ ", nullptr);
+	add(Variable::Flag::StrFixed | Variable::Flag::NoFunc, "OPTIND=1", getoptsreset);
 #ifdef WITH_LINENO
-	add(shell::Variable::Flag::StrFixed, "LINENO=", nullptr);
+	add(Variable::Flag::StrFixed, "LINENO=", nullptr);
 #endif
-	add(shell::Variable::Flag::StrFixed | shell::Variable::Flag::Full | shell::Variable::Flag::Unset, "LC_ALL=",
+	add(Variable::Flag::StrFixed | Variable::Flag::Full | Variable::Flag::Unset, "LC_ALL=",
 	    changelocale);
-	add(shell::Variable::Flag::StrFixed | shell::Variable::Flag::Full | shell::Variable::Flag::Unset, "LC_COLLATE=",
+	add(Variable::Flag::StrFixed | Variable::Flag::Full | Variable::Flag::Unset, "LC_COLLATE=",
 	    changelocale);
-	add(shell::Variable::Flag::StrFixed | shell::Variable::Flag::Full | shell::Variable::Flag::Unset, "LC_CTYPE=",
+	add(Variable::Flag::StrFixed | Variable::Flag::Full | Variable::Flag::Unset, "LC_CTYPE=",
 	    changelocale);
-	add(shell::Variable::Flag::StrFixed | shell::Variable::Flag::Full | shell::Variable::Flag::Unset, "LC_NUMERIC=",
+	add(Variable::Flag::StrFixed | Variable::Flag::Full | Variable::Flag::Unset, "LC_NUMERIC=",
 	    changelocale);
-	add(shell::Variable::Flag::StrFixed | shell::Variable::Flag::Full | shell::Variable::Flag::Unset, "LANG=",
+	add(Variable::Flag::StrFixed | Variable::Flag::Full | Variable::Flag::Unset, "LANG=",
 	    changelocale);
 
 	/*
@@ -210,16 +228,16 @@ initvar(Context &sh)
 		sh.variables.at("PS1").text = "PS1=# ";
 }
 
-shell::Result<shell::Variable *>
+Result<Variable *>
 setvar(
 	Context &sh,
 	const std::string &name,
 	const std::optional<std::string> &val,
-	shell::Variable::Flags flags
+	Variable::Flags flags
 )
 {
 	const auto namelen = endofname(name);
-	shell::Variable *variable;
+	Variable *variable;
 
 	if (!namelen || (namelen < name.size() && name[namelen] != '='))
 		return sh_error(
@@ -229,7 +247,7 @@ setvar(
 		);
 
 	if (!val)
-		flags |= shell::Variable::Flag::Unset;
+		flags |= Variable::Flag::Unset;
 
 	/* Always store name=value (empty value when unset). */
 	std::string nameeq;
@@ -246,22 +264,22 @@ setvar(
 	return variable;
 }
 
-shell::Result<void>
+Result<void>
 Context::set_var(
 	std::string_view name,
 	const std::optional<std::string> &value,
-	const shell::Variable::Flags &flags
+	const Variable::Flags &flags
 )
 {
 	TRY_SHV(setvar(*this, std::string(name), value, flags));
 	return {};
 }
 
-shell::Result<std::intmax_t>
+Result<std::intmax_t>
 Context::set_int_var(
 	std::string_view name,
 	std::intmax_t value,
-	const shell::Variable::Flags &flags
+	const Variable::Flags &flags
 )
 {
 	TRY_SHV(set_var(name, std::format("{}", value), flags));
@@ -275,34 +293,34 @@ Context::set_int_var(
  * Called with interrupts off.
  */
 
-shell::Result<shell::Variable *>
-setvareq(Context &sh, std::string s, shell::Variable::Flags flags)
+Result<Variable *>
+setvareq(Context &sh, std::string s, Variable::Flags flags)
 {
-	static const shell::Variable::Flags special =
-		shell::Variable::Flag::Exported |
-		shell::Variable::Flag::ReadOnly |
-		shell::Variable::Flag::StrFixed |
-		shell::Variable::Flag::Unset;
+	static const Variable::Flags special =
+		Variable::Flag::Exported |
+		Variable::Flag::ReadOnly |
+		Variable::Flag::StrFixed |
+		Variable::Flag::Unset;
 
 	if (sh.opts.allexport())
-		flags |= shell::Variable::Flag::Exported;
+		flags |= Variable::Flag::Exported;
 
 	std::string name(varname(s));
 	auto it = sh.variables.find(name);
-	shell::Variable *vp = nullptr;
+	Variable *vp = nullptr;
 
 	if (it != std::end(sh.variables)) {
-		shell::Variable::Flags keep;
+		Variable::Flags keep;
 
 		vp = &it->second;
-		if (vp->flags.test(shell::Variable::Flag::ReadOnly)) {
+		if (vp->flags.test(Variable::Flag::ReadOnly)) {
 			return sh_error(sh, "{}: is read only", std::string_view(name));
 		}
 
-		if ((flags & special) != shell::Variable::Flag::Unset)
-			keep = ~shell::Variable::Flag::Unset;
-		else if (vp->flags.test(shell::Variable::Flag::StrFixed))
-			keep = shell::Variable::Flag::StrFixed;
+		if ((flags & special) != Variable::Flag::Unset)
+			keep = ~Variable::Flag::Unset;
+		else if (vp->flags.test(Variable::Flag::StrFixed))
+			keep = Variable::Flag::StrFixed;
 		else {
 			sh.variables.erase(it);
 
@@ -313,9 +331,9 @@ setvareq(Context &sh, std::string s, shell::Variable::Flags flags)
 		vp->text = std::move(s);
 		vp->flags = flags;
 	} else {
-		if ((flags & special) == shell::Variable::Flag::Unset)
+		if ((flags & special) == Variable::Flag::Unset)
 			return nullptr;
-		shell::Variable v;
+		Variable v;
 		v.text = std::move(s);
 		v.flags = flags;
 		auto [placed, inserted] = sh.variables.emplace(std::move(name), std::move(v));
@@ -323,7 +341,7 @@ setvareq(Context &sh, std::string s, shell::Variable::Flags flags)
 		vp = &placed->second;
 	}
 
-	if (!flags.test(shell::Variable::Flag::NoFunc))
+	if (!flags.test(Variable::Flag::NoFunc))
 		varfunc(sh, vp);
 
 	return vp;
@@ -334,7 +352,7 @@ Context::get_var(std::string_view name) const
 {
 	const auto variable = findvar(*this, name);
 
-	if (variable && !variable->flags.test(shell::Variable::Flag::Unset)) {
+	if (variable && !variable->flags.test(Variable::Flag::Unset)) {
 #ifdef WITH_LINENO
 		if (name == "LINENO")
 			variable->text = std::format("LINENO={}", lineno);
@@ -346,7 +364,7 @@ Context::get_var(std::string_view name) const
 	return std::nullopt;
 }
 
-shell::Result<std::intmax_t>
+Result<std::intmax_t>
 Context::get_int_var(std::string_view name) const
 {
 	const auto value = get_var(name);
@@ -360,9 +378,9 @@ Context::get_int_var(std::string_view name) const
  */
 
 std::vector<std::string_view>
-listvars(Context &sh, const shell::Variable::Flags &on, const shell::Variable::Flags &off)
+listvars(Context &sh, const Variable::Flags &on, const Variable::Flags &off)
 {
-	shell::Variable::Flags mask = on | off;
+	Variable::Flags mask = on | off;
 	std::vector<std::string_view> list;
 
 	for (auto &[name, vp] : sh.variables) {
@@ -377,7 +395,7 @@ listvars(Context &sh, const shell::Variable::Flags &on, const shell::Variable::F
 std::vector<char *>
 environment(Context &sh)
 {
-	auto views = listvars(sh, shell::Variable::Flag::Exported, shell::Variable::Flag::Unset);
+	auto views = listvars(sh, Variable::Flag::Exported, Variable::Flag::Unset);
 	std::vector<char *> env;
 
 	env.reserve(views.size() + 1);
@@ -395,8 +413,8 @@ environment(Context &sh)
  * variables in lexicographic order - by the locale's collating order (sigh).
  */
 
-shell::Result<int>
-showvars(Context &sh, std::string_view prefix, const shell::Variable::Flags &on, const shell::Variable::Flags &off)
+Result<int>
+showvars(Context &sh, std::string_view prefix, const Variable::Flags &on, const Variable::Flags &off)
 {
 	auto list = listvars(sh, on, off);
 	std::string prefix_str(prefix);
@@ -430,13 +448,13 @@ showvars(Context &sh, std::string_view prefix, const shell::Variable::Flags &on,
  * The export and readonly commands.
  */
 
-shell::Result<int>
+Result<int>
 exportcmd(Context &sh, int argc, char **argv)
 {
 	char *name;
 	const char *p;
 	char **aptr;
-	shell::Variable::Flags flag = argv[0][0] == 'r' ? shell::Variable::Flag::ReadOnly : shell::Variable::Flag::Exported;
+	Variable::Flags flag = argv[0][0] == 'r' ? Variable::Flag::ReadOnly : Variable::Flag::Exported;
 	int notp;
 
 	notp = TRY_SH(nextopt(sh, "p")) - 'p';
@@ -463,7 +481,7 @@ exportcmd(Context &sh, int argc, char **argv)
  * The "local" command.
  */
 
-shell::Result<int>
+Result<int>
 localcmd(Context &sh, int argc, char **argv)
 {
 	char *name;
@@ -486,11 +504,11 @@ localcmd(Context &sh, int argc, char **argv)
  * "-" as a special case.
  */
 
-shell::Result<void>
-mklocal(Context &sh, std::string_view name, const shell::Variable::Flags &flags)
+Result<void>
+mklocal(Context &sh, std::string_view name, const Variable::Flags &flags)
 {
-	shell::LocalVariable lv;
-	shell::Variable *vp;
+	LocalVariable lv;
+	Variable *vp;
 
 	INTOFF(sh);
 	if (name == "-") {
@@ -502,15 +520,15 @@ mklocal(Context &sh, std::string_view name, const shell::Variable::Flags &flags)
 		if (!(vp = findvar(sh, name))) {
 			if (eq != std::string_view::npos)
 				vp = TRY_SH(setvareq(sh, std::string(name),
-						     shell::Variable::Flag::StrFixed | flags));
+						     Variable::Flag::StrFixed | flags));
 			else
 				vp = TRY_SH(setvar(sh, std::string(name), std::nullopt,
-						   shell::Variable::Flag::StrFixed | flags));
-			lv.flags = shell::Variable::Flag::Unset;
+						   Variable::Flag::StrFixed | flags));
+			lv.flags = Variable::Flag::Unset;
 		} else {
 			lv.text = vp->text;
 			lv.flags = vp->flags;
-			vp->flags |= shell::Variable::Flag::StrFixed;
+			vp->flags |= Variable::Flag::StrFixed;
 			if (eq != std::string_view::npos)
 				TRY_SHV(setvareq(sh, std::string(name), flags));
 		}
@@ -528,12 +546,13 @@ mklocal(Context &sh, std::string_view name, const shell::Variable::Flags &flags)
  * Interrupts must be off.
  */
 
-static shell::Result<void>
+namespace {
+Result<void>
 poplocalvars(Context &sh)
 {
 	INTOFF(sh);
 
-	shell::Frame frame = std::move(sh.stack.back());
+	Frame frame = std::move(sh.stack.back());
 	sh.stack.pop_back();
 
 	for (auto it = frame.variables.rbegin(); it != frame.variables.rend(); ++it) {
@@ -543,13 +562,13 @@ poplocalvars(Context &sh)
 			std::memcpy(sh.opts.list.data(), it->text.data(),
 				    sh.opts.list.size());
 			optschanged(sh);
-		} else if (it->flags == shell::Variable::Flag::Unset) {
-			vp->flags &= ~(shell::Variable::Flag::StrFixed | shell::Variable::Flag::ReadOnly);
+		} else if (it->flags == Variable::Flag::Unset) {
+			vp->flags &= ~(Variable::Flag::StrFixed | Variable::Flag::ReadOnly);
 			unsetvar(sh, vp->text);
 		} else {
 			vp->flags = it->flags;
 			vp->text = std::move(it->text);
-			if (!vp->flags.test(shell::Variable::Flag::NoFunc))
+			if (!vp->flags.test(Variable::Flag::NoFunc))
 				varfunc(sh, vp);
 		}
 	}
@@ -558,12 +577,14 @@ poplocalvars(Context &sh)
 
 	return {};
 }
+} // namespace
+
 
 
 /*
  * Create a new localvar environment.
  */
-shell::Result<std::size_t>
+Result<std::size_t>
 pushlocalvars(Context &sh, int push)
 {
 	const auto stop = sh.stack.size();
@@ -579,7 +600,7 @@ pushlocalvars(Context &sh, int push)
 }
 
 
-shell::Result<void>
+Result<void>
 unwindlocalvars(Context &sh, std::size_t stop)
 {
 	while (sh.stack.size() > stop)
@@ -594,7 +615,7 @@ unwindlocalvars(Context &sh, std::size_t stop)
  * with the same name.
  */
 
-shell::Result<int>
+Result<int>
 unsetcmd(Context &sh, int argc, char **argv)
 {
 	char **ap;
@@ -621,7 +642,7 @@ unsetcmd(Context &sh, int argc, char **argv)
  * Unset the specified variable.
  */
 
-shell::Result<void>
+Result<void>
 unsetvar(Context &sh, const std::string &s)
 {
 	TRY_SHV(setvar(sh, s, std::nullopt));
@@ -634,7 +655,8 @@ unsetvar(Context &sh, const std::string &s)
  * Compares two strings up to the first = or end.  Either side may use
  * '=' as the name terminator.
  */
-static int
+namespace {
+int
 varcmp(std::string_view p, std::string_view q)
 {
 	auto at = [](std::string_view s, std::size_t i, bool map_eq) {
@@ -666,12 +688,15 @@ varcmp(std::string_view p, std::string_view q)
 	return c - d;
 }
 
-static shell::Variable *
+Variable *
 findvar(const Context &sh, std::string_view name)
 {
 	auto it = sh.variables.find(std::string(varname(name)));
 
 	return it != std::end(sh.variables)
-		? const_cast<shell::Variable *>(&it->second)
+		? const_cast<Variable *>(&it->second)
 		: nullptr;
 }
+} // namespace
+
+} // namespace shell

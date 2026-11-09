@@ -8,7 +8,13 @@
 #include "system.h"
 #include "bltin.h"
 
-shell::Result<int>
+
+using namespace shell;
+
+
+namespace shell {
+
+Result<int>
 timescmd(Context &sh, int argc, char *argv[])
 {
 	struct tms buf;
@@ -38,3 +44,5 @@ timescmd(Context &sh, int argc, char *argv[])
 	       mcutime, cutime, mcstime, cstime);
 	return 0;
 }
+
+} // namespace shell

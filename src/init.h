@@ -37,9 +37,13 @@
 
 #include <libshell.hpp>
 
-using Context = shell::Context;
+
+namespace shell {
+
 void init(Context &sh);
 void exitreset(Context &sh);
-void forkreset(Context &sh, const shell::Node *);
+void forkreset(Context &sh, const Node *);
 void postexitreset(Context &sh);
 void reset(Context &sh);
+
+} // namespace shell

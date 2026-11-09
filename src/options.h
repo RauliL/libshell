@@ -45,24 +45,24 @@
 
 #include "error.h"
 
-using shparam = shell::ShellParam;
-using ShellOptions = shell::ShellOptions;
-using NextOptState = shell::NextOptState;
 
-#define NOPTS shell::option_count
 
-using ProcArgsResult = shell::ProcArgsResult;
+namespace shell {
+
+#define NOPTS option_count
 
 extern const char optletters[NOPTS];
 
-using Context = shell::Context;
-shell::Result<ProcArgsResult> procargs(Context &sh, char **);
+Result<ProcArgsResult> procargs(Context &sh, char **);
 void optschanged(Context &sh);
 void setparam(Context &sh, char **);
-void freeparam(Context &sh, shparam *);
-shell::Result<int> shiftcmd(Context &sh, int, char **);
-shell::Result<int> setcmd(Context &sh, int, char **);
-shell::Result<int> getoptscmd(Context &sh, int, char **);
-shell::Result<int> nextopt(Context &sh, std::string_view);
+void freeparam(Context &sh, ShellParam *);
+Result<int> shiftcmd(Context &sh, int, char **);
+Result<int> setcmd(Context &sh, int, char **);
+Result<int> getoptscmd(Context &sh, int, char **);
+Result<int> nextopt(Context &sh, std::string_view);
 void getoptsreset(Context &sh, std::string_view);
+
+} // namespace shell
+
 #endif

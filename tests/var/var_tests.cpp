@@ -6,6 +6,8 @@
 
 #include "shell_context.h"
 
+
+using namespace shell;
 namespace {
 
 struct VarFixture {
@@ -86,7 +88,7 @@ TEST_CASE_METHOD(VarFixture, "var: bad names are rejected", "[var]")
 
 TEST_CASE_METHOD(VarFixture, "var: readonly cannot be modified or removed", "[var]")
 {
-	using Flag = shell::Variable::Flag;
+	using Flag = Variable::Flag;
 
 	REQUIRE(sh.set_var("RO", "once", Flag::ReadOnly));
 	CHECK(sh.get_var("RO") == "once");
@@ -100,7 +102,7 @@ TEST_CASE_METHOD(VarFixture, "var: readonly cannot be modified or removed", "[va
 
 TEST_CASE_METHOD(VarFixture, "var: export flag is retained on the map entry", "[var]")
 {
-	using Flag = shell::Variable::Flag;
+	using Flag = Variable::Flag;
 
 	REQUIRE(sh.set_var("EXP", "yes", Flag::Exported));
 	auto it = sh.variables.find("EXP");
@@ -111,7 +113,7 @@ TEST_CASE_METHOD(VarFixture, "var: export flag is retained on the map entry", "[
 
 TEST_CASE_METHOD(VarFixture, "var: strfixed builtins stay mapped when unset", "[var]")
 {
-	using Flag = shell::Variable::Flag;
+	using Flag = Variable::Flag;
 
 	REQUIRE(sh.get_var("PATH"));
 	REQUIRE(sh.set_var("PATH", std::nullopt));

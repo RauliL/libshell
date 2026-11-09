@@ -14,6 +14,9 @@
 #include <cctype>
 #include <cstddef>
 
+
+namespace shell {
+
 #ifdef CEOF
 #undef CEOF
 #endif
@@ -93,3 +96,5 @@ constexpr int digit_val(int c)
 {
 	return c - '0';
 }
+
+} // namespace shell

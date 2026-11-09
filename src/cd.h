@@ -39,10 +39,13 @@
 
 #include "error.h"
 
-using Context = shell::Context;
-using CdState = shell::CdState;
 
-shell::Result<int> cdcmd(Context &sh, int, char **);
-shell::Result<int> pwdcmd(Context &sh, int, char **);
-shell::Result<void> setpwd(Context &sh, std::optional<std::string_view> val,
+
+namespace shell {
+
+Result<int> cdcmd(Context &sh, int, char **);
+Result<int> pwdcmd(Context &sh, int, char **);
+Result<void> setpwd(Context &sh, std::optional<std::string_view> val,
 			       int setold, bool refresh_phys = false);
+
+} // namespace shell

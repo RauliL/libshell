@@ -40,28 +40,28 @@
 
 #include <libshell.hpp>
 
-struct backcmd {		/* result of evalbackcmd */
-	int fd = -1;		/* file descriptor to read from */
-	std::string buf;	/* buffer */
-	shell::Job *jp = nullptr;	/* job structure for command */
-};
-
 #include <bitset>
 #include <cstddef>
 #include <type_traits>
-
 #include "error.h"
 
-using Context = shell::Context;
-using EvalFlag = shell::EvalFlag;
-using EvalFlags = shell::EvalFlags;
-using EvalSkip = shell::EvalSkip;
-using EvalSkipFlags = shell::EvalSkipFlags;
-using Node = shell::Node;
 
-shell::Result<int> evaltree(Context &sh, Node *, EvalFlags);
-shell::Result<void> evalbackcmd(Context &sh, Node *, struct backcmd *);
+namespace shell {
+
+struct backcmd {		/* result of evalbackcmd */
+	int fd = -1;		/* file descriptor to read from */
+	std::string buf;	/* buffer */
+	Job *jp = nullptr;	/* job structure for command */
+};
+
+
+
+
+Result<int> evaltree(Context &sh, Node *, EvalFlags);
+Result<void> evalbackcmd(Context &sh, Node *, struct backcmd *);
 /** Clear eval skip/loop state and close the temporary pipe on unwind. */
 void eval_exitreset(Context &sh);
+
+} // namespace shell
 
 #endif

@@ -39,6 +39,12 @@
 	operand ::= <any legal UNIX file name>
 */
 
+
+using namespace shell;
+
+
+namespace shell {
+
 enum token : int {
 	EOI,
 	FILRD,
@@ -101,7 +107,8 @@ struct TestState {
 	const t_op *wp_op = nullptr;
 };
 
-static const struct t_op ops[] = {
+namespace {
+const struct t_op ops[] = {
 	{"-r",	FILRD,	UNOP},
 	{"-w",	FILWR,	UNOP},
 	{"-x",	FILEX,	UNOP},
@@ -147,40 +154,49 @@ static const struct t_op ops[] = {
 
 
 
-static tl::unexpected<shell::Error> syntax(Context &sh, const char *,
+tl::unexpected<Error> syntax(Context &sh, const char *,
 					  const char *);
-static shell::Result<int> oexpr(Context &sh, TestState &, enum token);
-static shell::Result<int> aexpr(Context &sh, TestState &, enum token);
-static shell::Result<int> nexpr(Context &sh, TestState &, enum token);
-static shell::Result<int> primary(Context &sh, TestState &, enum token);
-static shell::Result<int> binop(Context &sh, TestState &);
-static int filstat(char *, enum token);
-static enum token t_lex(TestState &, char **);
-static int isoperand(char **);
-static bool newerf(const char *, const char *);
-static bool olderf(const char *, const char *);
-static int equalf(const char *, const char *);
-static const t_op *getop(const char *s);
+Result<int> oexpr(Context &sh, TestState &, enum token);
+Result<int> aexpr(Context &sh, TestState &, enum token);
+Result<int> nexpr(Context &sh, TestState &, enum token);
+Result<int> primary(Context &sh, TestState &, enum token);
+Result<int> binop(Context &sh, TestState &);
+int filstat(char *, enum token);
+enum token t_lex(TestState &, char **);
+int isoperand(char **);
+bool newerf(const char *, const char *);
+bool olderf(const char *, const char *);
+int equalf(const char *, const char *);
+const t_op *getop(const char *s);
+} // namespace
+
 
 #ifdef HAVE_FACCESSAT
 # ifdef HAVE_TRADITIONAL_FACCESSAT
-static inline int
+namespace {
+inline int
 faccessat_confused_about_superuser(Context &sh)
 { return 1; }
+} // namespace
+
 # else
-static inline int
+namespace {
+inline int
 faccessat_confused_about_superuser(Context &sh)
 { return 0; }
+} // namespace
+
 # endif
 #endif
 
-static inline shell::Result<intmax_t>
+namespace {
+inline Result<intmax_t>
 getn(Context &sh, const char *s)
 {
 	return atomax10(sh, s);
 }
 
-static const t_op *
+const t_op *
 getop(const char *s)
 {
 	for (const t_op *op = ops; op->op_text; op++) {
@@ -190,8 +206,10 @@ getop(const char *s)
 
 	return nullptr;
 }
+} // namespace
 
-shell::Result<int>
+
+Result<int>
 testcmd(Context &sh, int argc, char **argv)
 {
 	const t_op *op;
@@ -249,7 +267,8 @@ eval:
 	return res;
 }
 
-static tl::unexpected<shell::Error>
+namespace {
+tl::unexpected<Error>
 syntax(Context &sh, const char *op, const char *msg)
 {
 	if (op && *op)
@@ -258,7 +277,7 @@ syntax(Context &sh, const char *op, const char *msg)
 		return error("{}", msg);
 }
 
-static shell::Result<int>
+Result<int>
 oexpr(Context &sh, TestState &st, enum token n)
 {
 	int res = 0;
@@ -275,7 +294,7 @@ oexpr(Context &sh, TestState &st, enum token n)
 	return res;
 }
 
-static shell::Result<int>
+Result<int>
 aexpr(Context &sh, TestState &st, enum token n)
 {
 	int res = 1;
@@ -293,7 +312,7 @@ aexpr(Context &sh, TestState &st, enum token n)
 	return res;
 }
 
-static shell::Result<int>
+Result<int>
 nexpr(Context &sh, TestState &st, enum token n)
 {
 	if (n != UNOT)
@@ -305,7 +324,7 @@ nexpr(Context &sh, TestState &st, enum token n)
 	return !TRY_SH(nexpr(sh, st, n));
 }
 
-static shell::Result<int>
+Result<int>
 primary(Context &sh, TestState &st, enum token n)
 {
 	enum token nn;
@@ -352,7 +371,7 @@ primary(Context &sh, TestState &st, enum token n)
 	return strlen(*st.wp) > 0;
 }
 
-static shell::Result<int>
+Result<int>
 binop(Context &sh, TestState &st)
 {
 	const char *opnd1, *opnd2;
@@ -396,7 +415,7 @@ binop(Context &sh, TestState &st)
 	}
 }
 
-static int
+int
 filstat(char *nm, enum token mode)
 {
 	struct stat64 s;
@@ -448,7 +467,7 @@ filstat(char *nm, enum token mode)
 	}
 }
 
-static enum token
+enum token
 t_lex(TestState &st, char **tp)
 {
 	char *s = *tp;
@@ -469,7 +488,7 @@ t_lex(TestState &st, char **tp)
 	return OPERAND;
 }
 
-static int
+int
 isoperand(char **tp)
 {
 	char *s;
@@ -483,7 +502,7 @@ isoperand(char **tp)
 	return op && op->op_type == BINOP;
 }
 
-static bool
+bool
 newerf(const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
@@ -502,7 +521,7 @@ newerf(const char *f1, const char *f2)
 #endif
 }
 
-static bool
+bool
 olderf(const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
@@ -521,7 +540,7 @@ olderf(const char *f1, const char *f2)
 #endif
 }
 
-static int
+int
 equalf(const char *f1, const char *f2)
 {
 	struct stat64 b1, b2;
@@ -531,9 +550,12 @@ equalf(const char *f1, const char *f2)
 		b1.st_dev == b2.st_dev &&
 		b1.st_ino == b2.st_ino);
 }
+} // namespace
+
 
 #ifdef HAVE_FACCESSAT
-static int
+namespace {
+int
 has_exec_bit_set(Context &sh, const char *path)
 {
 	struct stat64 st;
@@ -542,6 +564,8 @@ has_exec_bit_set(Context &sh, const char *path)
 		return 0;
 	return st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH);
 }
+} // namespace
+
 
 int
 test_file_access(Context &sh, const char *path, int mode)
@@ -714,3 +738,5 @@ int test_access(const struct stat64 *sp, int stmode)
 	return sp->st_mode & stmode;
 }
 #endif	/* HAVE_FACCESSAT */
+
+} // namespace shell

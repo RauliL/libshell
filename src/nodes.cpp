@@ -5,7 +5,14 @@
 
 #include "nodes.h"
 
-static std::vector<Node::ptr> clonelist(const std::vector<Node::ptr> &src)
+
+using namespace shell;
+
+
+namespace shell {
+
+namespace {
+std::vector<Node::ptr> clonelist(const std::vector<Node::ptr> &src)
 {
 	std::vector<Node::ptr> out;
 
@@ -15,6 +22,8 @@ static std::vector<Node::ptr> clonelist(const std::vector<Node::ptr> &src)
 
 	return out;
 }
+} // namespace
+
 
 CommandNode::~CommandNode() = default;
 
@@ -211,3 +220,5 @@ NotNode::clone() const
 
 	return c;
 }
+
+} // namespace shell

@@ -48,9 +48,16 @@
 #include "syntax.h"
 #include "var.h"
 
-static shell::Result<void> setalias(Context &sh, const char *, const char *);
 
-static shell::Result<void>
+using namespace shell;
+
+
+namespace shell {
+
+namespace {
+Result<void> setalias(Context &sh, const char *, const char *);
+
+Result<void>
 setalias(Context &sh, const char *name, const char *val)
 {
 	const char *p = name;
@@ -63,39 +70,44 @@ setalias(Context &sh, const char *name, const char *val)
 	size_t namelen = static_cast<size_t>(val - name - 1); /* bytes before '=' */
 	std::string key(name, namelen);
 
-	return with_interrupts_off(sh, [&]() -> shell::Result<void> {
+	return with_interrupts_off(sh, [&]() -> Result<void> {
 		auto &slot = sh.aliases[key];
 
 		if (!slot)
-			slot = std::make_shared<shell::Alias>();
+			slot = std::make_shared<Alias>();
 		slot->name = std::move(key);
 		slot->value = val;
 
 		return {};
 	});
 }
+} // namespace
 
-shell::Result<int>
+
+Result<int>
 unalias(Context &sh, std::string_view name)
 {
-	return with_interrupts_off(sh, [&]() -> shell::Result<int> {
+	return with_interrupts_off(sh, [&]() -> Result<int> {
 		const bool found = sh.aliases.erase(std::string(name)) != 0;
 
 		return found ? EXIT_SUCCESS : EXIT_FAILURE;
 	});
 }
 
-static shell::Result<void>
+namespace {
+Result<void>
 rmaliases(Context &sh)
 {
-	return with_interrupts_off(sh, [&]() -> shell::Result<void> {
+	return with_interrupts_off(sh, [&]() -> Result<void> {
 		sh.aliases.clear();
 
 		return {};
 	});
 }
+} // namespace
 
-std::shared_ptr<shell::Alias>
+
+std::shared_ptr<Alias>
 lookupalias(Context &sh, std::string_view name, bool check)
 {
 	auto it = sh.aliases.find(std::string(name));
@@ -106,7 +118,7 @@ lookupalias(Context &sh, std::string_view name, bool check)
 	return it->second;
 }
 
-shell::Result<int>
+Result<int>
 aliascmd(Context &sh, int argc, char **argv)
 {
 	char *n;
@@ -139,7 +151,7 @@ aliascmd(Context &sh, int argc, char **argv)
 	return ret;
 }
 
-shell::Result<int>
+Result<int>
 unaliascmd(Context &sh, int argc, char **argv)
 {
 	int i;
@@ -162,10 +174,12 @@ unaliascmd(Context &sh, int argc, char **argv)
 }
 
 void
-printalias(Context &sh, const shell::Alias &ap)
+printalias(Context &sh, const Alias &ap)
 {
 	sh.out1->write(
 		sh,
 		std::format("{}={}\n", ap.name, single_quote(ap.value))
 	);
 }
+
+} // namespace shell

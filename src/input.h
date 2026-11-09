@@ -48,8 +48,11 @@
 #include "alias.h"
 #include "error.h"
 
-#define PUNGETC_MAX shell::pungetc_max
-#define IBUFSIZ shell::ibufsiz
+
+namespace shell {
+
+#define PUNGETC_MAX pungetc_max
+#define IBUFSIZ ibufsiz
 
 /* PEOF (the end of file marker) is defined in syntax.h */
 #define PEOA ((PEOF) - 1)
@@ -59,17 +62,12 @@ enum {
 	INPUT_NOFILE_OK = 2,
 };
 
-using StringPush = shell::StringPush;
-using parsefile = shell::ParseFile;
-using stdin_state = shell::StdinState;
-using InputStack = shell::InputStack;
 
 /*
  * The input line number. Requires Context &sh in scope.
  */
 #define plinno (sh.input.linno())
 
-using Context = shell::Context;
 void input_init(Context &sh, InputStack &in);
 /** Drain the current line after an error/interrupt in an interactive shell. */
 void input_reset_interactive(Context &sh);
@@ -79,13 +77,13 @@ int pgetc(Context &sh, InputStack &in);
 int pgetc_eoa(Context &sh, InputStack &in);
 void pungetc(Context &sh, InputStack &in);
 void pungetn(InputStack &in, int);
-void pushstring(Context &sh, InputStack &in, char *, const std::shared_ptr<shell::Alias> & = nullptr);
-shell::Result<int> setinputfile(Context &sh, InputStack &in,
+void pushstring(Context &sh, InputStack &in, char *, const std::shared_ptr<Alias> & = nullptr);
+Result<int> setinputfile(Context &sh, InputStack &in,
 				    std::string_view, int);
 void setinputstring(Context &sh, InputStack &in, char *);
 void pushstdin(Context &sh, InputStack &in);
 void popfile(Context &sh, InputStack &in);
-void unwindfiles(Context &sh, InputStack &in, parsefile *stop);
+void unwindfiles(Context &sh, InputStack &in, ParseFile *stop);
 void popallfiles(Context &sh, InputStack &in);
 void flush_input(Context &sh, InputStack &in);
 void reset_input(Context &sh, InputStack &in);
@@ -96,11 +94,13 @@ int pgetc(Context &sh);
 int pgetc_eoa(Context &sh);
 void pungetc(Context &sh);
 void pungetn(Context &sh, int);
-void pushstring(Context &sh, char *, const std::shared_ptr<shell::Alias> & = nullptr);
-shell::Result<int> setinputfile(Context &sh, std::string_view, int);
+void pushstring(Context &sh, char *, const std::shared_ptr<Alias> & = nullptr);
+Result<int> setinputfile(Context &sh, std::string_view, int);
 void setinputstring(Context &sh, char *);
 void pushstdin(Context &sh);
 void popfile(Context &sh);
-void unwindfiles(Context &sh, parsefile *);
+void unwindfiles(Context &sh, ParseFile *);
 void flush_input(Context &sh);
 void reset_input(Context &sh);
+
+} // namespace shell

@@ -10,6 +10,9 @@
 #include "options.h"
 #include "trap.h"
 
+
+using namespace shell;
+
 namespace shell {
 
 Context::Context(SignalOwnership signals)
@@ -68,25 +71,25 @@ Context::parse_args(char **argv)
 Result<int>
 Context::cmdloop()
 {
-	return ::cmdloop(*this);
+	return shell::cmdloop(*this);
 }
 
 void
 Context::exit_reset()
 {
-	::exitreset(*this);
+	shell::exitreset(*this);
 }
 
 void
 Context::reset()
 {
-	::reset(*this);
+	shell::reset(*this);
 }
 
 void
 Context::exit_shell()
 {
-	::exitshell(*this);
+	shell::exitshell(*this);
 }
 
 Result<void>

@@ -8,7 +8,14 @@
 
 #include "memalloc.h"
 
-static rawmem
+
+using namespace shell;
+
+
+namespace shell {
+
+namespace {
+rawmem
 checknull(void *p)
 {
 	if (!p) {
@@ -19,9 +26,13 @@ checknull(void *p)
 
 	return {p};
 }
+} // namespace
+
 
 __attribute__((__noinline__)) rawmem
 ckmalloc(std::size_t nbytes)
 {
 	return checknull(std::malloc(nbytes));
 }
+
+} // namespace shell

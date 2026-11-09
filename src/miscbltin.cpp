@@ -64,6 +64,12 @@
 #include "trap.h"
 #include "var.h"
 
+
+using namespace shell;
+
+
+namespace shell {
+
 #undef rflag
 
 
@@ -76,7 +82,8 @@
  *  @param ap argument (variable) list
  *  @param len length of line including trailing '\0'
  */
-static shell::Result<void>
+namespace {
+Result<void>
 readcmd_handle_line(Context &sh, ExpandBuf &eb, char *s, int ac, char **ap)
 {
 	ArgList fields;
@@ -104,6 +111,8 @@ readcmd_handle_line(Context &sh, ExpandBuf &eb, char *s, int ac, char **ap)
 	} while (*++ap);
 	return {};
 }
+} // namespace
+
 
 /*
  * The read builtin.  The -e option causes backslashes to escape the
@@ -113,7 +122,7 @@ readcmd_handle_line(Context &sh, ExpandBuf &eb, char *s, int ac, char **ap)
  * This uses unbuffered input, which may be avoidable in some cases.
  */
 
-shell::Result<int>
+Result<int>
 readcmd(Context &sh, int argc, char **argv)
 {
 	char *prompt;
@@ -209,7 +218,7 @@ start:
  * Public domain.
  */
 
-shell::Result<int>
+Result<int>
 umaskcmd(Context &sh, int argc, char **argv)
 {
 	char *ap;
@@ -345,7 +354,8 @@ struct limits {
 	char	option;
 };
 
-static const struct limits limits[] = {
+namespace {
+const struct limits limit_table[] = {
 #ifdef RLIMIT_CPU
 	{ "time(seconds)",		RLIMIT_CPU,	   1, 't' },
 #endif
@@ -384,10 +394,13 @@ static const struct limits limits[] = {
 #endif
 	{ nullptr,			0,		   0,  '\0' }
 };
+} // namespace
+
 
 enum limtype : int { SOFT = 0x1, HARD = 0x2 };
 
-static void
+namespace {
+void
 printlim(Context &sh, enum limtype how, const struct rlimit *limit,
 		     const struct limits *l)
 {
@@ -404,8 +417,10 @@ printlim(Context &sh, enum limtype how, const struct rlimit *limit,
 		out1fmt(sh, "%" PRIdMAX "\n", static_cast<intmax_t>(val));
 	}
 }
+} // namespace
 
-shell::Result<int>
+
+Result<int>
 ulimitcmd(Context &sh, int argc, char **argv)
 {
 	int	c;
@@ -469,7 +484,7 @@ ulimitcmd(Context &sh, int argc, char **argv)
 			what = optc;
 		}
 
-	for (l = limits; l->option != what; l++)
+	for (l = limit_table; l->option != what; l++)
 		;
 
 	set = *sh.bopt.argptr ? 1 : 0;
@@ -495,7 +510,7 @@ ulimitcmd(Context &sh, int argc, char **argv)
 		}
 	}
 	if (all) {
-		for (l = limits; l->name; l++) {
+		for (l = limit_table; l->name; l++) {
 			getrlimit(l->cmd, &limit);
 			out1fmt(sh, "%-20s ", l->name);
 			printlim(sh, how, &limit, l);
@@ -517,3 +532,5 @@ ulimitcmd(Context &sh, int argc, char **argv)
 	return 0;
 }
 #endif
+
+} // namespace shell

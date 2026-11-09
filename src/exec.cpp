@@ -74,14 +74,23 @@
 		/* index in path of %builtin, or -1 */
 
 
-static void tryexec(Context &sh, char *, char **, char **);
-static void printentry(Context &sh, const std::string &, const tblentry &);
-static bool hash_affected(const tblentry &, int);
-static void clearcmdentry(Context &sh);
-static tblentry *cmdlookup(Context &sh, const char *, int);
-static void delete_cmd_entry(Context &sh, const char *);
-static void addcmdentry(Context &sh, const char *, const struct cmdentry *);
-static shell::Result<int> describe_command(Context &sh, shell::Output *, char *, const char *, int);
+
+using namespace shell;
+
+
+namespace shell {
+
+namespace {
+void tryexec(Context &sh, char *, char **, char **);
+void printentry(Context &sh, const std::string &, const TableEntry &);
+bool hash_affected(const TableEntry &, int);
+void clearcmdentry(Context &sh);
+TableEntry *cmdlookup(Context &sh, const char *, int);
+void delete_cmd_entry(Context &sh, const char *);
+void addcmdentry(Context &sh, const char *, const struct cmdentry *);
+Result<int> describe_command(Context &sh, Output *, char *, const char *, int);
+} // namespace
+
 
 
 /*
@@ -125,12 +134,13 @@ shellexec(Context &sh, char **argv, const char *path, int idx)
 		break;
 	}
 	sh.exitstatus = exerrno;
-	exerror(sh, shell::Error::End, "{}: {}", argv[0], errmsg(e, E_EXEC));
+	exerror(sh, Error::End, "{}: {}", argv[0], errmsg(e, E_EXEC));
 	/* NOTREACHED */
 }
 
 
-static void
+namespace {
+void
 tryexec(Context &sh, char *cmd, char **argv, char **envp)
 {
 	char *const path_bshell = _PATH_BSHELL;
@@ -150,7 +160,7 @@ repeat:
 	}
 }
 
-static const char *
+const char *
 legal_pathopt(Context &sh, const char *opt, const char *term, int magic)
 {
 	switch (magic) {
@@ -172,6 +182,8 @@ legal_pathopt(Context &sh, const char *opt, const char *term, int magic)
 
 	return opt;
 }
+} // namespace
+
 
 /*
  * Do a path search.  The variable path (passed by reference) should be
@@ -246,18 +258,21 @@ padvance_magic(Context &sh, const char **path, const char *name, int magic,
 /*
  * True for entries that a cd or a PATH change must invalidate.
  */
-static inline bool
-hash_affected(const tblentry &cmdp, int builtinloc)
+namespace {
+inline bool
+hash_affected(const TableEntry &cmdp, int builtinloc)
 {
-	return cmdp.type == shell::TableEntry::Type::Normal || (
-		cmdp.type == shell::TableEntry::Type::Builtin &&
-		!(cmdp.param.cmd->flags & shell::BuiltinCommand::Flag::Regular) &&
+	return cmdp.type == TableEntry::Type::Normal || (
+		cmdp.type == TableEntry::Type::Builtin &&
+		!(cmdp.param.cmd->flags & BuiltinCommand::Flag::Regular) &&
 		builtinloc > 0
 	);
 }
+} // namespace
 
 
-shell::Result<int>
+
+Result<int>
 hashcmd(Context &sh, int argc, char **argv)
 {
 	int c;
@@ -275,18 +290,18 @@ hashcmd(Context &sh, int argc, char **argv)
 
 	if (!*sh.bopt.argptr) {
 		for (const auto &cmd : sh.cmdtable) {
-			if (cmd.second.type == shell::TableEntry::Type::Normal)
+			if (cmd.second.type == TableEntry::Type::Normal)
 				printentry(sh, cmd.first, cmd.second);
 		}
 		return 0;
 	}
 	c = 0;
 	while ((name = *sh.bopt.argptr)) {
-		tblentry *cmdp = cmdlookup(sh, name, 0);
+		TableEntry *cmdp = cmdlookup(sh, name, 0);
 		if (cmdp && hash_affected(*cmdp, sh.builtinloc))
 			delete_cmd_entry(sh, name);
 		TRY_SHV(find_command(sh, name, &entry, DO_ERR, pathval(sh)));
-		if (entry.type == shell::TableEntry::Type::Unknown)
+		if (entry.type == TableEntry::Type::Unknown)
 			c = 1;
 		sh.bopt.argptr++;
 	}
@@ -294,8 +309,9 @@ hashcmd(Context &sh, int argc, char **argv)
 }
 
 
-static void
-printentry(Context &sh, const std::string &cmdname, const tblentry &cmdp)
+namespace {
+void
+printentry(Context &sh, const std::string &cmdname, const TableEntry &cmdp)
 {
 	int idx;
 	const char *path;
@@ -309,7 +325,7 @@ printentry(Context &sh, const std::string &cmdname, const tblentry &cmdp)
 	out1str(std::format("{}{}\n", name, cmdp.rehash ? "*" : ""));
 }
 
-static int
+int
 test_exec(Context &sh, const char *fullname, struct stat64 *statb)
 {
 	if (!S_ISREG(statb->st_mode))
@@ -326,23 +342,25 @@ test_exec(Context &sh, const char *fullname, struct stat64 *statb)
 
 	return 1;
 }
+} // namespace
+
 
 /*
  * Resolve a command name.  If you change this routine, you may have to
  * change the shellexec routine as well.
  */
 
-shell::Result<void>
+Result<void>
 find_command(Context &sh, char *name, struct cmdentry *entry, int act, const char *path)
 {
-	tblentry *cmdp;
+	TableEntry *cmdp;
 	int idx;
 	int prev;
 	std::string fullname;
 	struct stat64 statb;
 	int e;
 	int updatetbl;
-	const shell::BuiltinCommand *bcmd;
+	const BuiltinCommand *bcmd;
 
 	// If name contains a slash, don't use PATH or hash table
 	if (std::strchr(name, '/')) {
@@ -354,13 +372,13 @@ find_command(Context &sh, char *name, struct cmdentry *entry, int act, const cha
 					continue;
 #endif
 absfail:
-				entry->type = shell::TableEntry::Type::Unknown;
+				entry->type = TableEntry::Type::Unknown;
 				return {};
 			}
 			if (!test_exec(sh, name, &statb))
 				goto absfail;
 		}
-		entry->type = shell::TableEntry::Type::Normal;
+		entry->type = TableEntry::Type::Normal;
 		return {};
 	}
 
@@ -374,14 +392,14 @@ absfail:
 
 		switch (cmdp->type) {
 		default:
-		case shell::TableEntry::Type::Normal:
+		case TableEntry::Type::Normal:
 			bit = DO_ALTPATH | DO_REGBLTIN;
 			break;
-		case shell::TableEntry::Type::Function:
+		case TableEntry::Type::Function:
 			bit = DO_NOFUNC;
 			break;
-		case shell::TableEntry::Type::Builtin:
-			bit = cmdp->param.cmd->flags & shell::BuiltinCommand::Flag::Regular ?
+		case TableEntry::Type::Builtin:
+			bit = cmdp->param.cmd->flags & BuiltinCommand::Flag::Regular ?
 			      0 : DO_REGBLTIN;
 			break;
 		}
@@ -398,7 +416,7 @@ absfail:
 
 	/* If %builtin not in path, check for builtin next */
 	bcmd = find_builtin(name);
-	if (bcmd && ((bcmd->flags & shell::BuiltinCommand::Flag::Regular) | (act & DO_ALTPATH) |
+	if (bcmd && ((bcmd->flags & BuiltinCommand::Flag::Regular) | (act & DO_ALTPATH) |
 		     (sh.builtinloc <= 0)))
 		goto builtin_success;
 
@@ -408,7 +426,7 @@ absfail:
 	/* We have to search path. */
 	prev = -1;		/* where to start */
 	if (cmdp && cmdp->rehash) {	/* doing a rehash */
-		if (cmdp->type == shell::TableEntry::Type::Builtin)
+		if (cmdp->type == TableEntry::Type::Builtin)
 			prev = sh.builtinloc;
 		else
 			prev = cmdp->param.index;
@@ -452,7 +470,7 @@ loop:
 			std::string pathcopy(fullname);
 			TRY_SHV(readcmdfile(sh, pathcopy.data()));
 			if (!(cmdp = cmdlookup(sh, name, 0)) ||
-			    cmdp->type != shell::TableEntry::Type::Function)
+			    cmdp->type != TableEntry::Type::Function)
 				return sh_error(sh, "{} not defined in {}", name,
 					 pathcopy);
 			goto success;
@@ -461,13 +479,13 @@ loop:
 		if (!test_exec(sh, fullname.c_str(), &statb))
 			continue;
 		if (!updatetbl) {
-			entry->type = shell::TableEntry::Type::Normal;
+			entry->type = TableEntry::Type::Normal;
 			entry->u.index = idx;
 			return {};
 		}
 		INTOFF(sh);
 		cmdp = cmdlookup(sh, name, 1);
-		cmdp->type = shell::TableEntry::Type::Normal;
+		cmdp->type = TableEntry::Type::Normal;
 		cmdp->param.index = idx;
 		INTON(sh);
 		goto success;
@@ -479,18 +497,18 @@ loop:
 	if (act & DO_ERR)
 		sh_warnx(sh, "{}: {}", name, errmsg(e, E_EXEC));
 fail:
-	entry->type = shell::TableEntry::Type::Unknown;
+	entry->type = TableEntry::Type::Unknown;
 	return {};
 
 builtin_success:
 	if (!updatetbl) {
-		entry->type = shell::TableEntry::Type::Builtin;
+		entry->type = TableEntry::Type::Builtin;
 		entry->u.cmd = bcmd;
 		return {};
 	}
 	INTOFF(sh);
 	cmdp = cmdlookup(sh, name, 1);
-	cmdp->type = shell::TableEntry::Type::Builtin;
+	cmdp->type = TableEntry::Type::Builtin;
 	cmdp->param.cmd = bcmd;
 	INTON(sh);
 success:
@@ -563,7 +581,8 @@ changepath(Context &sh, std::string_view newval)
  * PATH which has sh.changed.
  */
 
-static void
+namespace {
+void
 clearcmdentry(Context &sh)
 {
 	INTOFF(sh);
@@ -575,6 +594,8 @@ clearcmdentry(Context &sh)
 	);
 	INTON_DEFER(sh);
 }
+} // namespace
+
 
 
 
@@ -589,7 +610,8 @@ clearcmdentry(Context &sh)
 
 
 
-static tblentry *
+namespace {
+TableEntry *
 cmdlookup(Context &sh, const char *name, int add)
 {
 	auto it = sh.cmdtable.find(name);
@@ -600,18 +622,23 @@ cmdlookup(Context &sh, const char *name, int add)
 	}
 	return &it->second;
 }
+} // namespace
+
 
 /*
  * Delete the command entry for this name, if one exists.
  */
 
-static void
+namespace {
+void
 delete_cmd_entry(Context &sh, const char *name)
 {
 	INTOFF(sh);
 	sh.cmdtable.erase(name);
 	INTON_DEFER(sh);
 }
+} // namespace
+
 
 
 
@@ -620,16 +647,19 @@ delete_cmd_entry(Context &sh, const char *name)
  * the same name - except special builtins.
  */
 
-static void
+namespace {
+void
 addcmdentry(Context &sh, const char *name, const struct cmdentry *entry)
 {
-	tblentry *cmdp;
+	TableEntry *cmdp;
 
 	cmdp = cmdlookup(sh, name, 1);
 	cmdp->type = entry->type;
 	cmdp->param = entry->u;
 	cmdp->rehash = false;
 }
+} // namespace
+
 
 
 /*
@@ -642,7 +672,7 @@ defun(Context &sh, const DefunNode *func)
 	struct cmdentry entry;
 
 	INTOFF(sh);
-	entry.type = shell::TableEntry::Type::Function;
+	entry.type = TableEntry::Type::Function;
 	entry.u.func = std::shared_ptr<Node>(func->clone());
 	addcmdentry(sh, func->text.c_str(), &entry);
 	INTON_DEFER(sh);
@@ -657,9 +687,9 @@ void
 unsetfunc(Context &sh, std::string_view name)
 {
 	std::string key(name);
-	tblentry *cmdp = cmdlookup(sh, key.c_str(), 0);
+	TableEntry *cmdp = cmdlookup(sh, key.c_str(), 0);
 
-	if (cmdp && cmdp->type == shell::TableEntry::Type::Function)
+	if (cmdp && cmdp->type == TableEntry::Type::Function)
 		delete_cmd_entry(sh, key.c_str());
 }
 
@@ -667,7 +697,7 @@ unsetfunc(Context &sh, std::string_view name)
  * Locate and print what a word is...
  */
 
-shell::Result<int>
+Result<int>
 typecmd(Context &sh, int argc, char **argv)
 {
 	int err = 0;
@@ -679,17 +709,18 @@ typecmd(Context &sh, int argc, char **argv)
 	return err;
 }
 
-static shell::Result<int>
+namespace {
+Result<int>
 describe_command(
 	Context &sh,
-	shell::Output *out,
+	Output *out,
 	char *command,
     const char *path,
 	int verbose
 )
 {
 	struct cmdentry entry;
-	tblentry *cmdp;
+	TableEntry *cmdp;
 	if (verbose) {
 		out->write(sh, command);
 	}
@@ -732,7 +763,7 @@ describe_command(
 	}
 
 	switch (entry.type) {
-	case shell::TableEntry::Type::Normal: {
+	case TableEntry::Type::Normal: {
 		int j = entry.u.index;
 		std::string pathbuf;
 		const char *p;
@@ -759,7 +790,7 @@ describe_command(
 		break;
 	}
 
-	case shell::TableEntry::Type::Function:
+	case TableEntry::Type::Function:
 		if (verbose) {
 			out->write(sh, " is a shell function");
 		} else {
@@ -767,13 +798,13 @@ describe_command(
 		}
 		break;
 
-	case shell::TableEntry::Type::Builtin:
+	case TableEntry::Type::Builtin:
 		if (verbose) {
 			out->write(
 				sh,
 				std::format(
 					" is a {}shell builtin",
-					entry.u.cmd->flags & shell::BuiltinCommand::Flag::Special ? "special " : ""
+					entry.u.cmd->flags & BuiltinCommand::Flag::Special ? "special " : ""
 				)
 			);
 		} else {
@@ -792,8 +823,10 @@ out:
 	outc(sh, '\n', out);
 	return 0;
 }
+} // namespace
 
-shell::Result<int>
+
+Result<int>
 commandcmd(Context &sh, int argc, char **argv)
 {
 	char *cmd;
@@ -819,3 +852,5 @@ commandcmd(Context &sh, int argc, char **argv)
 
 	return 0;
 }
+
+} // namespace shell

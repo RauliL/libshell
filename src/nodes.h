@@ -9,7 +9,7 @@
 
 #include "eval.h"
 
-using Node = shell::Node;
+namespace shell {
 
 template <
 	typename T,
@@ -64,7 +64,7 @@ struct CommandNode : Node {
 	explicit CommandNode(Type t = Type::Cmd) : Node(t) {}
 	~CommandNode() override;
 	ptr clone() const override;
-	shell::Result<int> eval(
+	Result<int> eval(
 		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
@@ -78,7 +78,7 @@ struct PipeNode : Node {
 	explicit PipeNode(Type t = Type::Pipe) : Node(t) {}
 	~PipeNode() override;
 	ptr clone() const override;
-	shell::Result<int> eval(
+	Result<int> eval(
 		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
@@ -93,7 +93,7 @@ struct RedirNode : Node {
 	explicit RedirNode(Type t = Type::Redir) : Node(t) {}
 	~RedirNode() override;
 	ptr clone() const override;
-	shell::Result<int> eval(
+	Result<int> eval(
 		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
@@ -107,7 +107,7 @@ struct BinaryNode : Node {
 	explicit BinaryNode(Type t = Type::Semi) : Node(t) {}
 	~BinaryNode() override;
 	ptr clone() const override;
-	shell::Result<int> eval(
+	Result<int> eval(
 		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
@@ -122,7 +122,7 @@ struct IfNode : Node {
 	explicit IfNode(Type t = Type::If) : Node(t) {}
 	~IfNode() override;
 	ptr clone() const override;
-	shell::Result<int> eval(
+	Result<int> eval(
 		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
@@ -138,7 +138,7 @@ struct ForNode : Node {
 	explicit ForNode(Type t = Type::For) : Node(t) {}
 	~ForNode() override;
 	ptr clone() const override;
-	shell::Result<int> eval(
+	Result<int> eval(
 		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
@@ -153,7 +153,7 @@ struct CaseNode : Node {
 	explicit CaseNode(Type t = Type::Case) : Node(t) {}
 	~CaseNode() override;
 	ptr clone() const override;
-	shell::Result<int> eval(
+	Result<int> eval(
 		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
@@ -178,7 +178,7 @@ struct DefunNode : Node {
 	explicit DefunNode(Type t = Type::Defun) : Node(t) {}
 	~DefunNode() override;
 	ptr clone() const override;
-	shell::Result<int> eval(
+	Result<int> eval(
 		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
@@ -227,9 +227,11 @@ struct NotNode : Node {
 	NotNode(Type t = Type::Not) : Node(t) {}
 	~NotNode() override;
 	ptr clone() const override;
-	shell::Result<int> eval(
+	Result<int> eval(
 		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
 	) const override;
 };
+
+} // namespace shell

@@ -46,27 +46,34 @@
 #include <unistd.h>
 
 /** Argument/result scratch for one `printf` builtin invocation. */
-struct PrintfState {
-	char **gargv = nullptr;
-	int rval = 0;
-};
-
-static int conv_escape_str(Context &sh, const char *, std::string &);
-static int getchr(PrintfState &);
-static double getdouble(Context &sh, PrintfState &);
-static std::uintmax_t getuintmax(Context &sh, PrintfState &, int);
-static const char *getstr(PrintfState &);
-static std::string mklong(const char *, const char *);
-static void check_conversion(Context &sh, PrintfState &, const char *,
-			     const char *);
-
-#define isodigit(c)	((c) >= '0' && (c) <= '7')
-#define octtobin(c)	((c) - '0')
 
 #include "bltin.h"
 #include "parser.h"
 #include "syntax.h"
 #include "system.h"
+
+using namespace shell;
+
+namespace shell {
+
+struct PrintfState {
+	char **gargv = nullptr;
+	int rval = 0;
+};
+
+namespace {
+int conv_escape_str(Context &sh, const char *, std::string &);
+int getchr(PrintfState &);
+double getdouble(Context &sh, PrintfState &);
+std::uintmax_t getuintmax(Context &sh, PrintfState &, int);
+const char *getstr(PrintfState &);
+std::string mklong(const char *, const char *);
+void check_conversion(Context &sh, PrintfState &, const char *,
+			     const char *);
+} // namespace
+
+#define isodigit(c)	((c) >= '0' && (c) <= '7')
+#define octtobin(c)	((c) - '0')
 
 #define PF(f, func) { \
 	switch (reinterpret_cast<char *>(param) - reinterpret_cast<char *>(array)) { \
@@ -83,7 +90,7 @@ static void check_conversion(Context &sh, PrintfState &, const char *,
 }
 
 #define ASPF(out, f, func) ({ \
-	shell::Result<int> ret; \
+	Result<int> ret; \
 	switch (reinterpret_cast<char *>(param) - reinterpret_cast<char *>(array)) { \
 	default: \
 		ret = xasprintf(sh, out, f, array[0], array[1], func); \
@@ -101,7 +108,8 @@ static void check_conversion(Context &sh, PrintfState &, const char *,
 })
 
 
-static shell::Result<int>
+namespace {
+Result<int>
 print_escape_str(Context &sh, const char *f, int *param, int *array, const char *s)
 {
 	int done;
@@ -132,9 +140,11 @@ print_escape_str(Context &sh, const char *f, int *param, int *array, const char 
 	sh.out1->write(sh, p, total);
 	return done;
 }
+} // namespace
 
 
-shell::Result<int>
+
+Result<int>
 printfcmd(Context &sh, int argc, char *argv[])
 {
 	char *fmt;
@@ -281,7 +291,8 @@ out:
  * Print SysV echo(1) style escape string
  *	Halts processing string if a \c escape is encountered.
  */
-static int
+namespace {
+int
 conv_escape_str(Context &sh, const char *str, std::string &out)
 {
 	int c;
@@ -323,6 +334,8 @@ putchar:
 
 	return c;
 }
+} // namespace
+
 
 /*
  * Print "standard" escape characters
@@ -468,7 +481,8 @@ out_noput:
 	return (out - out0) | (str - str0) << 4;
 }
 
-static std::string
+namespace {
+std::string
 mklong(const char *str, const char *ch)
 {
 	/*
@@ -488,7 +502,7 @@ mklong(const char *str, const char *ch)
 	return copy;
 }
 
-static int
+int
 getchr(PrintfState &st)
 {
 	int val = 0;
@@ -498,7 +512,7 @@ getchr(PrintfState &st)
 	return val;
 }
 
-static const char *
+const char *
 getstr(PrintfState &st)
 {
 	const char *val = "";
@@ -509,7 +523,7 @@ getstr(PrintfState &st)
 	return val;
 }
 
-static std::uintmax_t
+std::uintmax_t
 getuintmax(Context &sh, PrintfState &st, int sign)
 {
 	uintmax_t val = 0;
@@ -531,7 +545,7 @@ out:
 	return val;
 }
 
-static double
+double
 getdouble(Context &sh, PrintfState &st)
 {
 	double val;
@@ -551,7 +565,7 @@ getdouble(Context &sh, PrintfState &st)
 	return val;
 }
 
-static void
+void
 check_conversion(Context &sh, PrintfState &st, const char *s,
 		 const char *ep)
 {
@@ -566,8 +580,10 @@ check_conversion(Context &sh, PrintfState &st, const char *s,
 		st.rval = 1;
 	}
 }
+} // namespace
 
-shell::Result<int>
+
+Result<int>
 echocmd(Context &sh, int argc, char **argv)
 {
 	const char *lastfmt = "%s\n";
@@ -589,3 +605,5 @@ echocmd(Context &sh, int argc, char **argv)
 	} while (!nonl && *argv);
 	return 0;
 }
+
+} // namespace shell

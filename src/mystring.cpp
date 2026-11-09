@@ -57,7 +57,14 @@
 #include "system.h"
 
 
+
+using namespace shell;
+
+
 char nullstr[1];		/* zero length string */
+
+namespace shell {
+
 const char dolatstr[] = { CTLQUOTEMARK, CTLVAR, VSNORMAL | VSBIT, '@', '=',
 			  CTLQUOTEMARK, '\0' };
 const char cqchars[] = {
@@ -79,7 +86,7 @@ prefix(const char *string, const char *pfx)
 	return const_cast<char *>(string + head.size());
 }
 
-tl::unexpected<shell::Error>
+tl::unexpected<Error>
 badnum(Context &sh, std::string_view s)
 {
 	std::string tmp(s);
@@ -89,7 +96,7 @@ badnum(Context &sh, std::string_view s)
 /*
  * Convert a string into an integer of type intmax_t.  Alow trailing spaces.
  */
-shell::Result<intmax_t>
+Result<intmax_t>
 atomax(Context &sh, std::string_view s, int base)
 {
 	std::string tmp(s);
@@ -115,7 +122,7 @@ atomax(Context &sh, std::string_view s, int base)
 	return r;
 }
 
-shell::Result<intmax_t>
+Result<intmax_t>
 atomax10(Context &sh, std::string_view s)
 {
 	return atomax(sh, s, 10);
@@ -126,7 +133,7 @@ atomax10(Context &sh, std::string_view s)
  * failure.
  */
 
-shell::Result<int>
+Result<int>
 number(Context &sh, std::string_view s)
 {
 	intmax_t n = TRY_SH(atomax10(sh, s));
@@ -210,3 +217,5 @@ ascii_upper(std::string_view s)
 
 	return out;
 }
+
+} // namespace shell

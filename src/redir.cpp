@@ -70,16 +70,21 @@
 # define PIPESIZE PIPE_BUF
 #endif
 
+using namespace shell;
+
+namespace shell {
+
 
 /* Bit map of currently closed file descriptors. */
 
 
-static shell::Result<int> openredirect(Context &sh, Node *);
-static shell::Result<void> dupredirect(Context &sh, Node *, int);
-static shell::Result<int> openhere(Context &sh, Node *);
+namespace {
+Result<int> openredirect(Context &sh, Node *);
+Result<void> dupredirect(Context &sh, Node *, int);
+Result<int> openhere(Context &sh, Node *);
 
 
-static unsigned
+unsigned
 update_closed_redirs(Context &sh, int fd, int nfd)
 {
 	unsigned val = sh.closed_redirs;
@@ -92,6 +97,8 @@ update_closed_redirs(Context &sh, int fd, int nfd)
 
 	return val & bit;
 }
+} // namespace
+
 
 
 /*
@@ -102,7 +109,7 @@ update_closed_redirs(Context &sh, int fd, int nfd)
  * stdout, is saved in memory.
  */
 
-shell::Result<void>
+Result<void>
 redirect(Context &sh, Node *redir, int flags)
 {
 	Node *n;
@@ -158,7 +165,8 @@ redirect(Context &sh, Node *redir, int flags)
 }
 
 
-static tl::unexpected<shell::Error>
+namespace {
+tl::unexpected<Error>
 sh_open_fail(Context &sh, const std::filesystem::path &pathname, int flags, int e)
 {
 	const char *word;
@@ -173,9 +181,11 @@ sh_open_fail(Context &sh, const std::filesystem::path &pathname, int flags, int 
 
 	return sh_error(sh, "cannot {} {}: {}", word, pathname.string(), errmsg(e, action));
 }
+} // namespace
 
 
-shell::Result<int>
+
+Result<int>
 sh_open(Context &sh, const std::filesystem::path &pathname, int flags, int mayfail)
 {
 	int fd;
@@ -193,7 +203,8 @@ sh_open(Context &sh, const std::filesystem::path &pathname, int flags, int mayfa
 }
 
 
-static shell::Result<int>
+namespace {
+Result<int>
 openredirect(Context &sh, Node *redir)
 {
 	struct stat64 sb;
@@ -255,7 +266,7 @@ ecreate:
 	return sh_open_fail(sh, fname, O_CREAT, EEXIST);
 }
 
-static shell::Result<int>
+Result<int>
 sh_dup2(Context &sh, int ofd, int nfd, int cfd)
 {
 	if (nfd < 0) {
@@ -272,7 +283,7 @@ sh_dup2(Context &sh, int ofd, int nfd, int cfd)
 	return nfd;
 }
 
-static shell::Result<void> dupredirect(Context &sh, Node *redir, int f)
+Result<void> dupredirect(Context &sh, Node *redir, int f)
 {
 	int fd = as<RedirList>(redir)->fd;
 
@@ -287,8 +298,10 @@ static shell::Result<void> dupredirect(Context &sh, Node *redir, int f)
 		TRY_SHV(sh_dup2(sh, f, fd, f));
 	return {};
 }
+} // namespace
 
-shell::Result<int>
+
+Result<int>
 sh_pipe(Context &sh, int pip[2], int memfd)
 {
 	if (memfd) {
@@ -311,7 +324,8 @@ sh_pipe(Context &sh, int pip[2], int memfd)
  * the pipe without forking.
  */
 
-static shell::Result<int>
+namespace {
+Result<int>
 openhere(Context &sh, Node *redir)
 {
 	size_t len = 0;
@@ -350,6 +364,8 @@ out:
 	close(pip[1]);
 	return pip[0];
 }
+} // namespace
+
 
 
 
@@ -357,7 +373,7 @@ out:
  * Undo the effects of the last redirection.
  */
 
-shell::Result<void>
+Result<void>
 popredir(Context &sh, int drop)
 {
 	INTOFF(sh);
@@ -408,7 +424,7 @@ redir_forkreset(Context &sh)
  * the original file dscriptor is not open.
  */
 
-shell::Result<int>
+Result<int>
 savefd(Context &sh, int from, int ofd)
 {
 	int newfd;
@@ -433,7 +449,7 @@ savefd(Context &sh, int from, int ofd)
 }
 
 
-shell::Result<int>
+Result<int>
 redirectsafe(Context &sh, Node *redir, int flags)
 {
 	int err = 0;
@@ -441,7 +457,7 @@ redirectsafe(Context &sh, Node *redir, int flags)
 
 	if (auto r = redirect(sh, redir, flags); !r) {
 		sh.exception = r.error();
-		err = r.error() == shell::Error::Generic ? 2 : static_cast<int>(r.error());
+		err = r.error() == Error::Generic ? 2 : static_cast<int>(r.error());
 	}
 	TRY_SHV(restore_handler_expandarg(sh, err));
 	barrier();
@@ -452,7 +468,7 @@ redirectsafe(Context &sh, Node *redir, int flags)
 }
 
 
-shell::Result<void>
+Result<void>
 unwindredir(Context &sh, std::size_t stop)
 {
 	while (sh.redirlist.size() > stop)
@@ -473,3 +489,5 @@ pushredir(Context &sh, Node *redir)
 	sh.redirlist.push_back(sv);
 	return stop;
 }
+
+} // namespace shell

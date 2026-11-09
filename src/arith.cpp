@@ -8,6 +8,12 @@
 #include "shell_context.h"
 #include "var.h"
 
+
+using namespace shell;
+
+
+namespace shell {
+
 namespace {
 
 enum class Op {
@@ -146,7 +152,8 @@ struct Token {
 using EvalResult = tl::expected<std::intmax_t, std::string>;
 using ParseResult = tl::expected<ExprPtr, std::string>;
 
-static EvalResult
+namespace {
+EvalResult
 do_binop(Op op, std::intmax_t a, std::intmax_t b)
 {
 	switch (op) {
@@ -192,17 +199,19 @@ do_binop(Op op, std::intmax_t a, std::intmax_t b)
 	}
 }
 
-static inline bool
+inline bool
 is_name_start(unsigned char c)
 {
 	return std::isalpha(c) || c == '_';
 }
 
-static inline bool
+inline bool
 is_name_char(unsigned char c)
 {
 	return std::isalnum(c) || c == '_';
 }
+} // namespace
+
 
 namespace {
 
@@ -728,7 +737,8 @@ private:
 
 } /* namespace */
 
-static Op
+namespace {
+Op
 assign_to_binop(Op op)
 {
 	switch (op) {
@@ -756,6 +766,8 @@ assign_to_binop(Op op)
 			return Op::Add;
 	}
 }
+} // namespace
+
 
 namespace {
 
@@ -766,7 +778,8 @@ struct overloaded : Ts... {
 
 }
 
-static EvalResult
+namespace {
+EvalResult
 eval(Context &context, const Expr &expr, bool noeval)
 {
 	return std::visit(
@@ -885,7 +898,7 @@ eval(Context &context, const Expr &expr, bool noeval)
 	);
 }
 
-static EvalResult
+EvalResult
 eval(Context &context, const ExprPtr &expr)
 {
 	if (!expr)
@@ -893,8 +906,10 @@ eval(Context &context, const ExprPtr &expr)
 
 	return eval(context, *expr, false);
 }
+} // namespace
 
-shell::Result<std::intmax_t>
+
+Result<std::intmax_t>
 Context::arith(std::string_view expr)
 {
 	const auto ast = Parser(expr).parse();
@@ -917,3 +932,5 @@ Context::arith(std::string_view expr)
 
 	return *result;
 }
+
+} // namespace shell

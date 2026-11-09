@@ -37,6 +37,7 @@
 
 #include <libshell.hpp>
 
+
 #ifndef JOBS
 #define JOBS 1
 #endif
@@ -46,13 +47,14 @@
 #define FORK_BG 1
 #define FORK_NOJOB 2
 
-using Context = shell::Context;
-using Node = shell::Node;
+namespace shell {
 
-shell::Result<int> killcmd(Context &, int, char **);
-shell::Result<int> waitcmd(Context &, int, char **);
-shell::Job *makejob(Context &, int);
-shell::Result<int> forkshell(Context &, shell::Job *, Node *, int);
-shell::Result<shell::Job *> vforkexec(Context &, const Node *, char **,
+Result<int> killcmd(Context &, int, char **);
+Result<int> waitcmd(Context &, int, char **);
+Job *makejob(Context &, int);
+Result<int> forkshell(Context &, Job *, Node *, int);
+Result<Job *> vforkexec(Context &, const Node *, char **,
 				      const char *, int);
-shell::Result<int> waitforjob(Context &, shell::Job *);
+Result<int> waitforjob(Context &, Job *);
+
+} // namespace shell

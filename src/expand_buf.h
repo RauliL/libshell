@@ -10,6 +10,8 @@
  * assembly. Always stack-local / passed by reference — never stored on
  * Context.
  */
+namespace shell {
+
 struct ExpandBuf {
 	std::string buf = std::string(256, '\0');
 	std::size_t used = 0; /* committed bytes; also base of in-progress write */
@@ -118,5 +120,7 @@ struct ExpandBuf {
 		*p = '\0';
 	}
 };
+
+} // namespace shell
 
 #endif

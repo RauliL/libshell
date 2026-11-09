@@ -40,20 +40,24 @@
 
 #include "error.h"
 
+
+namespace shell {
+
 extern int trapcnt;
 extern char sigmode[];
 extern volatile sig_atomic_t pending_sig;
 extern volatile sig_atomic_t gotsigchld;
 
-using Node = shell::Node;
 
-shell::Result<int> trapcmd(Context &sh, int, char **);
+Result<int> trapcmd(Context &sh, int, char **);
 void init_traps(Context &sh);
-shell::Result<void> clear_traps(Context &sh, const Node *);
+Result<void> clear_traps(Context &sh, const Node *);
 void setsignal(Context &sh, int);
 void ignoresig(Context &sh, int);
 void onsig(Context &sh, int);
-shell::Result<void> dotrap(Context &sh);
+Result<void> dotrap(Context &sh);
 void exitshell(Context &sh) __attribute__((__noreturn__));
 int decode_signal(Context &sh, std::string_view, int);
 void sigblockall(Context &sh, sigset_t *oldmask);
+
+} // namespace shell

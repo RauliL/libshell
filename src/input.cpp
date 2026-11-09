@@ -60,11 +60,20 @@
 #include "trap.h"
 
 
-static void pushfile(Context &sh, InputStack &in);
-static void popstring(Context &sh, InputStack &in);
-static int preadfd(Context &sh, InputStack &in);
-static void setinputfd(Context &sh, InputStack &in, int fd, int push);
-static int preadbuffer(Context &sh, InputStack &in);
+
+using namespace shell;
+
+
+namespace shell {
+
+namespace {
+void pushfile(Context &sh, InputStack &in);
+void popstring(Context &sh, InputStack &in);
+int preadfd(Context &sh, InputStack &in);
+void setinputfd(Context &sh, InputStack &in, int fd, int push);
+int preadbuffer(Context &sh, InputStack &in);
+} // namespace
+
 
 void
 input_reset_interactive(Context &sh)
@@ -111,7 +120,8 @@ input_init(Context &sh, InputStack &in)
 	}
 }
 
-static bool
+namespace {
+bool
 stdin_bufferable(Context &sh, InputStack &in)
 {
 	if (in.stdin_istty < 0)
@@ -120,7 +130,7 @@ stdin_bufferable(Context &sh, InputStack &in)
 	return in.stdin.bufferable;
 }
 
-static void
+void
 flush_tee(Context &sh, void *buf, int nr, int pending)
 {
 	(void)sh;
@@ -133,7 +143,7 @@ flush_tee(Context &sh, void *buf, int nr, int pending)
 	}
 }
 
-static int
+int
 stdin_tee(Context &sh, InputStack &in, void *buf, int nr)
 {
 	int err;
@@ -173,8 +183,8 @@ stdin_tee(Context &sh, InputStack &in, void *buf, int nr)
 	return err;
 }
 
-static void
-release_pending_aliases(Context &sh, parsefile &pf)
+void
+release_pending_aliases(Context &sh, ParseFile &pf)
 {
 	INTOFF(sh);
 	for (auto &ap : pf.pending_alias_release)
@@ -185,6 +195,8 @@ release_pending_aliases(Context &sh, parsefile &pf)
 	pf.pending_alias_release.clear();
 	INTON_DEFER(sh);
 }
+} // namespace
+
 
 
 /*
@@ -240,7 +252,8 @@ pgetc_eoa(Context &sh, InputStack &in)
 	       in.current->string_stack.back().ap ? PEOA : pgetc(sh, in);
 }
 
-static int
+namespace {
+int
 stdin_clear_nonblock(Context &sh)
 {
 	(void)sh;
@@ -254,7 +267,7 @@ stdin_clear_nonblock(Context &sh)
 	return flags;
 }
 
-static int
+int
 preadfd(Context &sh, InputStack &in)
 {
 	char *buf = in.current->buf;
@@ -303,6 +316,8 @@ retry:
 	}
 	return nr;
 }
+} // namespace
+
 
 /*
  * Refill the input buffer and return the next input character:
@@ -313,7 +328,8 @@ retry:
  * 4) Process input up to the next newline, deleting nul characters.
  */
 
-static int
+namespace {
+int
 preadbuffer(Context &sh, InputStack &in)
 {
 	int more;
@@ -354,6 +370,8 @@ eof:
 
 	return (signed char)*in.current->nextc++;
 }
+} // namespace
+
 
 void
 pungetn(InputStack &in, int n)
@@ -375,7 +393,7 @@ pungetc(Context &sh, InputStack &in)
 }
 
 /*
- * Push a string back onto the input at this current parsefile level.
+ * Push a string back onto the input at this current ParseFile level.
  * We handle aliases this way.
  */
 void
@@ -383,7 +401,7 @@ pushstring(
 	Context &sh,
 	InputStack &in,
 	char *s,
-	const std::shared_ptr<shell::Alias> &ap
+	const std::shared_ptr<Alias> &ap
 )
 {
 	const auto len = std::strlen(s);
@@ -404,7 +422,8 @@ pushstring(
 	INTON_DEFER(sh);
 }
 
-static void
+namespace {
+void
 popstring(Context &sh, InputStack &in)
 {
 	auto sp = in.current->string_stack.back();
@@ -424,13 +443,15 @@ popstring(Context &sh, InputStack &in)
 		in.current->pending_alias_release.push_back(std::move(sp.ap));
 	INTON_DEFER(sh);
 }
+} // namespace
+
 
 /*
  * Set the input to take input from a file.  If push is set, push the
  * old input onto the stack first.
  */
 
-shell::Result<int>
+Result<int>
 setinputfile(Context &sh, InputStack &in, std::string_view fname, int flags)
 {
 	int fd;
@@ -455,7 +476,8 @@ out:
  * interrupts off.
  */
 
-static void
+namespace {
+void
 setinputfd(Context &sh, InputStack &in, int fd, int push)
 {
 	pushfile(sh, in);
@@ -465,6 +487,8 @@ setinputfd(Context &sh, InputStack &in, int fd, int push)
 	in.current->owned_buf = std::make_unique<char[]>(IBUFSIZ);
 	in.current->nextc = in.current->buf = in.current->owned_buf.get();
 }
+} // namespace
+
 
 
 /*
@@ -489,16 +513,19 @@ setinputstring(Context &sh, InputStack &in, char *string)
  * adds a new entry to the stack and popfile restores the previous level.
  */
 
-static void
+namespace {
+void
 pushfile(Context &, InputStack &in)
 {
-	auto *pf = new parsefile{};
+	auto *pf = new ParseFile{};
 
 	pf->prev = in.current;
 	pf->linno = 1;
 	pf->fd = -1;
 	in.current = pf;
 }
+} // namespace
+
 
 void
 pushstdin(Context &sh, InputStack &in)
@@ -512,7 +539,7 @@ pushstdin(Context &sh, InputStack &in)
 void
 popfile(Context &sh, InputStack &in)
 {
-	parsefile *pf = in.current;
+	ParseFile *pf = in.current;
 
 	INTOFF(sh);
 	if (pf == &in.base) {
@@ -541,7 +568,7 @@ out:
 
 
 void __attribute__((noinline))
-unwindfiles(Context &sh, InputStack &in, parsefile *stop)
+unwindfiles(Context &sh, InputStack &in, ParseFile *stop)
 {
 	while (in.base.prev || in.current != stop)
 		popfile(sh, in);
@@ -615,12 +642,12 @@ pungetn(Context &sh, int n)
 }
 
 void
-pushstring(Context &sh, char *s, const std::shared_ptr<shell::Alias> &ap)
+pushstring(Context &sh, char *s, const std::shared_ptr<Alias> &ap)
 {
 	pushstring(sh, sh.input, s, std::move(ap));
 }
 
-shell::Result<int>
+Result<int>
 setinputfile(Context &sh, std::string_view fname, int flags)
 {
 	return setinputfile(sh, sh.input, fname, flags);
@@ -645,7 +672,7 @@ popfile(Context &sh)
 }
 
 void
-unwindfiles(Context &sh, parsefile *stop)
+unwindfiles(Context &sh, ParseFile *stop)
 {
 	unwindfiles(sh, sh.input, stop);
 }
@@ -661,3 +688,5 @@ reset_input(Context &sh)
 {
 	reset_input(sh, sh.input);
 }
+
+} // namespace shell

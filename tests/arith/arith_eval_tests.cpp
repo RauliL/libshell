@@ -8,6 +8,8 @@
 #include "shell_context.h"
 #include "var.h"
 
+
+using namespace shell;
 namespace {
 
 struct EvalFixture {
@@ -25,7 +27,7 @@ struct EvalFixture {
 		return *r;
 	}
 
-	shell::Result<std::intmax_t> eval_result(std::string_view expr)
+	Result<std::intmax_t> eval_result(std::string_view expr)
 	{
 		return sh.arith(expr);
 	}

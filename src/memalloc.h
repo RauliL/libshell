@@ -12,6 +12,9 @@
 
 #include "machdep.h"
 
+
+namespace shell {
+
 struct rawmem {
 	void *ptr;
 	template<class T>
@@ -24,4 +27,7 @@ struct rawmem {
 rawmem ckmalloc(std::size_t);
 
 #define ckfree(p)	std::free(const_cast<void *>(static_cast<const void *>(p)))
+
+} // namespace shell
+
 #endif

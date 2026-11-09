@@ -8,6 +8,12 @@
 #include "mystring.h"
 #include "shell_context.h"
 
+
+using namespace shell;
+
+
+namespace shell {
+
 void
 init_signal_names(Context &sh)
 {
@@ -244,3 +250,5 @@ Context::find_signal_number(std::string_view name, int minsig) const
 
 	return std::nullopt;
 }
+
+} // namespace shell

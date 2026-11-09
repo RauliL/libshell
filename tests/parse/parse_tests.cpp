@@ -8,6 +8,8 @@
 
 #include "parse_helpers.hpp"
 
+
+using namespace shell;
 namespace fs = std::filesystem;
 
 #ifndef PARSE_FIXTURE_DIR

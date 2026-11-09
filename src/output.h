@@ -45,19 +45,20 @@
 
 #include <sys/types.h>
 
-namespace shell { struct Context; }
-using Context = shell::Context;
-void outcslow(Context &sh, int, shell::Output *);
+
+namespace shell {
+
+void outcslow(Context &sh, int, Output *);
 void flushall(Context &sh);
-void outfmt(Context &sh, shell::Output *, const char *, ...)
+void outfmt(Context &sh, Output *, const char *, ...)
     __attribute__((__format__(__printf__,3,4)));
 void out1fmt(Context &sh, const char *, ...)
     __attribute__((__format__(__printf__,2,3)));
-shell::Result<int> xasprintf(Context &, std::string &, const char *, ...);
-void doformat(Context &sh, shell::Output *, const char *, va_list);
+Result<int> xasprintf(Context &, std::string &, const char *, ...);
+void doformat(Context &sh, Output *, const char *, va_list);
 int xwrite(Context &sh, int, const void *, std::size_t);
 
-inline void outc(Context &sh, int ch, shell::Output *file)
+inline void outc(Context &sh, int ch, Output *file)
 {
 	if (file->space() == 0)
 		outcslow(sh, ch, file);
@@ -72,3 +73,5 @@ inline void outc(Context &sh, int ch, shell::Output *file)
 #define out1str(s)	sh.out1->write(sh, (s))
 #define out2str(s)	sh.out2->write(sh, (s))
 #define outerr(f)	(f)->flags
+
+} // namespace shell

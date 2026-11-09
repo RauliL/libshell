@@ -13,6 +13,12 @@
 #include "trap.h"
 #include "var.h"
 
+
+using namespace shell;
+
+
+namespace shell {
+
 void
 init(Context &sh)
 {
@@ -50,3 +56,5 @@ reset(Context &sh)
 	input_reset_interactive(sh);
 	(void)unwindlocalvars(sh, 0);
 }
+
+} // namespace shell

@@ -62,9 +62,17 @@
 #include "main.h"
 #include "system.h"
 
-static int xvsnprintf(Context &sh, char *, size_t, const char *, va_list);
+
+using namespace shell;
+
 
 namespace shell {
+
+namespace {
+int xvsnprintf(Context &sh, char *, size_t, const char *, va_list);
+} // namespace
+
+
 
 void
 Output::ensure_buf()
@@ -128,10 +136,8 @@ buffered:
 		flags |= OUTPUT_ERR;
 }
 
-}
-
 void
-outcslow(Context &sh, int c, shell::Output *dest)
+outcslow(Context &sh, int c, Output *dest)
 {
 	char buf = c;
 
@@ -149,7 +155,7 @@ flushall(Context &sh)
 }
 
 void
-outfmt(Context &sh, shell::Output *file, const char *fmt, ...)
+outfmt(Context &sh, Output *file, const char *fmt, ...)
 {
 	va_list ap;
 
@@ -170,7 +176,8 @@ out1fmt(Context &sh, const char *fmt, ...)
 }
 
 
-static shell::Result<int>
+namespace {
+Result<int>
 xvasprintf(Context &sh, char **sp, size_t size, std::string &overflow,
 	   const char *f, va_list ap)
 {
@@ -190,9 +197,11 @@ xvasprintf(Context &sh, char **sp, size_t size, std::string &overflow,
 	len = xvsnprintf(sh, *sp, static_cast<size_t>(len) + 1, f, ap);
 	return len;
 }
+} // namespace
 
 
-shell::Result<int>
+
+Result<int>
 xasprintf(Context &sh, std::string &out, const char *f, ...)
 {
 	va_list ap;
@@ -207,7 +216,7 @@ xasprintf(Context &sh, std::string &out, const char *f, ...)
 
 
 void
-doformat(Context &sh, shell::Output *dest, const char *f, va_list ap)
+doformat(Context &sh, Output *dest, const char *f, va_list ap)
 {
 	char *s;
 	int len;
@@ -261,7 +270,8 @@ xwrite(Context &sh, int fd, const void *p, size_t n)
 }
 
 
-static int
+namespace {
+int
 xvsnprintf(Context &sh, char *outbuf, size_t length, const char *fmt, va_list ap)
 {
 	int ret;
@@ -286,3 +296,6 @@ xvsnprintf(Context &sh, char *outbuf, size_t length, const char *fmt, va_list ap
 
 	return ret;
 }
+} // namespace
+
+} // namespace shell

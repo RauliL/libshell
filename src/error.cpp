@@ -64,8 +64,14 @@
  * tl::unexpected for the caller to propagate as ShellResult.
  */
 
-tl::unexpected<shell::Error>
-exraise(Context &sh, shell::Error e)
+
+using namespace shell;
+
+
+namespace shell {
+
+tl::unexpected<Error>
+exraise(Context &sh, Error e)
 {
 	if (sh.vforked)
 		_exit(sh.exitstatus);
@@ -83,7 +89,7 @@ exraise(Context &sh, shell::Error e)
  * default disposition and re-raise so the process exits.
  */
 
-tl::unexpected<shell::Error>
+tl::unexpected<Error>
 onint(Context &sh)
 {
 
@@ -93,7 +99,7 @@ onint(Context &sh)
 	::raise(SIGINT);
 	sh.exitstatus = SIGINT + 128;
 
-	return exraise(sh, shell::Error::Interrupt);
+	return exraise(sh, Error::Interrupt);
 }
 
 InterruptSuppress::InterruptSuppress(Context &sh) : sh_(sh)
@@ -110,7 +116,7 @@ InterruptSuppress::~InterruptSuppress()
 	--sh_.suppressint;
 }
 
-shell::Result<void>
+Result<void>
 InterruptSuppress::resume()
 {
 	active_ = false;
@@ -120,10 +126,11 @@ InterruptSuppress::resume()
 	return {};
 }
 
-static void
+namespace {
+void
 exwarning_msg(Context &sh, std::string_view msg)
 {
-	shell::Output *errs = sh.out2;
+	Output *errs = sh.out2;
 	const char *name = sh.arg0.empty() ? "sh" : sh.arg0.c_str();
 
 	if (sh.commandname.empty())
@@ -137,8 +144,10 @@ exwarning_msg(Context &sh, std::string_view msg)
 	outcslow(sh, '\n', errs);
 #endif
 }
+} // namespace
 
-tl::unexpected<shell::Error>
+
+tl::unexpected<Error>
 sh_error_msg(Context &sh, std::string msg)
 {
 	sh.exitstatus = 2;
@@ -146,11 +155,11 @@ sh_error_msg(Context &sh, std::string msg)
 	exwarning_msg(sh, msg);
 	flushall(sh);
 
-	return exraise(sh, shell::Error::Generic);
+	return exraise(sh, Error::Generic);
 }
 
-tl::unexpected<shell::Error>
-exerror_msg(Context &sh, shell::Error cond, std::string msg)
+tl::unexpected<Error>
+exerror_msg(Context &sh, Error cond, std::string msg)
 {
 	exwarning_msg(sh, msg);
 	flushall(sh);
@@ -181,7 +190,7 @@ errmsg(int e, int action)
 
 
 #ifdef REALLY_SMALL
-shell::Result<void>
+Result<void>
 __inton(Context &sh)
 {
 	if (--sh.suppressint == 0 && sh.intpending)
@@ -189,3 +198,5 @@ __inton(Context &sh)
 	return {};
 }
 #endif
+
+} // namespace shell

@@ -19,6 +19,8 @@
 #include "shell.h"
 #include "shell_context.h"
 
+using namespace shell;
+
 namespace parse_test {
 
 inline void init_shell(Context &sh)
@@ -28,7 +30,7 @@ inline void init_shell(Context &sh)
 
 inline void set_alias(Context &sh, std::string name, std::string value)
 {
-	auto ap = std::make_shared<shell::Alias>();
+	auto ap = std::make_shared<Alias>();
 	ap->name = name;
 	ap->value = std::move(value);
 	sh.aliases.emplace(std::move(name), std::move(ap));
@@ -81,7 +83,7 @@ inline std::vector<Node::ptr> parse_trees(std::string_view script,
 			trees.push_back(std::move(result.tree));
 		}
 		popfile(sh);
-	} catch (const shell::ParseError &) {
+	} catch (const ParseError &) {
 		popfile(sh);
 		throw;
 	}

@@ -9,10 +9,15 @@
 
 #include "error.h"
 
-const shell::BuiltinCommand *find_builtin(std::string_view name);
+
+namespace shell {
+
+const BuiltinCommand *find_builtin(std::string_view name);
 
 /* Stable identities used by eval / trap. */
-extern const shell::BuiltinCommand builtin_command;
-extern const shell::BuiltinCommand builtin_eval;
-extern const shell::BuiltinCommand builtin_exec;
-extern const shell::BuiltinCommand builtin_trap;
+extern const BuiltinCommand builtin_command;
+extern const BuiltinCommand builtin_eval;
+extern const BuiltinCommand builtin_exec;
+extern const BuiltinCommand builtin_trap;
+
+} // namespace shell

@@ -28,7 +28,13 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+
+namespace shell {
+
 int readcmd(int, char **);
 int umaskcmd(int, char **);
 int ulimitcmd(int, char **);
+
+} // namespace shell
+
 #endif

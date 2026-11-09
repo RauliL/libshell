@@ -45,13 +45,14 @@
 
 #include "nodes.h"
 #include "token.h"
+#include "parse_error.h"
 
-namespace shell { class ParseError; }
 
-using heredoc = shell::HereDoc;
-using ParseSession = shell::ParseSession;
 
 /* control characters in argument strings */
+
+namespace shell {
+
 #define CTL_FIRST -127		/* first 'special' character */
 #define CTLESC -127		/* escape next character */
 #define CTLVAR -126		/* variable defn */
@@ -88,7 +89,6 @@ using ParseSession = shell::ParseSession;
 #define CHKEOFMARK	0x8
 
 
-using Context = shell::Context;
 /**
  * Result of `parsecmd()`: EOF vs blank line vs parse tree.
  */
@@ -107,5 +107,7 @@ std::optional<Token> findkwd(std::string_view);
 std::size_t endofname(std::string_view name);
 std::string expandstr(Context &sh, const char *);
 unsigned getmbc(Context &sh, int c, char *out, int mode);
-void report_parse_error(Context &sh, const shell::ParseError &e);
+void report_parse_error(Context &sh, const ParseError &e);
 tl::expected<void, std::string> try_parse_string(Context &sh, std::string_view s);
+
+} // namespace shell

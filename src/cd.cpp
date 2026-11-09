@@ -66,12 +66,19 @@
 #define CD_PHYSICAL 1
 #define CD_PRINT 2
 
-static shell::Result<int> docd(Context &sh, const char *, int);
-static shell::Result<std::optional<std::string>> updatepwd(Context &sh, const char *);
-static std::string getpwd(Context &sh);
-static shell::Result<int> cdopt(Context &sh);
 
-static shell::Result<int>
+using namespace shell;
+
+
+namespace shell {
+
+namespace {
+Result<int> docd(Context &sh, const char *, int);
+Result<std::optional<std::string>> updatepwd(Context &sh, const char *);
+std::string getpwd(Context &sh);
+Result<int> cdopt(Context &sh);
+
+Result<int>
 cdopt(Context &sh)
 {
 	int flags = 0;
@@ -87,8 +94,10 @@ cdopt(Context &sh)
 
 	return flags;
 }
+} // namespace
 
-shell::Result<int>
+
+Result<int>
 cdcmd(Context &sh, int argc, char **argv)
 {
 	const char *dest;
@@ -160,7 +169,8 @@ out:
  * know that the current directory has sh.changed.
  */
 
-static shell::Result<int>
+namespace {
+Result<int>
 docd(Context &sh, const char *dest, int flags)
 {
 	std::optional<std::string> logical;
@@ -189,6 +199,8 @@ out:
 
 	return err;
 }
+} // namespace
+
 
 
 /*
@@ -196,7 +208,8 @@ out:
  * cd command.
  */
 
-static shell::Result<std::optional<std::string>>
+namespace {
+Result<std::optional<std::string>>
 updatepwd(Context &sh, const char *dir)
 {
 	std::string path;
@@ -259,13 +272,16 @@ updatepwd(Context &sh, const char *dir)
 		path.pop_back();
 	return std::optional<std::string>{std::move(path)};
 }
+} // namespace
+
 
 
 /*
  * Find out what the current directory is. If we already know the current
  * directory, this routine returns immediately.
  */
-static std::string
+namespace {
+std::string
 getpwd(Context &sh)
 {
 #ifdef __GLIBC__
@@ -286,8 +302,10 @@ getpwd(Context &sh)
 	sh_warnx(sh, "getcwd() failed: {}", strerror(errno));
 	return {};
 }
+} // namespace
 
-shell::Result<int>
+
+Result<int>
 pwdcmd(Context &sh, int argc, char **argv)
 {
 	int flags;
@@ -303,7 +321,7 @@ pwdcmd(Context &sh, int argc, char **argv)
 	return 0;
 }
 
-shell::Result<void>
+Result<void>
 setpwd(
 	Context &sh,
 	std::optional<std::string_view> val,
@@ -312,7 +330,7 @@ setpwd(
 )
 {
 	if (setold)
-		TRY_SHV(setvar(sh, "OLDPWD", sh.cwd.curdir, shell::Variable::Flag::Exported));
+		TRY_SHV(setvar(sh, "OLDPWD", sh.cwd.curdir, Variable::Flag::Exported));
 
 	INTOFF(sh);
 	if (refresh_phys) {
@@ -327,7 +345,9 @@ setpwd(
 		}
 	}
 	INTON(sh);
-	TRY_SHV(setvar(sh, "PWD", sh.cwd.curdir, shell::Variable::Flag::Exported));
+	TRY_SHV(setvar(sh, "PWD", sh.cwd.curdir, Variable::Flag::Exported));
 
 	return {};
 }
+
+} // namespace shell

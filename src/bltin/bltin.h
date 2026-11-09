@@ -43,10 +43,15 @@
 #include "../shell.h"
 #include "../mystring.h"
 #include "../options.h"
-#ifdef SHELL
 #include "../memalloc.h"
 #include "../output.h"
 #include "../error.h"
+#include <stdio.h>
+
+
+namespace shell {
+
+#ifdef SHELL
 #undef stdout
 #undef stderr
 #undef putc
@@ -75,9 +80,10 @@
 #define getenv(p) bltinlookup(sh, (p))
 
 #else
-#include <stdio.h>
 #undef main
 #define INITARGS(argv)	if (!(commandname = argv[0])) {fputs("Argc is zero\n", stderr); exit(2);} else
 #endif
 
-shell::Result<int> echocmd(Context &sh, int, char **);
+Result<int> echocmd(Context &sh, int, char **);
+
+} // namespace shell

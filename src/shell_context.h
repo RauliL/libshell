@@ -25,9 +25,11 @@
 #include "system.h"
 #include "var.h"
 
-using Context = shell::Context;
 
 /** Fill signal_map from host SIG* names (called during Context init). */
+
+namespace shell {
+
 void init_signal_names(Context &sh);
 
 inline const char *bltinlookup(Context &sh, std::string_view name)
@@ -36,3 +38,5 @@ inline const char *bltinlookup(Context &sh, std::string_view name)
 		return value->data();
 	return nullptr;
 }
+
+} // namespace shell

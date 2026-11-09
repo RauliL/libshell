@@ -47,9 +47,12 @@
 
 #include "nodes.h"
 
+#include "error.h"
+
+
+namespace shell {
+
 using ArgList = std::vector<std::string>;
-using ifsregion = shell::IfsRegion;
-using ExpandState = shell::ExpandState;
 
 struct mbpair {
 	unsigned ml;
@@ -197,21 +200,21 @@ inline constexpr ExpandFlag EXP_QUOTED = ExpandFlag::quoted;
 inline constexpr ExpandFlag EXP_KEEPNUL = ExpandFlag::keepnul;
 inline constexpr ExpandFlag EXP_DISCARD = ExpandFlag::discard;
 
-using Context = shell::Context;
-#include "error.h"
-shell::Result<void> expandarg(Context &sh, Node *, ArgList *, ExpandFlags);
+Result<void> expandarg(Context &sh, Node *, ArgList *, ExpandFlags);
 /* Expand a single word to an owned string (here-docs, prompts, etc.). */
-shell::Result<std::string> expandarg_to_string(Context &sh, Node *,
+Result<std::string> expandarg_to_string(Context &sh, Node *,
 					      ExpandFlags);
 struct ExpandBuf;
 #define rmescapes(p) _rmescapes(sh, (p), 0, nullptr)
 char *_rmescapes(Context &sh, char *, int, ExpandBuf *eb = nullptr);
-shell::Result<int> casematch(Context &sh, Node *, char *);
+Result<int> casematch(Context &sh, Node *, char *);
 void recordregion(Context &sh, int, int, int);
-shell::Result<void> removerecordregions(Context &sh, int);
+Result<void> removerecordregions(Context &sh, int);
 void ifsbreakup(Context &sh, char *, int, ArgList *);
 void ifsfree(Context &sh);
-shell::Result<void> restore_handler_expandarg(Context &sh, int err);
+Result<void> restore_handler_expandarg(Context &sh, int err);
 void changeifs(Context &sh, std::string_view);
+
+} // namespace shell
 
 #endif

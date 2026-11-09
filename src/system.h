@@ -33,8 +33,8 @@
 
 #include <sys/types.h>
 
-namespace shell { struct Context; }
-using Context = shell::Context;
+#include <libshell.hpp>
+
 #ifndef SSIZE_MAX
 #define SSIZE_MAX ((ssize_t)((std::size_t)-1 >> 1))
 #endif
@@ -154,4 +154,8 @@ static inline void globfree64(glob64_t *pglob)
  */
 #define uninitialized_var(x) x = x
 
+namespace shell {
+
 unsigned conv_escape(Context &sh, const char *str, char *out, bool mbchar);
+
+} // namespace shell

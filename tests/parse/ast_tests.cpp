@@ -5,6 +5,8 @@
 
 #include "parse_helpers.hpp"
 
+
+using namespace shell;
 using parse_test::as_cmd;
 using parse_test::ctl_arith;
 using parse_test::ctl_backq;

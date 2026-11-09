@@ -73,7 +73,12 @@
 #include "mystring.h"
 #include "system.h"
 
-using Job = shell::Job;
+
+using namespace shell;
+
+
+
+namespace shell {
 
 /* mode flags for set_curjob */
 #define CUR_DELETE 2
@@ -85,25 +90,33 @@ using Job = shell::Job;
 #define DOWAIT_WAITCMD 2
 #define DOWAIT_WAITCMD_ALL 4
 
-static void set_curjob(Context &sh, Job *, unsigned);
-static std::string sprint_status(int);
-static void freejob(Context &sh, Job *);
-static shell::Result<Job *> getjob(Context &sh, const char *);
-static void forkchild(Context &sh, Job *, const Node *, int);
-static shell::Result<void> forkparent(Context &sh, Job *, const Node *, int, pid_t);
-static int dowait(Context &sh, int, Job *);
+namespace {
+void set_curjob(Context &sh, Job *, unsigned);
+std::string sprint_status(int);
+void freejob(Context &sh, Job *);
+Result<Job *> getjob(Context &sh, const char *);
+void forkchild(Context &sh, Job *, const Node *, int);
+Result<void> forkparent(Context &sh, Job *, const Node *, int, pid_t);
+int dowait(Context &sh, int, Job *);
+} // namespace
+
 #ifdef SYSV
-static int onsigchild();
+namespace {
+int onsigchild();
+} // namespace
+
 #endif
-static int waitproc(Context &sh, int, int *);
-static std::string commandtext(Context &sh, const Node *);
-static void cmdtxt(Context &sh, const Node *, std::string &);
-static void cmdlist(Context &sh, Node *, int, std::string &);
-static void cmdputs(std::string &, std::string_view);
+namespace {
+int waitproc(Context &sh, int, int *);
+std::string commandtext(Context &sh, const Node *);
+void cmdtxt(Context &sh, const Node *, std::string &);
+void cmdlist(Context &sh, Node *, int, std::string &);
+void cmdputs(std::string &, std::string_view);
+} // namespace
 
-namespace shell {
 
-shell::Job::Process &
+
+Job::Process &
 Job::add_process(pid_t pid, const std::string &command)
 {
 	processes.push_back(Process{pid, -1, std::move(command)});
@@ -135,9 +148,8 @@ Job::calc_status(bool pipefail_on)
 	return retval;
 }
 
-}
-
-static void
+namespace {
+void
 set_curjob(Context &sh, Job *jp, unsigned mode)
 {
 	auto &order = sh.job_order;
@@ -152,9 +164,11 @@ set_curjob(Context &sh, Job *jp, unsigned mode)
 		break;
 	}
 }
+} // namespace
 
 
-shell::Result<int>
+
+Result<int>
 killcmd(Context &sh, int argc, char **argv)
 {
 	int signo = -1;
@@ -201,7 +215,7 @@ usage:
 	}
 
 	if (list) {
-		shell::Output *out;
+		Output *out;
 
 		out = sh.out1;
 		if (!*argv) {
@@ -243,7 +257,8 @@ usage:
  * Text for a signal that killed the job waited on.  SIGINT and SIGPIPE
  * are not reported.  Returns an empty string when there is nothing to print.
  */
-static std::string
+namespace {
+std::string
 sprint_status(int status)
 {
 	if (WIFEXITED(status))
@@ -260,12 +275,15 @@ sprint_status(int status)
 #endif
 	return s;
 }
+} // namespace
+
 
 /*
  * Mark a job structure as unused.
  */
 
-static void
+namespace {
+void
 freejob(Context &sh, Job *jp)
 {
 	INTOFF(sh);
@@ -274,10 +292,12 @@ freejob(Context &sh, Job *jp)
 		sh.jobs[jp->slot].reset();
 	INTON_DEFER(sh);
 }
+} // namespace
 
 
 
-shell::Result<int>
+
+Result<int>
 waitcmd(Context &sh, int argc, char **argv)
 {
 	Job *job;
@@ -343,7 +363,8 @@ sigout:
  * Convert a job name to a job structure.
  */
 
-static shell::Result<Job *>
+namespace {
+Result<Job *>
 getjob(Context &sh, const char *name)
 {
 	enum class JobErr {
@@ -438,6 +459,8 @@ err:
 		return sh_error(sh, "No such job: {}", name ? name : "");
 	}
 }
+} // namespace
+
 
 
 
@@ -487,7 +510,8 @@ makejob(Context &sh, int nprocs)
  * Called with interrupts off.
  */
 
-static void
+namespace {
+void
 forkchild(Context &sh, Job *jp, const Node *n, int mode)
 {
 	int lvforked = sh.vforked;
@@ -523,7 +547,7 @@ forkchild(Context &sh, Job *jp, const Node *n, int mode)
 		freejob(sh, sh.job_order.front());
 }
 
-static shell::Result<void>
+Result<void>
 forkparent(Context &sh, Job *jp, const Node *n, int mode, pid_t pid)
 {
 	if (pid < 0) {
@@ -541,8 +565,10 @@ forkparent(Context &sh, Job *jp, const Node *n, int mode, pid_t pid)
 	jp->add_process(pid, n ? commandtext(sh, n) : std::string{});
 	return {};
 }
+} // namespace
 
-shell::Result<int>
+
+Result<int>
 forkshell(Context &sh, Job *jp, Node *n, int mode)
 {
 	pid_t pid;
@@ -558,7 +584,7 @@ forkshell(Context &sh, Job *jp, Node *n, int mode)
 	return pid;
 }
 
-shell::Result<Job *>
+Result<Job *>
 vforkexec(Context &sh, const Node *n, char **argv, const char *path, int idx)
 {
 	Job *jp;
@@ -588,7 +614,7 @@ vforkexec(Context &sh, const Node *n, char **argv, const char *path, int idx)
  * Called with interrupts off.
  */
 
-shell::Result<int>
+Result<int>
 waitforjob(Context &sh, Job *jp)
 {
 	int st;
@@ -609,7 +635,8 @@ waitforjob(Context &sh, Job *jp)
  * Wait for a process to terminate.
  */
 
-static int
+namespace {
+int
 waitone(Context &sh, int block, Job *job)
 {
 	int pid;
@@ -657,7 +684,7 @@ out:
 	return pid;
 }
 
-static int
+int
 dowait(Context &sh, int block, Job *jp)
 {
 	int gotchld = *(volatile int *)&sh.gotsigchld;
@@ -683,6 +710,8 @@ dowait(Context &sh, int block, Job *jp)
 
 	return rpid;
 }
+} // namespace
+
 
 /*
  * Do a wait system call.  If block is zero, we return -1 rather than
@@ -700,7 +729,8 @@ dowait(Context &sh, int block, Job *jp)
  */
 
 
-static int
+namespace {
+int
 waitproc(Context &sh, int block, int *status)
 {
 	sigset_t oldmask;
@@ -730,6 +760,8 @@ waitproc(Context &sh, int block, int *status)
 
 	return err;
 }
+} // namespace
+
 
 /*
  * Return a string identifying a command, so kill and wait can match %job
@@ -738,7 +770,8 @@ waitproc(Context &sh, int block, int *status)
 
 
 
-static std::string
+namespace {
+std::string
 commandtext(Context &sh, const Node *n)
 {
 	std::string out;
@@ -746,7 +779,7 @@ commandtext(Context &sh, const Node *n)
 	return out;
 }
 
-static void
+void
 cmdtxt(Context &sh, const Node *n, std::string &out)
 {
 	Node *np;
@@ -893,7 +926,7 @@ redir:
 	}
 }
 
-static void
+void
 cmdlist(Context &sh, Node *np, int sep, std::string &out)
 {
 	for (; np; np = as<ArgNode>(np)->next.get()) {
@@ -906,7 +939,7 @@ cmdlist(Context &sh, Node *np, int sep, std::string &out)
 }
 
 
-static void
+void
 cmdputs(std::string &out, std::string_view s)
 {
 	const char *p, *end, *str;
@@ -992,3 +1025,6 @@ dostr:
 		out.push_back('"');
 	}
 }
+} // namespace
+
+} // namespace shell

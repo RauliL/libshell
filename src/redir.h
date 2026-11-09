@@ -43,20 +43,22 @@
 #include "error.h"
 
 /* flags passed to redirect */
+
+namespace shell {
+
 #define REDIR_PUSH 01		/* save previous values of file descriptors */
 #define REDIR_SAVEFD2 03	/* set preverrout */
 
-using Node = shell::Node;
-using RedirFrame = shell::RedirFrame;
 
-using Context = shell::Context;
-shell::Result<void> redirect(Context &sh, Node *, int);
-shell::Result<void> popredir(Context &sh, int);
-shell::Result<int> savefd(Context &sh, int, int);
-shell::Result<int> redirectsafe(Context &sh, Node *, int);
-shell::Result<void> unwindredir(Context &sh, std::size_t stop);
+Result<void> redirect(Context &sh, Node *, int);
+Result<void> popredir(Context &sh, int);
+Result<int> savefd(Context &sh, int, int);
+Result<int> redirectsafe(Context &sh, Node *, int);
+Result<void> unwindredir(Context &sh, std::size_t stop);
 std::size_t pushredir(Context &sh, Node *redir);
 /** Drop saved redirection frames when entering a subshell. */
 void redir_forkreset(Context &sh);
-shell::Result<int> sh_open(Context &sh, const std::filesystem::path &pathname, int flags, int mayfail);
-shell::Result<int> sh_pipe(Context &sh, int pip[2], int memfd);
+Result<int> sh_open(Context &sh, const std::filesystem::path &pathname, int flags, int mayfail);
+Result<int> sh_pipe(Context &sh, int pip[2], int memfd);
+
+} // namespace shell

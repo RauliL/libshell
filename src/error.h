@@ -47,6 +47,9 @@
  * Types of operations (passed to the errmsg routine).
  */
 
+
+namespace shell {
+
 #define E_OPEN 01	/* opening a file */
 #define E_CREAT 02	/* creating a file */
 #define E_EXEC 04	/* executing a program */
@@ -56,8 +59,7 @@
  * INTON/FORCEINTON return from the enclosing ShellResult
  * function when a deferred SIGINT must unwind (via onint → exraise).
  */
-using Context = shell::Context;
-tl::unexpected<shell::Error> onint(Context &sh);
+tl::unexpected<Error> onint(Context &sh);
 
 #define barrier() ({ __asm__ __volatile__ ("": : :"memory"); })
 #define INTOFF(sh) \
@@ -67,7 +69,7 @@ tl::unexpected<shell::Error> onint(Context &sh);
 		0; \
 	})
 #ifdef REALLY_SMALL
-shell::Result<void> __inton(Context &sh);
+Result<void> __inton(Context &sh);
 #define INTON(sh) \
 	do { \
 		if (const auto _r = __inton((sh)); !_r) \
@@ -113,13 +115,13 @@ public:
 	InterruptSuppress &operator=(const InterruptSuppress &) = delete;
 	~InterruptSuppress();
 
-	shell::Result<void> resume();
+	Result<void> resume();
 };
 
 /* Avoid `.error()` in macros: bltin.h `#define error(...)` would rewrite it. */
 template <typename T>
-inline tl::unexpected<shell::Error>
-shell_fail_of(const shell::Result<T> &r)
+inline tl::unexpected<Error>
+shell_fail_of(const Result<T> &r)
 {
 	return tl::unexpected(r.error());
 }
@@ -154,21 +156,21 @@ auto with_interrupts_off(Context &sh, F &&f) -> decltype(f())
 	}
 }
 
-tl::unexpected<shell::Error> exraise(Context &sh, shell::Error);
-tl::unexpected<shell::Error> sh_error_msg(Context &sh, std::string msg);
-tl::unexpected<shell::Error> exerror_msg(Context &sh, shell::Error cond,
+tl::unexpected<Error> exraise(Context &sh, Error);
+tl::unexpected<Error> sh_error_msg(Context &sh, std::string msg);
+tl::unexpected<Error> exerror_msg(Context &sh, Error cond,
 					 std::string msg);
 
 template <typename... Args>
-tl::unexpected<shell::Error>
+tl::unexpected<Error>
 sh_error(Context &sh, std::format_string<Args...> fmt, Args &&...args)
 {
 	return sh_error_msg(sh, std::format(fmt, std::forward<Args>(args)...));
 }
 
 template <typename... Args>
-tl::unexpected<shell::Error>
-exerror(Context &sh, shell::Error cond, std::format_string<Args...> fmt,
+tl::unexpected<Error>
+exerror(Context &sh, Error cond, std::format_string<Args...> fmt,
 	Args &&...args)
 {
 	return exerror_msg(sh, cond,
@@ -185,3 +187,5 @@ sh_warnx(Context &sh, std::format_string<Args...> fmt, Args &&...args)
 {
 	sh_warnx_msg(sh, std::format(fmt, std::forward<Args>(args)...));
 }
+
+} // namespace shell
