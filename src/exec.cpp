@@ -133,7 +133,7 @@ namespace {
 void
 tryexec(Context &sh, char *cmd, char **argv, char **envp)
 {
-	char *const path_bshell = _PATH_BSHELL;
+	char path_bshell[] = _PATH_BSHELL;
 
 repeat:
 #ifdef SYSV

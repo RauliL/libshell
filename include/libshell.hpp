@@ -773,7 +773,7 @@ struct Context {
 		std::string,
 		Variable
 	>;
-	using signal_map_type = std::unordered_map<int, std::string_view>;
+	using signal_map_type = std::unordered_map<int, std::string>;
 
 	Output output{BUFSIZ, 1};
 	Output errout{0, 2};

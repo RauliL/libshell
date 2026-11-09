@@ -1162,7 +1162,7 @@ readtoken1(Context &sh, int firstc, char const *syntax, const std::string *eofma
 			unsigned ml;
 
 			/* Permit max(MB_LEN_MAX, 23) calls to USTPUTC. */
-			({ char *_q = (out); size_t _l = ((MB_LEN_MAX > 16 ? MB_LEN_MAX : 16) + 7); size_t _m = static_cast<size_t>(eb.cap_ptr() - _q); if (_l > _m) (out) = eb.makespace(_l, _q); 0; });
+			out = eb.makespace((MB_LEN_MAX > 16 ? MB_LEN_MAX : 16) + 7, out);
 			fieldsplitting = synstack->syntax == BASESYNTAX &&
 					 !(synstack->varnest |
 					   synstack->backq) ? 4 : 0;
@@ -1681,7 +1681,7 @@ parsebackq: {
                 int pc;
 
 		while (!done) {
-			({ char *_q = (pout); size_t _l = (MB_LEN_MAX + 1); size_t _m = static_cast<size_t>(eb.cap_ptr() - _q); if (_l > _m) (pout) = eb.makespace(_l, _q); 0; });
+			pout = eb.makespace(MB_LEN_MAX + 1, pout);
 			if (sh.parse.needprompt) {
 				setprompt(sh, 2);
 			}

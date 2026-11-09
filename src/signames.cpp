@@ -221,7 +221,8 @@ init_signal_names(Context &sh)
 		}
 
 		if (rtcnt < rt_limit / 2 - 1 && rtcnt != (rtmax - rtmin) / 2)
-			sh.signal_map[rtmin + rtcnt + 1] = "RTMIN+" + std::to_string(rtcnt + 1);
+			sh.signal_map[rtmin + rtcnt + 1] =
+				"RTMIN+" + std::to_string(rtcnt + 1);
 	}
 #endif
 #endif
@@ -232,7 +233,10 @@ Context::find_signal_name(int signo) const
 {
 	const auto it = signal_map.find(signo);
 
-	return it != std::end(signal_map) ? it->second : "";
+	if (it == std::end(signal_map))
+		return std::string_view{};
+
+	return it->second;
 }
 
 std::optional<int>

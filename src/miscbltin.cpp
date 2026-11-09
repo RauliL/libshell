@@ -154,7 +154,7 @@ readcmd(Context &sh, int argc, char **argv)
 		unsigned ml;
 		int c;
 
-		({ char *_q = (p); size_t _l = ((MB_LEN_MAX > 16 ? MB_LEN_MAX : 16) + 4); size_t _m = static_cast<size_t>(eb.cap_ptr() - _q); if (_l > _m) (p) = eb.makespace(_l, _q); 0; });
+		p = eb.makespace((MB_LEN_MAX > 16 ? MB_LEN_MAX : 16) + 4, p);
 		c = pgetc(sh);
 		if (c == PEOF) {
 			status = 1;
