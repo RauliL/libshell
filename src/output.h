@@ -45,19 +45,19 @@
 
 #include <sys/types.h>
 
-struct ShellContext;
-
-void outcslow(ShellContext &sh, int, shell::Output *);
-void flushall(ShellContext &sh);
-void outfmt(ShellContext &sh, shell::Output *, const char *, ...)
+namespace shell { struct Context; }
+using Context = shell::Context;
+void outcslow(Context &sh, int, shell::Output *);
+void flushall(Context &sh);
+void outfmt(Context &sh, shell::Output *, const char *, ...)
     __attribute__((__format__(__printf__,3,4)));
-void out1fmt(ShellContext &sh, const char *, ...)
+void out1fmt(Context &sh, const char *, ...)
     __attribute__((__format__(__printf__,2,3)));
-shell::Result<int> xasprintf(ShellContext &, std::string &, const char *, ...);
-void doformat(ShellContext &sh, shell::Output *, const char *, va_list);
-int xwrite(ShellContext &sh, int, const void *, std::size_t);
+shell::Result<int> xasprintf(Context &, std::string &, const char *, ...);
+void doformat(Context &sh, shell::Output *, const char *, va_list);
+int xwrite(Context &sh, int, const void *, std::size_t);
 
-inline void outc(ShellContext &sh, int ch, shell::Output *file)
+inline void outc(Context &sh, int ch, shell::Output *file)
 {
 	if (file->space() == 0)
 		outcslow(sh, ch, file);

@@ -77,7 +77,7 @@
  *  @param len length of line including trailing '\0'
  */
 static shell::Result<void>
-readcmd_handle_line(ShellContext &sh, ExpandBuf &eb, char *s, int ac, char **ap)
+readcmd_handle_line(Context &sh, ExpandBuf &eb, char *s, int ac, char **ap)
 {
 	ArgList fields;
 	size_t i = 0;
@@ -114,7 +114,7 @@ readcmd_handle_line(ShellContext &sh, ExpandBuf &eb, char *s, int ac, char **ap)
  */
 
 shell::Result<int>
-readcmd(ShellContext &sh, int argc, char **argv)
+readcmd(Context &sh, int argc, char **argv)
 {
 	char *prompt;
 	int startloc;
@@ -210,7 +210,7 @@ start:
  */
 
 shell::Result<int>
-umaskcmd(ShellContext &sh, int argc, char **argv)
+umaskcmd(Context &sh, int argc, char **argv)
 {
 	char *ap;
 	int mask;
@@ -388,7 +388,7 @@ static const struct limits limits[] = {
 enum limtype : int { SOFT = 0x1, HARD = 0x2 };
 
 static void
-printlim(ShellContext &sh, enum limtype how, const struct rlimit *limit,
+printlim(Context &sh, enum limtype how, const struct rlimit *limit,
 		     const struct limits *l)
 {
 	rlim_t val;
@@ -406,7 +406,7 @@ printlim(ShellContext &sh, enum limtype how, const struct rlimit *limit,
 }
 
 shell::Result<int>
-ulimitcmd(ShellContext &sh, int argc, char **argv)
+ulimitcmd(Context &sh, int argc, char **argv)
 {
 	int	c;
 	rlim_t val = 0;

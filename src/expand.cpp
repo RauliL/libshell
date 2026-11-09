@@ -123,23 +123,23 @@ struct ifs_state {
 
 
 
-static shell::Result<char *> argstr(ShellContext &sh, ExpandBuf &eb, char *p, ExpandFlags flag);
-static char * exptilde(ShellContext &sh, ExpandBuf &eb, char *startp, ExpandFlags flag);
-static shell::Result<char *> expari(ShellContext &sh, ExpandBuf &eb, char *start, ExpandFlags flag);
-static shell::Result<void> expbackq(ShellContext &sh, ExpandBuf &eb, Node *, ExpandFlags);
-static shell::Result<char *> evalvar(ShellContext &sh, ExpandBuf &eb, char *, ExpandFlags);
-static size_t strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, ExpandFlags flags);
-static size_t memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, ExpandFlags flags);
-static shell::Result<ssize_t> varvalue(ShellContext &sh, ExpandBuf &eb, char *,
+static shell::Result<char *> argstr(Context &sh, ExpandBuf &eb, char *p, ExpandFlags flag);
+static char * exptilde(Context &sh, ExpandBuf &eb, char *startp, ExpandFlags flag);
+static shell::Result<char *> expari(Context &sh, ExpandBuf &eb, char *start, ExpandFlags flag);
+static shell::Result<void> expbackq(Context &sh, ExpandBuf &eb, Node *, ExpandFlags);
+static shell::Result<char *> evalvar(Context &sh, ExpandBuf &eb, char *, ExpandFlags);
+static size_t strtodest(Context &sh, ExpandBuf &eb, const char *p, ExpandFlags flags);
+static size_t memtodest(Context &sh, ExpandBuf &eb, const char *p, size_t len, ExpandFlags flags);
+static shell::Result<ssize_t> varvalue(Context &sh, ExpandBuf &eb, char *,
 				       int, ExpandFlags);
-static shell::Result<void> expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &);
-static void addglob(ShellContext &sh, const glob64_t *);
-static char * expmeta(ShellContext &sh, ExpandBuf &eb, char *, unsigned, size_t);
-static void addfname(ShellContext &sh, char *);
-static int patmatch(ShellContext &sh, char *, const char *, ExpandBuf *eb = nullptr);
-static int pmatch(ShellContext &sh, char *, const char *);
-static size_t cvtnum(ShellContext &sh, ExpandBuf &eb, intmax_t num, ExpandFlags flags);
-static tl::unexpected<shell::Error> varunset(ShellContext &sh, const char *, const char *, const char *, int);
+static shell::Result<void> expandmeta(Context &sh, ExpandBuf &eb, ArgList &);
+static void addglob(Context &sh, const glob64_t *);
+static char * expmeta(Context &sh, ExpandBuf &eb, char *, unsigned, size_t);
+static void addfname(Context &sh, char *);
+static int patmatch(Context &sh, char *, const char *, ExpandBuf *eb = nullptr);
+static int pmatch(Context &sh, char *, const char *);
+static size_t cvtnum(Context &sh, ExpandBuf &eb, intmax_t num, ExpandFlags flags);
+static tl::unexpected<shell::Error> varunset(Context &sh, const char *, const char *, const char *, int);
 
 
 /*
@@ -149,7 +149,7 @@ static tl::unexpected<shell::Error> varunset(ShellContext &sh, const char *, con
  */
 
 static inline char *
-preglob(ShellContext &sh, const char *pattern, int flag, ExpandBuf *eb = nullptr)
+preglob(Context &sh, const char *pattern, int flag, ExpandBuf *eb = nullptr)
 {
 	if (FNMATCH_IS_ENABLED) {
 		if (!flag)
@@ -162,7 +162,7 @@ preglob(ShellContext &sh, const char *pattern, int flag, ExpandBuf *eb = nullptr
 
 
 static size_t
-mesclen(ShellContext &sh, const char *start, const char *p, char mesc)
+mesclen(Context &sh, const char *start, const char *p, char mesc)
 {
 	size_t esc = 0;
 
@@ -173,13 +173,13 @@ mesclen(ShellContext &sh, const char *start, const char *p, char mesc)
 }
 
 static size_t
-esclen(ShellContext &sh, const char *start, const char *p)
+esclen(Context &sh, const char *start, const char *p)
 {
 	return mesclen(sh, start, p, CTLESC);
 }
 
 static __attribute__((noinline)) unsigned
-mbnext(ShellContext &sh, const char *p)
+mbnext(Context &sh, const char *p)
 {
 	unsigned start = 0;
 	unsigned end = 0;
@@ -205,7 +205,7 @@ mbnext(ShellContext &sh, const char *p)
 }
 
 static inline const char *
-getpwhome(ShellContext &sh, const char *name)
+getpwhome(Context &sh, const char *name)
 {
 #ifdef HAVE_GETPWNAM
 	struct passwd *pw = getpwnam(name);
@@ -224,7 +224,7 @@ getpwhome(ShellContext &sh, const char *name)
  */
 
 shell::Result<void>
-expandarg(ShellContext &sh, Node *arg, ArgList *alist, ExpandFlags flag)
+expandarg(Context &sh, Node *arg, ArgList *alist, ExpandFlags flag)
 {
 	ExpandBuf eb;
 	char *p;
@@ -255,7 +255,7 @@ expandarg(ShellContext &sh, Node *arg, ArgList *alist, ExpandFlags flag)
 }
 
 shell::Result<std::string>
-expandarg_to_string(ShellContext &sh, Node *arg, ExpandFlags flag)
+expandarg_to_string(Context &sh, Node *arg, ExpandFlags flag)
 {
 	ExpandBuf eb;
 
@@ -278,7 +278,7 @@ expandarg_to_string(ShellContext &sh, Node *arg, ExpandFlags flag)
  */
 
 static shell::Result<char *>
-argstr(ShellContext &sh, ExpandBuf &eb, char *p, ExpandFlags flag)
+argstr(Context &sh, ExpandBuf &eb, char *p, ExpandFlags flag)
 {
 	static const char spclchars[] = {
 		'=',
@@ -412,7 +412,7 @@ addquote:
 }
 
 static char *
-exptilde(ShellContext &sh, ExpandBuf &eb, char *startp, ExpandFlags flag)
+exptilde(Context &sh, ExpandBuf &eb, char *startp, ExpandFlags flag)
 {
 	signed char c;
 	char *name;
@@ -461,7 +461,7 @@ lose:
 
 
 shell::Result<void>
-removerecordregions(ShellContext &sh, int endoff)
+removerecordregions(Context &sh, int endoff)
 {
 	auto &regs = sh.expand.ifsregions;
 
@@ -496,7 +496,7 @@ removerecordregions(ShellContext &sh, int endoff)
  * evaluate, place result in (backed up) result, adjust string position.
  */
 static shell::Result<char *>
-expari(ShellContext &sh, ExpandBuf &eb, char *start, ExpandFlags flag)
+expari(Context &sh, ExpandBuf &eb, char *start, ExpandFlags flag)
 {
 	int begoff;
 	int endoff;
@@ -540,7 +540,7 @@ out:
  */
 
 static shell::Result<void>
-expbackq(ShellContext &sh, ExpandBuf &eb, Node *cmd, ExpandFlags flag)
+expbackq(Context &sh, ExpandBuf &eb, Node *cmd, ExpandFlags flag)
 {
 	struct backcmd in;
 	int i;
@@ -600,7 +600,7 @@ out:
 
 
 static char *
-scanleft(ShellContext &sh, char *startp, char *endp, char *rmesc, char *rmescend,
+scanleft(Context &sh, char *startp, char *endp, char *rmesc, char *rmescend,
 		      char *str, int quotes, int zero)
 {
 	char *loc;
@@ -638,7 +638,7 @@ scanleft(ShellContext &sh, char *startp, char *endp, char *rmesc, char *rmescend
 
 
 static char *
-scanright(ShellContext &sh, char *startp, char *endp, char *rmesc, char *rmescend,
+scanright(Context &sh, char *startp, char *endp, char *rmesc, char *rmescend,
 		       char *str, int quotes, int zero)
 {
 	size_t esc = 0;
@@ -681,7 +681,7 @@ scanright(ShellContext &sh, char *startp, char *endp, char *rmesc, char *rmescen
 }
 
 static shell::Result<char *>
-subevalvar(ShellContext &sh, ExpandBuf &eb, char *start, char *str, int strloc, int startloc,
+subevalvar(Context &sh, ExpandBuf &eb, char *start, char *str, int strloc, int startloc,
 			int varflags, ExpandFlags flag)
 {
 	int subtype = varflags & VSTYPE;
@@ -691,7 +691,7 @@ subevalvar(ShellContext &sh, ExpandBuf &eb, char *start, char *str, int strloc, 
 	long amount;
 	char *rmesc, *rmescend;
 	int zero;
-	char *(*scan)(ShellContext &, char *, char *, char *, char *, char *, int, int);
+	char *(*scan)(Context &, char *, char *, char *, char *, char *, int, int);
 	int nstrloc = strloc;
 	char *endp;
 	char *p;
@@ -779,7 +779,7 @@ out:
  * input string.
  */
 static shell::Result<char *>
-evalvar(ShellContext &sh, ExpandBuf &eb, char *p, ExpandFlags flag)
+evalvar(Context &sh, ExpandBuf &eb, char *p, ExpandFlags flag)
 {
 	int subtype;
 	int varflags;
@@ -885,7 +885,7 @@ really_record:
 }
 
 static char *
-chtodest(ShellContext &sh, int c, const char *syntax, char *out)
+chtodest(Context &sh, int c, const char *syntax, char *out)
 {
 	if (syntax[c] == CCTL)
 		(*(out)++ = (CTLESC));
@@ -895,7 +895,7 @@ chtodest(ShellContext &sh, int c, const char *syntax, char *out)
 }
 
 static struct mbpair
-mbtodest(ShellContext &sh, const char *p, char *q, const char *syntax,
+mbtodest(Context &sh, const char *p, char *q, const char *syntax,
 			      size_t len)
 {
 	mbstate_t mbs = {};
@@ -933,7 +933,7 @@ out:
  */
 
 static size_t
-memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, ExpandFlags flags)
+memtodest(Context &sh, ExpandBuf &eb, const char *p, size_t len, ExpandFlags flags)
 {
 	const char *syntax;
 	size_t count = 0;
@@ -1008,7 +1008,7 @@ memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, ExpandFlag
 
 
 static size_t
-strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, ExpandFlags flags)
+strtodest(Context &sh, ExpandBuf &eb, const char *p, ExpandFlags flags)
 {
 	size_t len = strlen(p);
 	return memtodest(sh, eb, p, len, flags);
@@ -1021,7 +1021,7 @@ strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, ExpandFlags flags)
  */
 
 static shell::Result<ssize_t>
-varvalue(ShellContext &sh, ExpandBuf &eb, char *name, int varflags, ExpandFlags flags)
+varvalue(Context &sh, ExpandBuf &eb, char *name, int varflags, ExpandFlags flags)
 {
 	int subtype = varflags & VSTYPE;
 	unsigned long seplen;
@@ -1160,7 +1160,7 @@ value:
  */
 
 void
-recordregion(ShellContext &sh, int start, int end, int nulonly)
+recordregion(Context &sh, int start, int end, int nulonly)
 {
 	INTOFF(sh);
 	sh.expand.ifsregions.push_back({start, end, nulonly});
@@ -1168,7 +1168,7 @@ recordregion(ShellContext &sh, int start, int end, int nulonly)
 }
 
 static unsigned
-ifsisifs(ShellContext &sh, const char *p, unsigned ml, const char *ifs)
+ifsisifs(Context &sh, const char *p, unsigned ml, const char *ifs)
 {
 	bool isdefifs = false;
 	bool isifs = false;
@@ -1200,7 +1200,7 @@ out:
 }
 
 static char *
-ifsbreakup_slow(ShellContext &sh, struct ifs_state *ifst, ArgList *alist,
+ifsbreakup_slow(Context &sh, struct ifs_state *ifst, ArgList *alist,
 			     int nulonly, char *p)
 {
 	unsigned ifschar;
@@ -1295,7 +1295,7 @@ out_zero_ifsspc:
  * joining together the last arguments.
  */
 void
-ifsbreakup(ShellContext &sh, char *string, int maxargs, ArgList *alist)
+ifsbreakup(Context &sh, char *string, int maxargs, ArgList *alist)
 {
 	struct ifs_state ifst;
 	const char *realifs;
@@ -1371,7 +1371,7 @@ add:
 }
 
 void
-ifsfree(ShellContext &sh)
+ifsfree(Context &sh)
 {
 	if (sh.expand.ifsregions.empty())
 		return;
@@ -1382,7 +1382,7 @@ ifsfree(ShellContext &sh)
 }
 
 void
-changeifs(ShellContext &sh, std::string_view ifs_in)
+changeifs(Context &sh, std::string_view ifs_in)
 {
 	mbstate_t mbs = {};
 	std::wstring nwcifs;
@@ -1442,7 +1442,7 @@ out:
 
 #ifdef __GLIBC__
 static void *
-opendir_interruptible(ShellContext &sh, const char *pathname)
+opendir_interruptible(Context &sh, const char *pathname)
 {
 	if (int_pending(sh)) {
 		sh.suppressint = 0;
@@ -1456,7 +1456,7 @@ opendir_interruptible(ShellContext &sh, const char *pathname)
 #endif
 
 static shell::Result<void>
-expandmeta_glob(ShellContext &sh, ArgList &strs)
+expandmeta_glob(Context &sh, ArgList &strs)
 {
 	ArgList out;
 
@@ -1473,7 +1473,7 @@ expandmeta_glob(ShellContext &sh, ArgList &strs)
 		pglob.gl_readdir = reinterpret_cast<struct dirent64 *(*)(void *)>(
 			readdir64);
 		pglob.gl_opendir = [](const char *pathname) -> void * {
-			return opendir_interruptible(*ShellContext::signaled, pathname);
+			return opendir_interruptible(*Context::signaled, pathname);
 		};
 		pglob.gl_lstat = lstat64;
 		pglob.gl_stat = stat64;
@@ -1520,7 +1520,7 @@ nometa:
  */
 
 static void
-addglob(ShellContext &sh, const glob64_t *pglob)
+addglob(Context &sh, const glob64_t *pglob)
 {
 	char **p = pglob->gl_pathv;
 
@@ -1530,7 +1530,7 @@ addglob(ShellContext &sh, const glob64_t *pglob)
 }
 
 static shell::Result<void>
-expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &strs)
+expandmeta(Context &sh, ExpandBuf &eb, ArgList &strs)
 {
 	/* TODO - EXP_REDIR */
 
@@ -1579,13 +1579,13 @@ nometa:
 }
 
 static void
-addfname_common(ShellContext &sh, char *name)
+addfname_common(Context &sh, char *name)
 {
 	sh.expand.exparg.emplace_back(name);
 }
 
 static char *
-addfnamealt(ShellContext &sh, ExpandBuf &eb, char *enddir, size_t expdir_len)
+addfnamealt(Context &sh, ExpandBuf &eb, char *enddir, size_t expdir_len)
 {
 	char *name;
 
@@ -1597,7 +1597,7 @@ addfnamealt(ShellContext &sh, ExpandBuf &eb, char *enddir, size_t expdir_len)
 }
 
 static char *
-expmeta_rmescapes(ShellContext &sh, char *enddir, const char *name)
+expmeta_rmescapes(Context &sh, char *enddir, const char *name)
 {
 	const char *p;
 
@@ -1621,7 +1621,7 @@ expmeta_rmescapes(ShellContext &sh, char *enddir, const char *name)
 
 #ifndef HAVE_MEMRCHR
 static void *
-memrchr(ShellContext &sh, const void *s, int c, size_t n)
+memrchr(Context &sh, const void *s, int c, size_t n)
 {
 	const unsigned char *str = s;
 	const unsigned char *cp;
@@ -1638,7 +1638,7 @@ memrchr(ShellContext &sh, const void *s, int c, size_t n)
  */
 
 static char *
-expmeta(ShellContext &sh, ExpandBuf &eb, char *name, unsigned name_len, size_t expdir_len)
+expmeta(Context &sh, ExpandBuf &eb, char *name, unsigned name_len, size_t expdir_len)
 {
 	const char mesc = FNMATCH_IS_ENABLED ? '\\' : CTLESC;
 	struct stat64 statb;
@@ -1757,7 +1757,7 @@ out_opendir:
  */
 
 static void
-addfname(ShellContext &sh, char *name)
+addfname(Context &sh, char *name)
 {
 	addfname_common(sh, name);
 }
@@ -1770,14 +1770,14 @@ addfname(ShellContext &sh, char *name)
  */
 
 static inline int
-patmatch(ShellContext &sh, char *pattern, const char *string, ExpandBuf *eb)
+patmatch(Context &sh, char *pattern, const char *string, ExpandBuf *eb)
 {
 	return pmatch(sh, preglob(sh, pattern, 0, eb), string);
 }
 
 
 static __attribute__((noinline)) int
-ccmatch(ShellContext &sh, char *p, const char *mbc, int ml,
+ccmatch(Context &sh, char *p, const char *mbc, int ml,
 					     char **r)
 {
 	mbstate_t mbst = {};
@@ -1810,7 +1810,7 @@ ccmatch(ShellContext &sh, char *p, const char *mbc, int ml,
 }
 
 static int
-pmatch(ShellContext &sh, char *pattern, const char *string)
+pmatch(Context &sh, char *pattern, const char *string)
 {
 	const char *q;
 	unsigned mb;
@@ -1969,7 +1969,7 @@ breakloop:
  */
 
 char *
-_rmescapes(ShellContext &sh, char *str, int flag, ExpandBuf *eb)
+_rmescapes(Context &sh, char *str, int flag, ExpandBuf *eb)
 {
 	char *p, *q, *r;
 	int notescaped;
@@ -2082,7 +2082,7 @@ setnesc:
  */
 
 shell::Result<int>
-casematch(ShellContext &sh, Node *pattern, char *val)
+casematch(Context &sh, Node *pattern, char *val)
 {
 	ExpandBuf eb;
 	int result;
@@ -2100,7 +2100,7 @@ casematch(ShellContext &sh, Node *pattern, char *val)
  * Our own itoa().
  */
 static std::size_t
-cvtnum(ShellContext &sh, ExpandBuf &eb, std::intmax_t num, ExpandFlags flags)
+cvtnum(Context &sh, ExpandBuf &eb, std::intmax_t num, ExpandFlags flags)
 {
 	auto buf = std::format("{}", num);
 
@@ -2108,7 +2108,7 @@ cvtnum(ShellContext &sh, ExpandBuf &eb, std::intmax_t num, ExpandFlags flags)
 }
 
 static tl::unexpected<shell::Error>
-varunset(ShellContext &sh, const char *end, const char *var, const char *umsg, int varflags)
+varunset(Context &sh, const char *end, const char *var, const char *umsg, int varflags)
 {
 	const char *msg = "parameter not set";
 	const char *tail = "";
@@ -2124,7 +2124,7 @@ varunset(ShellContext &sh, const char *end, const char *var, const char *umsg, i
 }
 
 shell::Result<void>
-restore_handler_expandarg(ShellContext &sh, int err)
+restore_handler_expandarg(Context &sh, int err)
 {
 	if (err) {
 		if (sh.exception != shell::Error::Generic)

@@ -52,12 +52,12 @@
 #define E_EXEC 04	/* executing a program */
 
 /*
- * Interrupt deferral macros require ShellContext &sh in scope.
+ * Interrupt deferral macros require Context &sh in scope.
  * INTON/FORCEINTON return from the enclosing ShellResult
  * function when a deferred SIGINT must unwind (via onint → exraise).
  */
-struct ShellContext;
-tl::unexpected<shell::Error> onint(ShellContext &sh);
+using Context = shell::Context;
+tl::unexpected<shell::Error> onint(Context &sh);
 
 #define barrier() ({ __asm__ __volatile__ ("": : :"memory"); })
 #define INTOFF(sh) \
@@ -67,7 +67,7 @@ tl::unexpected<shell::Error> onint(ShellContext &sh);
 		0; \
 	})
 #ifdef REALLY_SMALL
-shell::Result<void> __inton(ShellContext &sh);
+shell::Result<void> __inton(Context &sh);
 #define INTON(sh) \
 	do { \
 		if (const auto _r = __inton((sh)); !_r) \
@@ -104,11 +104,11 @@ shell::Result<void> __inton(ShellContext &sh);
  * for full INTON semantics (may return onint).
  */
 class InterruptSuppress {
-	ShellContext &sh_;
+	Context &sh_;
 	bool active_ = true;
 
 public:
-	explicit InterruptSuppress(ShellContext &sh);
+	explicit InterruptSuppress(Context &sh);
 	InterruptSuppress(const InterruptSuppress &) = delete;
 	InterruptSuppress &operator=(const InterruptSuppress &) = delete;
 	~InterruptSuppress();
@@ -140,7 +140,7 @@ shell_fail_of(const shell::Result<T> &r)
 	} while (0)
 
 template <typename F>
-auto with_interrupts_off(ShellContext &sh, F &&f) -> decltype(f())
+auto with_interrupts_off(Context &sh, F &&f) -> decltype(f())
 {
 	InterruptSuppress guard(sh);
 	if constexpr (std::is_void_v<decltype(f())>) {
@@ -154,21 +154,21 @@ auto with_interrupts_off(ShellContext &sh, F &&f) -> decltype(f())
 	}
 }
 
-tl::unexpected<shell::Error> exraise(ShellContext &sh, shell::Error);
-tl::unexpected<shell::Error> sh_error_msg(ShellContext &sh, std::string msg);
-tl::unexpected<shell::Error> exerror_msg(ShellContext &sh, shell::Error cond,
+tl::unexpected<shell::Error> exraise(Context &sh, shell::Error);
+tl::unexpected<shell::Error> sh_error_msg(Context &sh, std::string msg);
+tl::unexpected<shell::Error> exerror_msg(Context &sh, shell::Error cond,
 					 std::string msg);
 
 template <typename... Args>
 tl::unexpected<shell::Error>
-sh_error(ShellContext &sh, std::format_string<Args...> fmt, Args &&...args)
+sh_error(Context &sh, std::format_string<Args...> fmt, Args &&...args)
 {
 	return sh_error_msg(sh, std::format(fmt, std::forward<Args>(args)...));
 }
 
 template <typename... Args>
 tl::unexpected<shell::Error>
-exerror(ShellContext &sh, shell::Error cond, std::format_string<Args...> fmt,
+exerror(Context &sh, shell::Error cond, std::format_string<Args...> fmt,
 	Args &&...args)
 {
 	return exerror_msg(sh, cond,
@@ -177,11 +177,11 @@ exerror(ShellContext &sh, shell::Error cond, std::format_string<Args...> fmt,
 
 const char *errmsg(int, int);
 
-void sh_warnx_msg(ShellContext &sh, std::string msg);
+void sh_warnx_msg(Context &sh, std::string msg);
 
 template <typename... Args>
 void
-sh_warnx(ShellContext &sh, std::format_string<Args...> fmt, Args &&...args)
+sh_warnx(Context &sh, std::format_string<Args...> fmt, Args &&...args)
 {
 	sh_warnx_msg(sh, std::format(fmt, std::forward<Args>(args)...));
 }

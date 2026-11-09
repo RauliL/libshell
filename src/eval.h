@@ -52,16 +52,15 @@ struct backcmd {		/* result of evalbackcmd */
 
 #include "error.h"
 
-struct ShellContext;
-
+using Context = shell::Context;
 using EvalFlag = shell::EvalFlag;
 using EvalFlags = shell::EvalFlags;
 using Node = shell::Node;
 
-shell::Result<int> evaltree(ShellContext &sh, Node *, EvalFlags);
-shell::Result<void> evalbackcmd(ShellContext &sh, Node *, struct backcmd *);
+shell::Result<int> evaltree(Context &sh, Node *, EvalFlags);
+shell::Result<void> evalbackcmd(Context &sh, Node *, struct backcmd *);
 /** Clear eval skip/loop state and close the temporary pipe on unwind. */
-void eval_exitreset(ShellContext &sh);
+void eval_exitreset(Context &sh);
 
 extern int evalskip;
 

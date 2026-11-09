@@ -46,14 +46,13 @@
 #define FORK_BG 1
 #define FORK_NOJOB 2
 
-struct ShellContext;
-
+using Context = shell::Context;
 using Node = shell::Node;
 
-shell::Result<int> killcmd(ShellContext &, int, char **);
-shell::Result<int> waitcmd(ShellContext &, int, char **);
-shell::Job *makejob(ShellContext &, int);
-shell::Result<int> forkshell(ShellContext &, shell::Job *, Node *, int);
-shell::Result<shell::Job *> vforkexec(ShellContext &, const Node *, char **,
+shell::Result<int> killcmd(Context &, int, char **);
+shell::Result<int> waitcmd(Context &, int, char **);
+shell::Job *makejob(Context &, int);
+shell::Result<int> forkshell(Context &, shell::Job *, Node *, int);
+shell::Result<shell::Job *> vforkexec(Context &, const Node *, char **,
 				      const char *, int);
-shell::Result<int> waitforjob(ShellContext &, shell::Job *);
+shell::Result<int> waitforjob(Context &, shell::Job *);

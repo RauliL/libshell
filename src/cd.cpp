@@ -66,13 +66,13 @@
 #define CD_PHYSICAL 1
 #define CD_PRINT 2
 
-static shell::Result<int> docd(ShellContext &sh, const char *, int);
-static shell::Result<std::optional<std::string>> updatepwd(ShellContext &sh, const char *);
-static std::string getpwd(ShellContext &sh);
-static shell::Result<int> cdopt(ShellContext &sh);
+static shell::Result<int> docd(Context &sh, const char *, int);
+static shell::Result<std::optional<std::string>> updatepwd(Context &sh, const char *);
+static std::string getpwd(Context &sh);
+static shell::Result<int> cdopt(Context &sh);
 
 static shell::Result<int>
-cdopt(ShellContext &sh)
+cdopt(Context &sh)
 {
 	int flags = 0;
 	int i, j;
@@ -89,7 +89,7 @@ cdopt(ShellContext &sh)
 }
 
 shell::Result<int>
-cdcmd(ShellContext &sh, int argc, char **argv)
+cdcmd(Context &sh, int argc, char **argv)
 {
 	const char *dest;
 	const char *path;
@@ -161,7 +161,7 @@ out:
  */
 
 static shell::Result<int>
-docd(ShellContext &sh, const char *dest, int flags)
+docd(Context &sh, const char *dest, int flags)
 {
 	std::optional<std::string> logical;
 	const char *dir = nullptr;
@@ -197,7 +197,7 @@ out:
  */
 
 static shell::Result<std::optional<std::string>>
-updatepwd(ShellContext &sh, const char *dir)
+updatepwd(Context &sh, const char *dir)
 {
 	std::string path;
 	std::string components;
@@ -266,7 +266,7 @@ updatepwd(ShellContext &sh, const char *dir)
  * directory, this routine returns immediately.
  */
 static std::string
-getpwd(ShellContext &sh)
+getpwd(Context &sh)
 {
 #ifdef __GLIBC__
 	char *dir = getcwd(0, 0);
@@ -288,7 +288,7 @@ getpwd(ShellContext &sh)
 }
 
 shell::Result<int>
-pwdcmd(ShellContext &sh, int argc, char **argv)
+pwdcmd(Context &sh, int argc, char **argv)
 {
 	int flags;
 	const char *dir = sh.cwd.curdir.c_str();
@@ -305,7 +305,7 @@ pwdcmd(ShellContext &sh, int argc, char **argv)
 
 shell::Result<void>
 setpwd(
-	ShellContext &sh,
+	Context &sh,
 	std::optional<std::string_view> val,
 	int setold,
 	bool refresh_phys

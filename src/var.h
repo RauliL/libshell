@@ -46,13 +46,13 @@
 
 #include "error.h"
 
-struct ShellContext;
-
+namespace shell { struct Context; }
+using Context = shell::Context;
 /*
  * Shell variables.
  */
 
-/* Value helpers use ShellContext &sh from the enclosing scope. */
+/* Value helpers use Context &sh from the enclosing scope. */
 
 extern const char defpathvar[];
 inline constexpr char defifs[] = " \t\n";
@@ -69,26 +69,25 @@ inline constexpr char defifs[] = " \t\n";
 #define ps2val(sh)	((sh).variables.at("PS2").text.c_str() + 4)
 #define ps4val(sh)	((sh).variables.at("PS4").text.c_str() + 4)
 
-struct ShellContext;
-void initvar(ShellContext &sh);
+void initvar(Context &sh);
 /** Seed builtins, import environ, and set IFS/OPTIND/PPID/PWD. */
-void init_shell_vars(ShellContext &sh);
-shell::Result<shell::Variable *> setvar(ShellContext &sh, const std::string &name,
+void init_shell_vars(Context &sh);
+shell::Result<shell::Variable *> setvar(Context &sh, const std::string &name,
 				       const std::optional<std::string> &val,
 				       shell::Variable::Flags flags = {});
-shell::Result<shell::Variable *> setvareq(ShellContext &sh, std::string s, shell::Variable::Flags flags = {});
+shell::Result<shell::Variable *> setvareq(Context &sh, std::string s, shell::Variable::Flags flags = {});
 /** Name=value strings for variables matching on/off flags (no sentinel). */
-std::vector<std::string_view> listvars(ShellContext &sh, const shell::Variable::Flags &on,
+std::vector<std::string_view> listvars(Context &sh, const shell::Variable::Flags &on,
 				       const shell::Variable::Flags &off);
 /** Environ block for execve: pointers into the variable map + trailing nullptr. */
-std::vector<char *> environment(ShellContext &sh);
-shell::Result<int> showvars(ShellContext &sh, std::string_view prefix,
+std::vector<char *> environment(Context &sh);
+shell::Result<int> showvars(Context &sh, std::string_view prefix,
 				const shell::Variable::Flags &on, const shell::Variable::Flags &off);
-shell::Result<int> exportcmd(ShellContext &sh, int, char **);
-shell::Result<int> localcmd(ShellContext &sh, int, char **);
-shell::Result<void> mklocal(ShellContext &sh, std::string_view name,
+shell::Result<int> exportcmd(Context &sh, int, char **);
+shell::Result<int> localcmd(Context &sh, int, char **);
+shell::Result<void> mklocal(Context &sh, std::string_view name,
 				const shell::Variable::Flags &flags = {});
-shell::Result<std::size_t> pushlocalvars(ShellContext &sh, int push);
-shell::Result<void> unwindlocalvars(ShellContext &sh, std::size_t stop);
-shell::Result<int> unsetcmd(ShellContext &sh, int, char **);
-shell::Result<void> unsetvar(ShellContext &sh, const std::string &);
+shell::Result<std::size_t> pushlocalvars(Context &sh, int push);
+shell::Result<void> unwindlocalvars(Context &sh, std::size_t stop);
+shell::Result<int> unsetcmd(Context &sh, int, char **);
+shell::Result<void> unsetvar(Context &sh, const std::string &);

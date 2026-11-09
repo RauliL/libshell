@@ -65,42 +65,42 @@ using stdin_state = shell::StdinState;
 using InputStack = shell::InputStack;
 
 /*
- * The input line number. Requires ShellContext &sh in scope.
+ * The input line number. Requires Context &sh in scope.
  */
 #define plinno (sh.input.linno())
 
-struct ShellContext;
-void input_init(ShellContext &sh, InputStack &in);
+using Context = shell::Context;
+void input_init(Context &sh, InputStack &in);
 /** Drain the current line after an error/interrupt in an interactive shell. */
-void input_reset_interactive(ShellContext &sh);
+void input_reset_interactive(Context &sh);
 /** Drop nested input files and stdin pipe state when entering a subshell. */
-void input_forkreset(ShellContext &sh);
-int pgetc(ShellContext &sh, InputStack &in);
-int pgetc_eoa(ShellContext &sh, InputStack &in);
-void pungetc(ShellContext &sh, InputStack &in);
+void input_forkreset(Context &sh);
+int pgetc(Context &sh, InputStack &in);
+int pgetc_eoa(Context &sh, InputStack &in);
+void pungetc(Context &sh, InputStack &in);
 void pungetn(InputStack &in, int);
-void pushstring(ShellContext &sh, InputStack &in, char *, const std::shared_ptr<shell::Alias> & = nullptr);
-shell::Result<int> setinputfile(ShellContext &sh, InputStack &in,
+void pushstring(Context &sh, InputStack &in, char *, const std::shared_ptr<shell::Alias> & = nullptr);
+shell::Result<int> setinputfile(Context &sh, InputStack &in,
 				    std::string_view, int);
-void setinputstring(ShellContext &sh, InputStack &in, char *);
-void pushstdin(ShellContext &sh, InputStack &in);
-void popfile(ShellContext &sh, InputStack &in);
-void unwindfiles(ShellContext &sh, InputStack &in, parsefile *stop);
-void popallfiles(ShellContext &sh, InputStack &in);
-void flush_input(ShellContext &sh, InputStack &in);
-void reset_input(ShellContext &sh, InputStack &in);
+void setinputstring(Context &sh, InputStack &in, char *);
+void pushstdin(Context &sh, InputStack &in);
+void popfile(Context &sh, InputStack &in);
+void unwindfiles(Context &sh, InputStack &in, parsefile *stop);
+void popallfiles(Context &sh, InputStack &in);
+void flush_input(Context &sh, InputStack &in);
+void reset_input(Context &sh, InputStack &in);
 
 /* Overloads that use the shell's own input stack. */
-void input_init(ShellContext &sh);
-int pgetc(ShellContext &sh);
-int pgetc_eoa(ShellContext &sh);
-void pungetc(ShellContext &sh);
-void pungetn(ShellContext &sh, int);
-void pushstring(ShellContext &sh, char *, const std::shared_ptr<shell::Alias> & = nullptr);
-shell::Result<int> setinputfile(ShellContext &sh, std::string_view, int);
-void setinputstring(ShellContext &sh, char *);
-void pushstdin(ShellContext &sh);
-void popfile(ShellContext &sh);
-void unwindfiles(ShellContext &sh, parsefile *);
-void flush_input(ShellContext &sh);
-void reset_input(ShellContext &sh);
+void input_init(Context &sh);
+int pgetc(Context &sh);
+int pgetc_eoa(Context &sh);
+void pungetc(Context &sh);
+void pungetn(Context &sh, int);
+void pushstring(Context &sh, char *, const std::shared_ptr<shell::Alias> & = nullptr);
+shell::Result<int> setinputfile(Context &sh, std::string_view, int);
+void setinputstring(Context &sh, char *);
+void pushstdin(Context &sh);
+void popfile(Context &sh);
+void unwindfiles(Context &sh, parsefile *);
+void flush_input(Context &sh);
+void reset_input(Context &sh);

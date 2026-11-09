@@ -51,13 +51,13 @@ struct PrintfState {
 	int rval = 0;
 };
 
-static int conv_escape_str(ShellContext &sh, const char *, std::string &);
+static int conv_escape_str(Context &sh, const char *, std::string &);
 static int getchr(PrintfState &);
-static double getdouble(ShellContext &sh, PrintfState &);
-static std::uintmax_t getuintmax(ShellContext &sh, PrintfState &, int);
+static double getdouble(Context &sh, PrintfState &);
+static std::uintmax_t getuintmax(Context &sh, PrintfState &, int);
 static const char *getstr(PrintfState &);
 static std::string mklong(const char *, const char *);
-static void check_conversion(ShellContext &sh, PrintfState &, const char *,
+static void check_conversion(Context &sh, PrintfState &, const char *,
 			     const char *);
 
 #define isodigit(c)	((c) >= '0' && (c) <= '7')
@@ -102,7 +102,7 @@ static void check_conversion(ShellContext &sh, PrintfState &, const char *,
 
 
 static shell::Result<int>
-print_escape_str(ShellContext &sh, const char *f, int *param, int *array, const char *s)
+print_escape_str(Context &sh, const char *f, int *param, int *array, const char *s)
 {
 	int done;
 	int total;
@@ -135,7 +135,7 @@ print_escape_str(ShellContext &sh, const char *f, int *param, int *array, const 
 
 
 shell::Result<int>
-printfcmd(ShellContext &sh, int argc, char *argv[])
+printfcmd(Context &sh, int argc, char *argv[])
 {
 	char *fmt;
 	char *format;
@@ -282,7 +282,7 @@ out:
  *	Halts processing string if a \c escape is encountered.
  */
 static int
-conv_escape_str(ShellContext &sh, const char *str, std::string &out)
+conv_escape_str(Context &sh, const char *str, std::string &out)
 {
 	int c;
 
@@ -328,7 +328,7 @@ putchar:
  * Print "standard" escape characters
  */
 unsigned
-conv_escape(ShellContext &sh, const char *str0, char *out0, bool mbchar)
+conv_escape(Context &sh, const char *str0, char *out0, bool mbchar)
 {
 	char *out = out0;
 	const char *str = str0;
@@ -510,7 +510,7 @@ getstr(PrintfState &st)
 }
 
 static std::uintmax_t
-getuintmax(ShellContext &sh, PrintfState &st, int sign)
+getuintmax(Context &sh, PrintfState &st, int sign)
 {
 	uintmax_t val = 0;
 	char *cp, *ep;
@@ -532,7 +532,7 @@ out:
 }
 
 static double
-getdouble(ShellContext &sh, PrintfState &st)
+getdouble(Context &sh, PrintfState &st)
 {
 	double val;
 	char *cp, *ep;
@@ -552,7 +552,7 @@ getdouble(ShellContext &sh, PrintfState &st)
 }
 
 static void
-check_conversion(ShellContext &sh, PrintfState &st, const char *s,
+check_conversion(Context &sh, PrintfState &st, const char *s,
 		 const char *ep)
 {
 	if (*ep) {
@@ -568,7 +568,7 @@ check_conversion(ShellContext &sh, PrintfState &st, const char *s,
 }
 
 shell::Result<int>
-echocmd(ShellContext &sh, int argc, char **argv)
+echocmd(Context &sh, int argc, char **argv)
 {
 	const char *lastfmt = "%s\n";
 	int nonl;

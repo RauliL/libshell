@@ -9,7 +9,7 @@
 #include "bltin.h"
 
 shell::Result<int>
-timescmd(ShellContext &sh, int argc, char *argv[])
+timescmd(Context &sh, int argc, char *argv[])
 {
 	struct tms buf;
 	long int clk_tck = sysconf(_SC_CLK_TCK);

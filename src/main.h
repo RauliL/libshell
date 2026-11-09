@@ -37,12 +37,12 @@
 
 #include <cerrno>
 
-struct ShellContext;
-
+namespace shell { struct Context; }
+using Context = shell::Context;
 /* shell level: 0 for the main shell, 1 for its children, and so on */
 #define rootshell (!sh.shlvl)
 
-shell::Result<int> cmdloop(ShellContext &sh);
-shell::Result<void> readcmdfile(ShellContext &sh, std::string_view);
-shell::Result<int> dotcmd(ShellContext &sh, int, char **);
-shell::Result<int> exitcmd(ShellContext &sh, int, char **);
+shell::Result<int> cmdloop(Context &sh);
+shell::Result<void> readcmdfile(Context &sh, std::string_view);
+shell::Result<int> dotcmd(Context &sh, int, char **);
+shell::Result<int> exitcmd(Context &sh, int, char **);

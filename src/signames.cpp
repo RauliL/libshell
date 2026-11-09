@@ -9,9 +9,9 @@
 #include "shell_context.h"
 
 void
-init_signal_names(ShellContext &sh)
+init_signal_names(Context &sh)
 {
-	static const ShellContext::signal_map_type global_signals = {
+	static const Context::signal_map_type global_signals = {
 		// EXIT is trap "signal" 0.
 		{ 0, "EXIT" },
 
@@ -222,7 +222,7 @@ init_signal_names(ShellContext &sh)
 }
 
 std::optional<std::string_view>
-ShellContext::find_signal_name(int signo) const
+Context::find_signal_name(int signo) const
 {
 	const auto it = signal_map.find(signo);
 
@@ -230,7 +230,7 @@ ShellContext::find_signal_name(int signo) const
 }
 
 std::optional<int>
-ShellContext::find_signal_number(std::string_view name, int minsig) const
+Context::find_signal_number(std::string_view name, int minsig) const
 {
 	const auto upper = ascii_upper(name);
 

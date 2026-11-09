@@ -74,14 +74,14 @@
 		/* index in path of %builtin, or -1 */
 
 
-static void tryexec(ShellContext &sh, char *, char **, char **);
-static void printentry(ShellContext &sh, const std::string &, const tblentry &);
+static void tryexec(Context &sh, char *, char **, char **);
+static void printentry(Context &sh, const std::string &, const tblentry &);
 static bool hash_affected(const tblentry &, int);
-static void clearcmdentry(ShellContext &sh);
-static tblentry *cmdlookup(ShellContext &sh, const char *, int);
-static void delete_cmd_entry(ShellContext &sh, const char *);
-static void addcmdentry(ShellContext &sh, const char *, const struct cmdentry *);
-static shell::Result<int> describe_command(ShellContext &sh, shell::Output *, char *, const char *, int);
+static void clearcmdentry(Context &sh);
+static tblentry *cmdlookup(Context &sh, const char *, int);
+static void delete_cmd_entry(Context &sh, const char *);
+static void addcmdentry(Context &sh, const char *, const struct cmdentry *);
+static shell::Result<int> describe_command(Context &sh, shell::Output *, char *, const char *, int);
 
 
 /*
@@ -90,7 +90,7 @@ static shell::Result<int> describe_command(ShellContext &sh, shell::Output *, ch
  */
 
 void
-shellexec(ShellContext &sh, char **argv, const char *path, int idx)
+shellexec(Context &sh, char **argv, const char *path, int idx)
 {
 	int e;
 	std::vector<char *> env = environment(sh);
@@ -131,7 +131,7 @@ shellexec(ShellContext &sh, char **argv, const char *path, int idx)
 
 
 static void
-tryexec(ShellContext &sh, char *cmd, char **argv, char **envp)
+tryexec(Context &sh, char *cmd, char **argv, char **envp)
 {
 	char *const path_bshell = _PATH_BSHELL;
 
@@ -151,7 +151,7 @@ repeat:
 }
 
 static const char *
-legal_pathopt(ShellContext &sh, const char *opt, const char *term, int magic)
+legal_pathopt(Context &sh, const char *opt, const char *term, int magic)
 {
 	switch (magic) {
 	case 0:
@@ -190,7 +190,7 @@ legal_pathopt(ShellContext &sh, const char *opt, const char *term, int magic)
 
 
 int
-padvance_magic(ShellContext &sh, const char **path, const char *name, int magic,
+padvance_magic(Context &sh, const char **path, const char *name, int magic,
 	       std::string &out)
 {
 	const char *term = "%:";
@@ -258,7 +258,7 @@ hash_affected(const tblentry &cmdp, int builtinloc)
 
 
 shell::Result<int>
-hashcmd(ShellContext &sh, int argc, char **argv)
+hashcmd(Context &sh, int argc, char **argv)
 {
 	int c;
 	struct cmdentry entry;
@@ -295,7 +295,7 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 
 
 static void
-printentry(ShellContext &sh, const std::string &cmdname, const tblentry &cmdp)
+printentry(Context &sh, const std::string &cmdname, const tblentry &cmdp)
 {
 	int idx;
 	const char *path;
@@ -310,7 +310,7 @@ printentry(ShellContext &sh, const std::string &cmdname, const tblentry &cmdp)
 }
 
 static int
-test_exec(ShellContext &sh, const char *fullname, struct stat64 *statb)
+test_exec(Context &sh, const char *fullname, struct stat64 *statb)
 {
 	if (!S_ISREG(statb->st_mode))
 		return 0;
@@ -333,7 +333,7 @@ test_exec(ShellContext &sh, const char *fullname, struct stat64 *statb)
  */
 
 shell::Result<void>
-find_command(ShellContext &sh, char *name, struct cmdentry *entry, int act, const char *path)
+find_command(Context &sh, char *name, struct cmdentry *entry, int act, const char *path)
 {
 	tblentry *cmdp;
 	int idx;
@@ -514,7 +514,7 @@ success:
  */
 
 void
-hashcd(ShellContext &sh)
+hashcd(Context &sh)
 {
 	for (auto &entry : sh.cmdtable) {
 		if (hash_affected(entry.second, sh.builtinloc))
@@ -532,7 +532,7 @@ hashcd(ShellContext &sh)
  */
 
 void
-changepath(ShellContext &sh, std::string_view newval)
+changepath(Context &sh, std::string_view newval)
 {
 	std::string path(newval);
 	const char *scan;
@@ -564,7 +564,7 @@ changepath(ShellContext &sh, std::string_view newval)
  */
 
 static void
-clearcmdentry(ShellContext &sh)
+clearcmdentry(Context &sh)
 {
 	INTOFF(sh);
 	std::erase_if(
@@ -590,7 +590,7 @@ clearcmdentry(ShellContext &sh)
 
 
 static tblentry *
-cmdlookup(ShellContext &sh, const char *name, int add)
+cmdlookup(Context &sh, const char *name, int add)
 {
 	auto it = sh.cmdtable.find(name);
 	if (it == sh.cmdtable.end()) {
@@ -606,7 +606,7 @@ cmdlookup(ShellContext &sh, const char *name, int add)
  */
 
 static void
-delete_cmd_entry(ShellContext &sh, const char *name)
+delete_cmd_entry(Context &sh, const char *name)
 {
 	INTOFF(sh);
 	sh.cmdtable.erase(name);
@@ -621,7 +621,7 @@ delete_cmd_entry(ShellContext &sh, const char *name)
  */
 
 static void
-addcmdentry(ShellContext &sh, const char *name, const struct cmdentry *entry)
+addcmdentry(Context &sh, const char *name, const struct cmdentry *entry)
 {
 	tblentry *cmdp;
 
@@ -637,7 +637,7 @@ addcmdentry(ShellContext &sh, const char *name, const struct cmdentry *entry)
  */
 
 void
-defun(ShellContext &sh, const DefunNode *func)
+defun(Context &sh, const DefunNode *func)
 {
 	struct cmdentry entry;
 
@@ -654,7 +654,7 @@ defun(ShellContext &sh, const DefunNode *func)
  */
 
 void
-unsetfunc(ShellContext &sh, std::string_view name)
+unsetfunc(Context &sh, std::string_view name)
 {
 	std::string key(name);
 	tblentry *cmdp = cmdlookup(sh, key.c_str(), 0);
@@ -668,7 +668,7 @@ unsetfunc(ShellContext &sh, std::string_view name)
  */
 
 shell::Result<int>
-typecmd(ShellContext &sh, int argc, char **argv)
+typecmd(Context &sh, int argc, char **argv)
 {
 	int err = 0;
 
@@ -681,7 +681,7 @@ typecmd(ShellContext &sh, int argc, char **argv)
 
 static shell::Result<int>
 describe_command(
-	ShellContext &sh,
+	Context &sh,
 	shell::Output *out,
 	char *command,
     const char *path,
@@ -794,7 +794,7 @@ out:
 }
 
 shell::Result<int>
-commandcmd(ShellContext &sh, int argc, char **argv)
+commandcmd(Context &sh, int argc, char **argv)
 {
 	char *cmd;
 	int c;

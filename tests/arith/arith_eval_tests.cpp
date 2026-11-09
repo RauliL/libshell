@@ -11,7 +11,7 @@
 namespace {
 
 struct EvalFixture {
-	ShellContext sh;
+	Context sh;
 
 	EvalFixture()
 	{

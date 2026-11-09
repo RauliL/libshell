@@ -14,7 +14,7 @@
 #include "var.h"
 
 void
-init(ShellContext &sh)
+init(Context &sh)
 {
 	/* InputStack member ctor already wires basebuf / linno. */
 	init_signal_names(sh);
@@ -23,7 +23,7 @@ init(ShellContext &sh)
 }
 
 void
-exitreset(ShellContext &sh)
+exitreset(Context &sh)
 {
 	eval_exitreset(sh);
 	ifsfree(sh);
@@ -31,7 +31,7 @@ exitreset(ShellContext &sh)
 }
 
 void
-forkreset(ShellContext &sh, const Node *n)
+forkreset(Context &sh, const Node *n)
 {
 	input_forkreset(sh);
 	redir_forkreset(sh);
@@ -39,13 +39,13 @@ forkreset(ShellContext &sh, const Node *n)
 }
 
 void
-postexitreset(ShellContext &sh)
+postexitreset(Context &sh)
 {
 	flush_input(sh);
 }
 
 void
-reset(ShellContext &sh)
+reset(Context &sh)
 {
 	input_reset_interactive(sh);
 	(void)unwindlocalvars(sh, 0);

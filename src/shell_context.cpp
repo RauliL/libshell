@@ -6,7 +6,7 @@
 #include "cd.h"
 #include "init.h"
 
-ShellContext::ShellContext(SignalOwnership signals)
+Context::Context(SignalOwnership signals)
 {
 	mypid = rootpid = getpid();
 
@@ -17,38 +17,38 @@ ShellContext::ShellContext(SignalOwnership signals)
 }
 
 void
-ShellContext::claim_signals()
+Context::claim_signals()
 {
 	signaled = this;
 }
 
 void
-ShellContext::release_signals()
+Context::release_signals()
 {
 	if (signaled == this)
 		signaled = nullptr;
 }
 
 void
-ShellContext::set_stdout(const shell::Output::sink_type &sink)
+Context::set_stdout(const shell::Output::sink_type &sink)
 {
 	output.sink = sink;
 }
 
 void
-ShellContext::set_stderr(const shell::Output::sink_type &sink)
+Context::set_stderr(const shell::Output::sink_type &sink)
 {
 	errout.sink = sink;
 }
 
 std::string_view
-ShellContext::get_cwd() const
+Context::get_cwd() const
 {
 	return cwd.curdir;
 }
 
 shell::Result<void>
-ShellContext::set_cwd(std::string_view path)
+Context::set_cwd(std::string_view path)
 {
 	return setpwd(*this, path, 0);
 }

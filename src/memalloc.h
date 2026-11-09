@@ -3,7 +3,7 @@
 /*-
  * Heap wrappers (ckmalloc / ckfree).
  *
- * These no longer take a ShellContext; allocation policy is not part of
+ * These no longer take a Context; allocation policy is not part of
  * shell execution state. Prefer stack / std::vector / new where practical.
  */
 

@@ -102,11 +102,11 @@ const char optletters[NOPTS] = {
 
 
 
-static shell::Result<int> options(ShellContext &sh, int,
+static shell::Result<int> options(Context &sh, int,
 				  std::optional<std::string> *minusc);
-static shell::Result<void> minus_o(ShellContext &sh, char *, int);
-static shell::Result<void> setoption(ShellContext &sh, int, int);
-static shell::Result<int> getopts(ShellContext &sh, char *, char *, char **);
+static shell::Result<void> minus_o(Context &sh, char *, int);
+static shell::Result<void> setoption(Context &sh, int, int);
+static shell::Result<int> getopts(Context &sh, char *, char *, char **);
 
 
 /*
@@ -114,7 +114,7 @@ static shell::Result<int> getopts(ShellContext &sh, char *, char *, char **);
  */
 
 shell::Result<ProcArgsResult>
-procargs(ShellContext &sh, char **xargv)
+procargs(Context &sh, char **xargv)
 {
 	int i;
 	ProcArgsResult result;
@@ -169,7 +169,7 @@ setarg0:
 
 
 void
-optschanged(ShellContext &sh)
+optschanged(Context &sh)
 {
 	setsignal(sh, SIGINT);
 	setsignal(sh, SIGQUIT);
@@ -182,7 +182,7 @@ optschanged(ShellContext &sh)
  */
 
 static shell::Result<int>
-options(ShellContext &sh, int cmdline, std::optional<std::string> *minusc)
+options(Context &sh, int cmdline, std::optional<std::string> *minusc)
 {
 	char *p;
 	int val;
@@ -231,7 +231,7 @@ options(ShellContext &sh, int cmdline, std::optional<std::string> *minusc)
 }
 
 static shell::Result<void>
-minus_o(ShellContext &sh, char *name, int val)
+minus_o(Context &sh, char *name, int val)
 {
 	if (!name) {
 		if (val) {
@@ -262,7 +262,7 @@ minus_o(ShellContext &sh, char *name, int val)
 
 
 static shell::Result<void>
-setoption(ShellContext &sh, int flag, int val)
+setoption(Context &sh, int flag, int val)
 {
 	int i;
 
@@ -275,13 +275,13 @@ setoption(ShellContext &sh, int flag, int val)
 }
 
 void
-ShellContext::set_arg0(std::string name)
+Context::set_arg0(std::string name)
 {
 	arg0 = std::move(name);
 }
 
 void
-ShellContext::set_args(std::span<const std::string_view> args)
+Context::set_args(std::span<const std::string_view> args)
 {
 	shellparam.p.clear();
 	shellparam.p.reserve(args.size());
@@ -292,7 +292,7 @@ ShellContext::set_args(std::span<const std::string_view> args)
 }
 
 shell::Result<void>
-ShellContext::set_option(std::string_view name, bool enabled)
+Context::set_option(std::string_view name, bool enabled)
 {
 	for (int i = 0; i < NOPTS; i++) {
 		if (name == optnames[i]) {
@@ -305,7 +305,7 @@ ShellContext::set_option(std::string_view name, bool enabled)
 }
 
 shell::Result<void>
-ShellContext::set_option(char letter, bool enabled)
+Context::set_option(char letter, bool enabled)
 {
 	TRY_SHV(setoption(*this, letter, enabled ? 1 : 0));
 	optschanged(*this);
@@ -313,7 +313,7 @@ ShellContext::set_option(char letter, bool enabled)
 }
 
 std::optional<bool>
-ShellContext::get_option(std::string_view name) const
+Context::get_option(std::string_view name) const
 {
 	for (int i = 0; i < NOPTS; i++) {
 		if (name == optnames[i])
@@ -329,7 +329,7 @@ ShellContext::get_option(std::string_view name) const
  */
 
 void
-setparam(ShellContext &sh, char **argv)
+setparam(Context &sh, char **argv)
 {
 	std::vector<std::string> newparam;
 
@@ -347,7 +347,7 @@ setparam(ShellContext &sh, char **argv)
  */
 
 void
-freeparam(ShellContext &sh, shparam *param)
+freeparam(Context &sh, shparam *param)
 {
 	param->p.clear();
 }
@@ -359,7 +359,7 @@ freeparam(ShellContext &sh, shparam *param)
  */
 
 shell::Result<int>
-shiftcmd(ShellContext &sh, int argc, char **argv)
+shiftcmd(Context &sh, int argc, char **argv)
 {
 	int n = 1;
 
@@ -384,7 +384,7 @@ shiftcmd(ShellContext &sh, int argc, char **argv)
  */
 
 shell::Result<int>
-setcmd(ShellContext &sh, int argc, char **argv)
+setcmd(Context &sh, int argc, char **argv)
 {
 	if (argc == 1)
 		return showvars(sh, "", {}, shell::Variable::Flag::Unset);
@@ -401,7 +401,7 @@ setcmd(ShellContext &sh, int argc, char **argv)
 
 
 void
-getoptsreset(ShellContext &sh, std::string_view value)
+getoptsreset(Context &sh, std::string_view value)
 {
 	(void)value;
 	sh.shellparam.optind = 1;
@@ -416,7 +416,7 @@ getoptsreset(ShellContext &sh, std::string_view value)
  */
 
 shell::Result<int>
-getoptscmd(ShellContext &sh, int argc, char **argv)
+getoptscmd(Context &sh, int argc, char **argv)
 {
 	char **optbase;
 
@@ -449,7 +449,7 @@ getoptscmd(ShellContext &sh, int argc, char **argv)
 }
 
 static shell::Result<int>
-getopts(ShellContext &sh, char *optstr, char *optvar, char **optfirst)
+getopts(Context &sh, char *optstr, char *optvar, char **optfirst)
 {
 	char *p, *q;
 	char c = '?';
@@ -545,7 +545,7 @@ out:
  */
 
 shell::Result<int>
-nextopt(ShellContext &sh, std::string_view optstring)
+nextopt(Context &sh, std::string_view optstring)
 {
 	char *p;
 	char c;

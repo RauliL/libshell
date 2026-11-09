@@ -59,12 +59,13 @@ extern const char cqchars[];
 
 #include "error.h"
 
-struct ShellContext;
+namespace shell { struct Context; }
+using Context = shell::Context;
 char *prefix(const char *, const char *);
-tl::unexpected<shell::Error> badnum(ShellContext &sh, std::string_view s);
-shell::Result<intmax_t> atomax(ShellContext &sh, std::string_view, int);
-shell::Result<intmax_t> atomax10(ShellContext &sh, std::string_view);
-shell::Result<int> number(ShellContext &sh, std::string_view);
+tl::unexpected<shell::Error> badnum(Context &sh, std::string_view s);
+shell::Result<intmax_t> atomax(Context &sh, std::string_view, int);
+shell::Result<intmax_t> atomax10(Context &sh, std::string_view);
+shell::Result<int> number(Context &sh, std::string_view);
 bool is_number(std::string_view);
 std::string single_quote(std::string_view);
 int pstrcmp(const void *, const void *);

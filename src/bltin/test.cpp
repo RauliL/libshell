@@ -147,13 +147,13 @@ static const struct t_op ops[] = {
 
 
 
-static tl::unexpected<shell::Error> syntax(ShellContext &sh, const char *,
+static tl::unexpected<shell::Error> syntax(Context &sh, const char *,
 					  const char *);
-static shell::Result<int> oexpr(ShellContext &sh, TestState &, enum token);
-static shell::Result<int> aexpr(ShellContext &sh, TestState &, enum token);
-static shell::Result<int> nexpr(ShellContext &sh, TestState &, enum token);
-static shell::Result<int> primary(ShellContext &sh, TestState &, enum token);
-static shell::Result<int> binop(ShellContext &sh, TestState &);
+static shell::Result<int> oexpr(Context &sh, TestState &, enum token);
+static shell::Result<int> aexpr(Context &sh, TestState &, enum token);
+static shell::Result<int> nexpr(Context &sh, TestState &, enum token);
+static shell::Result<int> primary(Context &sh, TestState &, enum token);
+static shell::Result<int> binop(Context &sh, TestState &);
 static int filstat(char *, enum token);
 static enum token t_lex(TestState &, char **);
 static int isoperand(char **);
@@ -165,17 +165,17 @@ static const t_op *getop(const char *s);
 #ifdef HAVE_FACCESSAT
 # ifdef HAVE_TRADITIONAL_FACCESSAT
 static inline int
-faccessat_confused_about_superuser(ShellContext &sh)
+faccessat_confused_about_superuser(Context &sh)
 { return 1; }
 # else
 static inline int
-faccessat_confused_about_superuser(ShellContext &sh)
+faccessat_confused_about_superuser(Context &sh)
 { return 0; }
 # endif
 #endif
 
 static inline shell::Result<intmax_t>
-getn(ShellContext &sh, const char *s)
+getn(Context &sh, const char *s)
 {
 	return atomax10(sh, s);
 }
@@ -192,7 +192,7 @@ getop(const char *s)
 }
 
 shell::Result<int>
-testcmd(ShellContext &sh, int argc, char **argv)
+testcmd(Context &sh, int argc, char **argv)
 {
 	const t_op *op;
 	enum token n;
@@ -250,7 +250,7 @@ eval:
 }
 
 static tl::unexpected<shell::Error>
-syntax(ShellContext &sh, const char *op, const char *msg)
+syntax(Context &sh, const char *op, const char *msg)
 {
 	if (op && *op)
 		return error("{}: {}", op, msg);
@@ -259,7 +259,7 @@ syntax(ShellContext &sh, const char *op, const char *msg)
 }
 
 static shell::Result<int>
-oexpr(ShellContext &sh, TestState &st, enum token n)
+oexpr(Context &sh, TestState &st, enum token n)
 {
 	int res = 0;
 
@@ -276,7 +276,7 @@ oexpr(ShellContext &sh, TestState &st, enum token n)
 }
 
 static shell::Result<int>
-aexpr(ShellContext &sh, TestState &st, enum token n)
+aexpr(Context &sh, TestState &st, enum token n)
 {
 	int res = 1;
 
@@ -294,7 +294,7 @@ aexpr(ShellContext &sh, TestState &st, enum token n)
 }
 
 static shell::Result<int>
-nexpr(ShellContext &sh, TestState &st, enum token n)
+nexpr(Context &sh, TestState &st, enum token n)
 {
 	if (n != UNOT)
 		return primary(sh, st, n);
@@ -306,7 +306,7 @@ nexpr(ShellContext &sh, TestState &st, enum token n)
 }
 
 static shell::Result<int>
-primary(ShellContext &sh, TestState &st, enum token n)
+primary(Context &sh, TestState &st, enum token n)
 {
 	enum token nn;
 	int res;
@@ -353,7 +353,7 @@ primary(ShellContext &sh, TestState &st, enum token n)
 }
 
 static shell::Result<int>
-binop(ShellContext &sh, TestState &st)
+binop(Context &sh, TestState &st)
 {
 	const char *opnd1, *opnd2;
 	const t_op *op;
@@ -534,7 +534,7 @@ equalf(const char *f1, const char *f2)
 
 #ifdef HAVE_FACCESSAT
 static int
-has_exec_bit_set(ShellContext &sh, const char *path)
+has_exec_bit_set(Context &sh, const char *path)
 {
 	struct stat64 st;
 
@@ -544,7 +544,7 @@ has_exec_bit_set(ShellContext &sh, const char *path)
 }
 
 int
-test_file_access(ShellContext &sh, const char *path, int mode)
+test_file_access(Context &sh, const char *path, int mode)
 {
 	if (faccessat_confused_about_superuser(sh) &&
 	    mode == X_OK && geteuid() == 0 && !has_exec_bit_set(sh, path))

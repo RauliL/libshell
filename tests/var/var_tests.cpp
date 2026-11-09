@@ -9,7 +9,7 @@
 namespace {
 
 struct VarFixture {
-	ShellContext sh{ShellContext::SignalOwnership::Leave};
+	Context sh{Context::SignalOwnership::Leave};
 
 	VarFixture()
 	{

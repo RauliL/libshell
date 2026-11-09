@@ -197,21 +197,21 @@ inline constexpr ExpandFlag EXP_QUOTED = ExpandFlag::quoted;
 inline constexpr ExpandFlag EXP_KEEPNUL = ExpandFlag::keepnul;
 inline constexpr ExpandFlag EXP_DISCARD = ExpandFlag::discard;
 
-struct ShellContext;
+using Context = shell::Context;
 #include "error.h"
-shell::Result<void> expandarg(ShellContext &sh, Node *, ArgList *, ExpandFlags);
+shell::Result<void> expandarg(Context &sh, Node *, ArgList *, ExpandFlags);
 /* Expand a single word to an owned string (here-docs, prompts, etc.). */
-shell::Result<std::string> expandarg_to_string(ShellContext &sh, Node *,
+shell::Result<std::string> expandarg_to_string(Context &sh, Node *,
 					      ExpandFlags);
 struct ExpandBuf;
 #define rmescapes(p) _rmescapes(sh, (p), 0, nullptr)
-char *_rmescapes(ShellContext &sh, char *, int, ExpandBuf *eb = nullptr);
-shell::Result<int> casematch(ShellContext &sh, Node *, char *);
-void recordregion(ShellContext &sh, int, int, int);
-shell::Result<void> removerecordregions(ShellContext &sh, int);
-void ifsbreakup(ShellContext &sh, char *, int, ArgList *);
-void ifsfree(ShellContext &sh);
-shell::Result<void> restore_handler_expandarg(ShellContext &sh, int err);
-void changeifs(ShellContext &sh, std::string_view);
+char *_rmescapes(Context &sh, char *, int, ExpandBuf *eb = nullptr);
+shell::Result<int> casematch(Context &sh, Node *, char *);
+void recordregion(Context &sh, int, int, int);
+shell::Result<void> removerecordregions(Context &sh, int);
+void ifsbreakup(Context &sh, char *, int, ArgList *);
+void ifsfree(Context &sh);
+shell::Result<void> restore_handler_expandarg(Context &sh, int err);
+void changeifs(Context &sh, std::string_view);
 
 #endif

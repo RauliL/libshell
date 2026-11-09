@@ -88,8 +88,7 @@ using ParseSession = shell::ParseSession;
 #define CHKEOFMARK	0x8
 
 
-struct ShellContext;
-
+using Context = shell::Context;
 /**
  * Result of `parsecmd()`: EOF vs blank line vs parse tree.
  */
@@ -100,13 +99,13 @@ struct ParseCmdResult {
 
 bool isassignment(std::string_view p);
 bool issimplecmd(const Node *n, std::string_view name);
-ParseCmdResult parsecmd(ShellContext &sh, int);
-void fixredir(ShellContext &sh, Node *, const char *, int);
-std::string getprompt(ShellContext &, void *);
+ParseCmdResult parsecmd(Context &sh, int);
+void fixredir(Context &sh, Node *, const char *, int);
+std::string getprompt(Context &, void *);
 std::optional<Token> findkwd(std::string_view);
 /* Length of a leading legal variable name; 0 if none. */
 std::size_t endofname(std::string_view name);
-std::string expandstr(ShellContext &sh, const char *);
-unsigned getmbc(ShellContext &sh, int c, char *out, int mode);
-void report_parse_error(ShellContext &sh, const shell::ParseError &e);
-tl::expected<void, std::string> try_parse_string(ShellContext &sh, std::string_view s);
+std::string expandstr(Context &sh, const char *);
+unsigned getmbc(Context &sh, int c, char *out, int mode);
+void report_parse_error(Context &sh, const shell::ParseError &e);
+tl::expected<void, std::string> try_parse_string(Context &sh, std::string_view s);

@@ -1,8 +1,3 @@
-#include <iostream>
-#include <optional>
-#include <string>
-#include <utility>
-
 #include <libshell.hpp>
 
 #include "../src/init.h"
@@ -12,12 +7,14 @@
 #include "../src/shell_context.h"
 #include "../src/trap.h"
 
-static shell::Result<int> run_interactive(ShellContext &);
+using namespace shell;
+
+static Result<int> run_interactive(Context &);
 
 int
 main(int argc, char** argv)
 {
-	ShellContext sh;
+	Context sh;
 	int state = 0;
 
 #if PROFILE
@@ -25,9 +22,8 @@ main(int argc, char** argv)
 #endif
 
 resume:
-	shell::Error err{};
+	Error err{};
 	bool failed = false;
-
 	std::optional<std::string> minusc;
 
 	if (state == 0) {
@@ -61,14 +57,14 @@ resume:
 	}
 
 	if (failed) {
-		shell::Error ecode = err;
+		Error ecode = err;
 
 handle_err:
 		exitreset(sh);
 		sh.exception = ecode;
 		if (
-			ecode == shell::Error::End ||
-			ecode == shell::Error::Exit ||
+			ecode == Error::End ||
+			ecode == Error::Exit ||
 			state == 0 ||
 			sh.opts.interactive() == 0 ||
 			sh.shlvl
@@ -77,7 +73,7 @@ handle_err:
 
 		reset(sh);
 
-		if (ecode == shell::Error::Interrupt) {
+		if (ecode == Error::Interrupt) {
 			out2c('\n');
 #ifdef FLUSHERR
 			sh.out2->flush(sh);
@@ -86,7 +82,8 @@ handle_err:
 		barrier();
 		sh.suppressint = 0;
 		if (sh.intpending) {
-			auto u = onint(sh);
+			const auto u = onint(sh);
+
 			ecode = u.value(); /* tl::unexpected<ShellErr>::value */
 			goto handle_err;
 		}
@@ -111,8 +108,8 @@ exit:
  * Top-level interactive parse/eval loop: prompting, ignoreeof, and
  * recovering from parse errors at the prompt.
  */
-static shell::Result<int>
-run_interactive(ShellContext &sh)
+static Result<int>
+run_interactive(Context &sh)
 {
 	int status = 0;
 	int numeof = 0;
@@ -136,11 +133,14 @@ run_interactive(ShellContext &sh)
 				numeof++;
 			} else {
 				Node *n = cmd.tree.get();
+
 				numeof = 0;
+
 				auto r = evaltree(sh, n, {});
+
 				if (!r) {
 					sh.exception = r.error();
-					if (r.error() == shell::Error::Generic) {
+					if (r.error() == Error::Generic) {
 						skip = sh.evalskip;
 						if (skip) {
 							sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
@@ -153,7 +153,7 @@ run_interactive(ShellContext &sh)
 				if (n)
 					status = *r;
 			}
-		} catch (const shell::ParseError &e) {
+		} catch (const ParseError &e) {
 			report_parse_error(sh, e);
 			skip = sh.evalskip;
 			if (skip) {

@@ -21,12 +21,12 @@
 
 namespace parse_test {
 
-inline void init_shell(ShellContext &sh)
+inline void init_shell(Context &sh)
 {
 	sh.arg0 = "parse_tests";
 }
 
-inline void set_alias(ShellContext &sh, std::string name, std::string value)
+inline void set_alias(Context &sh, std::string name, std::string value)
 {
 	auto ap = std::make_shared<shell::Alias>();
 	ap->name = name;
@@ -36,7 +36,7 @@ inline void set_alias(ShellContext &sh, std::string name, std::string value)
 
 inline bool parses_ok(std::string_view script)
 {
-	ShellContext sh;
+	Context sh;
 	init_shell(sh);
 
 	std::string copy(script);
@@ -64,7 +64,7 @@ using AliasInit = std::initializer_list<std::pair<std::string_view, std::string_
 inline std::vector<Node::ptr> parse_trees(std::string_view script,
 					  AliasInit aliases = {})
 {
-	ShellContext sh;
+	Context sh;
 	init_shell(sh);
 	for (auto [name, value] : aliases)
 		set_alias(sh, std::string(name), std::string(value));

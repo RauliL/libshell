@@ -37,9 +37,9 @@
 
 #include <libshell.hpp>
 
-struct ShellContext;
-void init(ShellContext &sh);
-void exitreset(ShellContext &sh);
-void forkreset(ShellContext &sh, const shell::Node *);
-void postexitreset(ShellContext &sh);
-void reset(ShellContext &sh);
+using Context = shell::Context;
+void init(Context &sh);
+void exitreset(Context &sh);
+void forkreset(Context &sh, const shell::Node *);
+void postexitreset(Context &sh);
+void reset(Context &sh);

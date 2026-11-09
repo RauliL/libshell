@@ -85,20 +85,20 @@ using Job = shell::Job;
 #define DOWAIT_WAITCMD 2
 #define DOWAIT_WAITCMD_ALL 4
 
-static void set_curjob(ShellContext &sh, Job *, unsigned);
+static void set_curjob(Context &sh, Job *, unsigned);
 static std::string sprint_status(int);
-static void freejob(ShellContext &sh, Job *);
-static shell::Result<Job *> getjob(ShellContext &sh, const char *);
-static void forkchild(ShellContext &sh, Job *, const Node *, int);
-static shell::Result<void> forkparent(ShellContext &sh, Job *, const Node *, int, pid_t);
-static int dowait(ShellContext &sh, int, Job *);
+static void freejob(Context &sh, Job *);
+static shell::Result<Job *> getjob(Context &sh, const char *);
+static void forkchild(Context &sh, Job *, const Node *, int);
+static shell::Result<void> forkparent(Context &sh, Job *, const Node *, int, pid_t);
+static int dowait(Context &sh, int, Job *);
 #ifdef SYSV
 static int onsigchild();
 #endif
-static int waitproc(ShellContext &sh, int, int *);
-static std::string commandtext(ShellContext &sh, const Node *);
-static void cmdtxt(ShellContext &sh, const Node *, std::string &);
-static void cmdlist(ShellContext &sh, Node *, int, std::string &);
+static int waitproc(Context &sh, int, int *);
+static std::string commandtext(Context &sh, const Node *);
+static void cmdtxt(Context &sh, const Node *, std::string &);
+static void cmdlist(Context &sh, Node *, int, std::string &);
 static void cmdputs(std::string &, std::string_view);
 
 namespace shell {
@@ -138,7 +138,7 @@ Job::calc_status(bool pipefail_on)
 }
 
 static void
-set_curjob(ShellContext &sh, Job *jp, unsigned mode)
+set_curjob(Context &sh, Job *jp, unsigned mode)
 {
 	auto &order = sh.job_order;
 	order.erase(std::remove(order.begin(), order.end(), jp), order.end());
@@ -155,7 +155,7 @@ set_curjob(ShellContext &sh, Job *jp, unsigned mode)
 
 
 shell::Result<int>
-killcmd(ShellContext &sh, int argc, char **argv)
+killcmd(Context &sh, int argc, char **argv)
 {
 	int signo = -1;
 	int list = 0;
@@ -266,7 +266,7 @@ sprint_status(int status)
  */
 
 static void
-freejob(ShellContext &sh, Job *jp)
+freejob(Context &sh, Job *jp)
 {
 	INTOFF(sh);
 	set_curjob(sh, jp, CUR_DELETE);
@@ -278,7 +278,7 @@ freejob(ShellContext &sh, Job *jp)
 
 
 shell::Result<int>
-waitcmd(ShellContext &sh, int argc, char **argv)
+waitcmd(Context &sh, int argc, char **argv)
 {
 	Job *job;
 	int retval;
@@ -344,7 +344,7 @@ sigout:
  */
 
 static shell::Result<Job *>
-getjob(ShellContext &sh, const char *name)
+getjob(Context &sh, const char *name)
 {
 	enum class JobErr {
 		NoSuch,
@@ -447,7 +447,7 @@ err:
  */
 
 Job *
-makejob(ShellContext &sh, int nprocs)
+makejob(Context &sh, int nprocs)
 {
 	std::size_t slot = 0;
 	for (; slot < sh.jobs.size(); ++slot) {
@@ -488,7 +488,7 @@ makejob(ShellContext &sh, int nprocs)
  */
 
 static void
-forkchild(ShellContext &sh, Job *jp, const Node *n, int mode)
+forkchild(Context &sh, Job *jp, const Node *n, int mode)
 {
 	int lvforked = sh.vforked;
 
@@ -524,7 +524,7 @@ forkchild(ShellContext &sh, Job *jp, const Node *n, int mode)
 }
 
 static shell::Result<void>
-forkparent(ShellContext &sh, Job *jp, const Node *n, int mode, pid_t pid)
+forkparent(Context &sh, Job *jp, const Node *n, int mode, pid_t pid)
 {
 	if (pid < 0) {
 		if (jp)
@@ -543,7 +543,7 @@ forkparent(ShellContext &sh, Job *jp, const Node *n, int mode, pid_t pid)
 }
 
 shell::Result<int>
-forkshell(ShellContext &sh, Job *jp, Node *n, int mode)
+forkshell(Context &sh, Job *jp, Node *n, int mode)
 {
 	pid_t pid;
 
@@ -559,7 +559,7 @@ forkshell(ShellContext &sh, Job *jp, Node *n, int mode)
 }
 
 shell::Result<Job *>
-vforkexec(ShellContext &sh, const Node *n, char **argv, const char *path, int idx)
+vforkexec(Context &sh, const Node *n, char **argv, const char *path, int idx)
 {
 	Job *jp;
 	int pid;
@@ -589,7 +589,7 @@ vforkexec(ShellContext &sh, const Node *n, char **argv, const char *path, int id
  */
 
 shell::Result<int>
-waitforjob(ShellContext &sh, Job *jp)
+waitforjob(Context &sh, Job *jp)
 {
 	int st;
 
@@ -610,7 +610,7 @@ waitforjob(ShellContext &sh, Job *jp)
  */
 
 static int
-waitone(ShellContext &sh, int block, Job *job)
+waitone(Context &sh, int block, Job *job)
 {
 	int pid;
 	int status;
@@ -658,7 +658,7 @@ out:
 }
 
 static int
-dowait(ShellContext &sh, int block, Job *jp)
+dowait(Context &sh, int block, Job *jp)
 {
 	int gotchld = *(volatile int *)&sh.gotsigchld;
 	int rpid;
@@ -701,7 +701,7 @@ dowait(ShellContext &sh, int block, Job *jp)
 
 
 static int
-waitproc(ShellContext &sh, int block, int *status)
+waitproc(Context &sh, int block, int *status)
 {
 	sigset_t oldmask;
 	int flags = block == DOWAIT_BLOCK ? 0 : WNOHANG;
@@ -739,7 +739,7 @@ waitproc(ShellContext &sh, int block, int *status)
 
 
 static std::string
-commandtext(ShellContext &sh, const Node *n)
+commandtext(Context &sh, const Node *n)
 {
 	std::string out;
 	cmdtxt(sh, n, out);
@@ -747,7 +747,7 @@ commandtext(ShellContext &sh, const Node *n)
 }
 
 static void
-cmdtxt(ShellContext &sh, const Node *n, std::string &out)
+cmdtxt(Context &sh, const Node *n, std::string &out)
 {
 	Node *np;
 	const char *p;
@@ -894,7 +894,7 @@ redir:
 }
 
 static void
-cmdlist(ShellContext &sh, Node *np, int sep, std::string &out)
+cmdlist(Context &sh, Node *np, int sep, std::string &out)
 {
 	for (; np; np = as<ArgNode>(np)->next.get()) {
 		if (!sep)

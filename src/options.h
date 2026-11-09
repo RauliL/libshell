@@ -53,7 +53,7 @@ using NextOptState = shell::NextOptState;
 
 /**
  * Host-facing result of parsing process argv (`-c`, login shell, …).
- * The `-c` script string lives here, not on ShellContext.
+ * The `-c` script string lives here, not on Context.
  */
 struct ProcArgsResult {
 	int login = 0;
@@ -62,14 +62,14 @@ struct ProcArgsResult {
 
 extern const char optletters[NOPTS];
 
-struct ShellContext;
-shell::Result<ProcArgsResult> procargs(ShellContext &sh, char **);
-void optschanged(ShellContext &sh);
-void setparam(ShellContext &sh, char **);
-void freeparam(ShellContext &sh, shparam *);
-shell::Result<int> shiftcmd(ShellContext &sh, int, char **);
-shell::Result<int> setcmd(ShellContext &sh, int, char **);
-shell::Result<int> getoptscmd(ShellContext &sh, int, char **);
-shell::Result<int> nextopt(ShellContext &sh, std::string_view);
-void getoptsreset(ShellContext &sh, std::string_view);
+using Context = shell::Context;
+shell::Result<ProcArgsResult> procargs(Context &sh, char **);
+void optschanged(Context &sh);
+void setparam(Context &sh, char **);
+void freeparam(Context &sh, shparam *);
+shell::Result<int> shiftcmd(Context &sh, int, char **);
+shell::Result<int> setcmd(Context &sh, int, char **);
+shell::Result<int> getoptscmd(Context &sh, int, char **);
+shell::Result<int> nextopt(Context &sh, std::string_view);
+void getoptsreset(Context &sh, std::string_view);
 #endif

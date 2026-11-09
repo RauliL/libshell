@@ -8,7 +8,7 @@
 /*
  * Growable contiguous string builder for shell word expansion and similar
  * assembly. Always stack-local / passed by reference — never stored on
- * ShellContext.
+ * Context.
  */
 struct ExpandBuf {
 	std::string buf = std::string(256, '\0');

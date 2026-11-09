@@ -65,7 +65,7 @@
  */
 
 tl::unexpected<shell::Error>
-exraise(ShellContext &sh, shell::Error e)
+exraise(Context &sh, shell::Error e)
 {
 	if (sh.vforked)
 		_exit(sh.exitstatus);
@@ -84,7 +84,7 @@ exraise(ShellContext &sh, shell::Error e)
  */
 
 tl::unexpected<shell::Error>
-onint(ShellContext &sh)
+onint(Context &sh)
 {
 
 	sh.intpending = 0;
@@ -96,7 +96,7 @@ onint(ShellContext &sh)
 	return exraise(sh, shell::Error::Interrupt);
 }
 
-InterruptSuppress::InterruptSuppress(ShellContext &sh) : sh_(sh)
+InterruptSuppress::InterruptSuppress(Context &sh) : sh_(sh)
 {
 	++sh_.suppressint;
 	std::atomic_signal_fence(std::memory_order_acq_rel);
@@ -121,7 +121,7 @@ InterruptSuppress::resume()
 }
 
 static void
-exwarning_msg(ShellContext &sh, std::string_view msg)
+exwarning_msg(Context &sh, std::string_view msg)
 {
 	shell::Output *errs = sh.out2;
 	const char *name = sh.arg0.empty() ? "sh" : sh.arg0.c_str();
@@ -139,7 +139,7 @@ exwarning_msg(ShellContext &sh, std::string_view msg)
 }
 
 tl::unexpected<shell::Error>
-sh_error_msg(ShellContext &sh, std::string msg)
+sh_error_msg(Context &sh, std::string msg)
 {
 	sh.exitstatus = 2;
 
@@ -150,7 +150,7 @@ sh_error_msg(ShellContext &sh, std::string msg)
 }
 
 tl::unexpected<shell::Error>
-exerror_msg(ShellContext &sh, shell::Error cond, std::string msg)
+exerror_msg(Context &sh, shell::Error cond, std::string msg)
 {
 	exwarning_msg(sh, msg);
 	flushall(sh);
@@ -159,7 +159,7 @@ exerror_msg(ShellContext &sh, shell::Error cond, std::string msg)
 }
 
 void
-sh_warnx_msg(ShellContext &sh, std::string msg)
+sh_warnx_msg(Context &sh, std::string msg)
 {
 	exwarning_msg(sh, msg);
 }
@@ -182,7 +182,7 @@ errmsg(int e, int action)
 
 #ifdef REALLY_SMALL
 shell::Result<void>
-__inton(ShellContext &sh)
+__inton(Context &sh)
 {
 	if (--sh.suppressint == 0 && sh.intpending)
 		return onint(sh);

@@ -74,7 +74,7 @@ const char defpathvar[] =
 
 
 void
-changelocale(ShellContext &, std::string_view val)
+changelocale(Context &, std::string_view val)
 {
 	auto eq = val.find('=');
 
@@ -95,7 +95,7 @@ changelocale(ShellContext &, std::string_view val)
 	setlocale(LC_ALL, "");
 }
 
-static shell::Variable *findvar(const ShellContext &sh, std::string_view name);
+static shell::Variable *findvar(const Context &sh, std::string_view name);
 
 /* Name part of "name" or "name=value". */
 static std::string_view
@@ -109,7 +109,7 @@ varname(std::string_view s)
  */
 
 void
-init_shell_vars(ShellContext &sh)
+init_shell_vars(Context &sh)
 {
 	char **envp;
 	struct stat64 st1, st2;
@@ -150,7 +150,7 @@ varvalue(std::string_view s)
 }
 
 static void
-varfunc(ShellContext &sh, shell::Variable *vp)
+varfunc(Context &sh, shell::Variable *vp)
 {
 	if (!vp->func)
 		return;
@@ -166,7 +166,7 @@ varfunc(ShellContext &sh, shell::Variable *vp)
  */
 
 void
-initvar(ShellContext &sh)
+initvar(Context &sh)
 {
 	auto add = [&](
 		const shell::Variable::Flags &flags,
@@ -212,7 +212,7 @@ initvar(ShellContext &sh)
 
 shell::Result<shell::Variable *>
 setvar(
-	ShellContext &sh,
+	Context &sh,
 	const std::string &name,
 	const std::optional<std::string> &val,
 	shell::Variable::Flags flags
@@ -247,7 +247,7 @@ setvar(
 }
 
 shell::Result<void>
-ShellContext::set_var(
+Context::set_var(
 	std::string_view name,
 	const std::optional<std::string> &value,
 	const shell::Variable::Flags &flags
@@ -258,7 +258,7 @@ ShellContext::set_var(
 }
 
 shell::Result<std::intmax_t>
-ShellContext::set_int_var(
+Context::set_int_var(
 	std::string_view name,
 	std::intmax_t value,
 	const shell::Variable::Flags &flags
@@ -276,7 +276,7 @@ ShellContext::set_int_var(
  */
 
 shell::Result<shell::Variable *>
-setvareq(ShellContext &sh, std::string s, shell::Variable::Flags flags)
+setvareq(Context &sh, std::string s, shell::Variable::Flags flags)
 {
 	static const shell::Variable::Flags special =
 		shell::Variable::Flag::Exported |
@@ -330,7 +330,7 @@ setvareq(ShellContext &sh, std::string s, shell::Variable::Flags flags)
 }
 
 std::optional<std::string_view>
-ShellContext::get_var(std::string_view name) const
+Context::get_var(std::string_view name) const
 {
 	const auto variable = findvar(*this, name);
 
@@ -347,11 +347,11 @@ ShellContext::get_var(std::string_view name) const
 }
 
 shell::Result<std::intmax_t>
-ShellContext::get_int_var(std::string_view name) const
+Context::get_int_var(std::string_view name) const
 {
 	const auto value = get_var(name);
 
-	return atomax(const_cast<ShellContext &>(*this),
+	return atomax(const_cast<Context &>(*this),
 		      value.value_or(std::string_view{}), 0);
 }
 
@@ -360,7 +360,7 @@ ShellContext::get_int_var(std::string_view name) const
  */
 
 std::vector<std::string_view>
-listvars(ShellContext &sh, const shell::Variable::Flags &on, const shell::Variable::Flags &off)
+listvars(Context &sh, const shell::Variable::Flags &on, const shell::Variable::Flags &off)
 {
 	shell::Variable::Flags mask = on | off;
 	std::vector<std::string_view> list;
@@ -375,7 +375,7 @@ listvars(ShellContext &sh, const shell::Variable::Flags &on, const shell::Variab
 }
 
 std::vector<char *>
-environment(ShellContext &sh)
+environment(Context &sh)
 {
 	auto views = listvars(sh, shell::Variable::Flag::Exported, shell::Variable::Flag::Unset);
 	std::vector<char *> env;
@@ -396,7 +396,7 @@ environment(ShellContext &sh)
  */
 
 shell::Result<int>
-showvars(ShellContext &sh, std::string_view prefix, const shell::Variable::Flags &on, const shell::Variable::Flags &off)
+showvars(Context &sh, std::string_view prefix, const shell::Variable::Flags &on, const shell::Variable::Flags &off)
 {
 	auto list = listvars(sh, on, off);
 	std::string prefix_str(prefix);
@@ -431,7 +431,7 @@ showvars(ShellContext &sh, std::string_view prefix, const shell::Variable::Flags
  */
 
 shell::Result<int>
-exportcmd(ShellContext &sh, int argc, char **argv)
+exportcmd(Context &sh, int argc, char **argv)
 {
 	char *name;
 	const char *p;
@@ -464,7 +464,7 @@ exportcmd(ShellContext &sh, int argc, char **argv)
  */
 
 shell::Result<int>
-localcmd(ShellContext &sh, int argc, char **argv)
+localcmd(Context &sh, int argc, char **argv)
 {
 	char *name;
 
@@ -487,7 +487,7 @@ localcmd(ShellContext &sh, int argc, char **argv)
  */
 
 shell::Result<void>
-mklocal(ShellContext &sh, std::string_view name, const shell::Variable::Flags &flags)
+mklocal(Context &sh, std::string_view name, const shell::Variable::Flags &flags)
 {
 	shell::LocalVariable lv;
 	shell::Variable *vp;
@@ -529,7 +529,7 @@ mklocal(ShellContext &sh, std::string_view name, const shell::Variable::Flags &f
  */
 
 static shell::Result<void>
-poplocalvars(ShellContext &sh)
+poplocalvars(Context &sh)
 {
 	INTOFF(sh);
 
@@ -564,7 +564,7 @@ poplocalvars(ShellContext &sh)
  * Create a new localvar environment.
  */
 shell::Result<std::size_t>
-pushlocalvars(ShellContext &sh, int push)
+pushlocalvars(Context &sh, int push)
 {
 	const auto stop = sh.stack.size();
 
@@ -580,7 +580,7 @@ pushlocalvars(ShellContext &sh, int push)
 
 
 shell::Result<void>
-unwindlocalvars(ShellContext &sh, std::size_t stop)
+unwindlocalvars(Context &sh, std::size_t stop)
 {
 	while (sh.stack.size() > stop)
 		TRY_SHV(poplocalvars(sh));
@@ -595,7 +595,7 @@ unwindlocalvars(ShellContext &sh, std::size_t stop)
  */
 
 shell::Result<int>
-unsetcmd(ShellContext &sh, int argc, char **argv)
+unsetcmd(Context &sh, int argc, char **argv)
 {
 	char **ap;
 	int i;
@@ -622,7 +622,7 @@ unsetcmd(ShellContext &sh, int argc, char **argv)
  */
 
 shell::Result<void>
-unsetvar(ShellContext &sh, const std::string &s)
+unsetvar(Context &sh, const std::string &s)
 {
 	TRY_SHV(setvar(sh, s, std::nullopt));
 	return {};
@@ -667,7 +667,7 @@ varcmp(std::string_view p, std::string_view q)
 }
 
 static shell::Variable *
-findvar(const ShellContext &sh, std::string_view name)
+findvar(const Context &sh, std::string_view name)
 {
 	auto it = sh.variables.find(std::string(varname(name)));
 

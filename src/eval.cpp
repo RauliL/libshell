@@ -70,20 +70,20 @@
 #include "parse_error.h"
 
 
-static void evaltreenr(ShellContext &, Node *, EvalFlags)
+static void evaltreenr(Context &, Node *, EvalFlags)
 	__attribute__((__noreturn__));
-static shell::Result<int> evalloop(ShellContext &sh, const BinaryNode *, EvalFlags);
-static shell::Result<int> evalfor(ShellContext &sh, const ForNode *, EvalFlags);
-static shell::Result<int> evalcase(ShellContext &sh, const CaseNode *, EvalFlags);
-static shell::Result<int> evalsubshell(ShellContext &sh, const Node *, EvalFlags);
-static shell::Result<void> expredir(ShellContext &sh, Node *);
-static shell::Result<int> evalpipe(ShellContext &sh, const PipeNode *, EvalFlags);
-static shell::Result<int> evalcommand(ShellContext &sh, const CommandNode *, EvalFlags);
-static shell::Result<int> evalbltin(ShellContext &sh, const shell::BuiltinCommand *, int, char **, EvalFlags);
-static shell::Result<int> evalfun(ShellContext &sh, const std::shared_ptr<Node> &, int, char **, EvalFlags);
-static shell::Result<void> prehash(ShellContext &sh, Node *);
-static int eprintlist(ShellContext &sh, shell::Output *, const ArgList &, int);
-static shell::Result<int> bltincmd(ShellContext &sh, int, char **);
+static shell::Result<int> evalloop(Context &sh, const BinaryNode *, EvalFlags);
+static shell::Result<int> evalfor(Context &sh, const ForNode *, EvalFlags);
+static shell::Result<int> evalcase(Context &sh, const CaseNode *, EvalFlags);
+static shell::Result<int> evalsubshell(Context &sh, const Node *, EvalFlags);
+static shell::Result<void> expredir(Context &sh, Node *);
+static shell::Result<int> evalpipe(Context &sh, const PipeNode *, EvalFlags);
+static shell::Result<int> evalcommand(Context &sh, const CommandNode *, EvalFlags);
+static shell::Result<int> evalbltin(Context &sh, const shell::BuiltinCommand *, int, char **, EvalFlags);
+static shell::Result<int> evalfun(Context &sh, const std::shared_ptr<Node> &, int, char **, EvalFlags);
+static shell::Result<void> prehash(Context &sh, Node *);
+static int eprintlist(Context &sh, shell::Output *, const ArgList &, int);
+static shell::Result<int> bltincmd(Context &sh, int, char **);
 
 
 static const struct shell::BuiltinCommand bltin = {
@@ -98,7 +98,7 @@ static const struct shell::BuiltinCommand bltin = {
  */
 
 void
-eval_exitreset(ShellContext &sh)
+eval_exitreset(Context &sh)
 {
 	if (sh.savestatus >= 0) {
 		if (sh.exception == shell::Error::Exit || sh.evalskip == SKIPFUNCDEF)
@@ -122,7 +122,7 @@ eval_exitreset(ShellContext &sh)
  */
 
 shell::Result<int>
-evalcmd(ShellContext &sh, int argc, char **argv, EvalFlags flags)
+evalcmd(Context &sh, int argc, char **argv, EvalFlags flags)
 {
         if (argc > 1) {
                 if (argc == 2)
@@ -138,7 +138,7 @@ evalcmd(ShellContext &sh, int argc, char **argv, EvalFlags flags)
 }
 
 static inline bool
-parser_eof(const ShellContext &sh)
+parser_eof(const Context &sh)
 {
 	return sh.parse.tokpushback && sh.parse.lasttoken == Token::Eof;
 }
@@ -149,7 +149,7 @@ parser_eof(const ShellContext &sh)
  */
 
 static shell::Result<int>
-eval_input(ShellContext &sh, EvalFlags flags)
+eval_input(Context &sh, EvalFlags flags)
 {
 	int status = 0;
 
@@ -190,7 +190,7 @@ eval_input(ShellContext &sh, EvalFlags flags)
 }
 
 shell::Result<int>
-ShellContext::eval(const std::string &script, EvalFlags flags)
+Context::eval(const std::string &script, EvalFlags flags)
 {
 	std::string copy = script;
 
@@ -199,7 +199,7 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
 }
 
 shell::Result<int>
-ShellContext::eval_file(std::string_view path, EvalFlags flags)
+Context::eval_file(std::string_view path, EvalFlags flags)
 {
 	TRY_SHV(setinputfile(*this, path, INPUT_PUSH_FILE));
 	return eval_input(*this, flags);
@@ -212,7 +212,7 @@ ShellContext::eval_file(std::string_view path, EvalFlags flags)
  */
 
 shell::Result<int>
-evaltree(ShellContext &sh, Node *n, EvalFlags flags)
+evaltree(Context &sh, Node *n, EvalFlags flags)
 {
 	bool checkexit = false;
 	int status = 0;
@@ -244,13 +244,13 @@ exexit:
 }
 
 shell::Result<int>
-Node::eval(ShellContext &, EvalFlags, bool &) const
+Node::eval(Context &, EvalFlags, bool &) const
 {
 	return EXIT_SUCCESS;
 }
 
 shell::Result<int>
-NotNode::eval(ShellContext &sh, EvalFlags, bool &) const
+NotNode::eval(Context &sh, EvalFlags, bool &) const
 {
 	auto status = TRY_SH(evaltree(sh, com.get(), EvalFlag::Tested));
 
@@ -261,7 +261,7 @@ NotNode::eval(ShellContext &sh, EvalFlags, bool &) const
 }
 
 shell::Result<int>
-RedirNode::eval(ShellContext &sh, EvalFlags flags, bool &checkexit) const
+RedirNode::eval(Context &sh, EvalFlags flags, bool &checkexit) const
 {
 	if (type == Type::Subshell || type == Type::Backgnd) {
 		checkexit = true;
@@ -285,7 +285,7 @@ RedirNode::eval(ShellContext &sh, EvalFlags flags, bool &checkexit) const
 }
 
 shell::Result<int>
-CommandNode::eval(ShellContext &sh, EvalFlags flags, bool &checkexit) const
+CommandNode::eval(Context &sh, EvalFlags flags, bool &checkexit) const
 {
 	checkexit = true;
 
@@ -293,13 +293,13 @@ CommandNode::eval(ShellContext &sh, EvalFlags flags, bool &checkexit) const
 }
 
 shell::Result<int>
-ForNode::eval(ShellContext &sh, EvalFlags flags, bool &) const
+ForNode::eval(Context &sh, EvalFlags flags, bool &) const
 {
 	return evalfor(sh, this, flags);
 }
 
 shell::Result<int>
-BinaryNode::eval(ShellContext &sh, EvalFlags flags, bool &) const
+BinaryNode::eval(Context &sh, EvalFlags flags, bool &) const
 {
 	if (type == Type::While || type == Type::Until)
 		return evalloop(sh, this, flags);
@@ -318,7 +318,7 @@ BinaryNode::eval(ShellContext &sh, EvalFlags flags, bool &) const
 }
 
 shell::Result<int>
-PipeNode::eval(ShellContext &sh, EvalFlags flags, bool &checkexit) const
+PipeNode::eval(Context &sh, EvalFlags flags, bool &checkexit) const
 {
 	checkexit = true;
 
@@ -326,13 +326,13 @@ PipeNode::eval(ShellContext &sh, EvalFlags flags, bool &checkexit) const
 }
 
 shell::Result<int>
-CaseNode::eval(ShellContext &sh, EvalFlags flags, bool &) const
+CaseNode::eval(Context &sh, EvalFlags flags, bool &) const
 {
 	return evalcase(sh, this, flags);
 }
 
 shell::Result<int>
-IfNode::eval(ShellContext &sh, EvalFlags flags, bool &) const
+IfNode::eval(Context &sh, EvalFlags flags, bool &) const
 {
 	const auto status = TRY_SH(evaltree(sh, test.get(), EvalFlag::Tested));
 
@@ -347,7 +347,7 @@ IfNode::eval(ShellContext &sh, EvalFlags flags, bool &) const
 }
 
 shell::Result<int>
-DefunNode::eval(ShellContext &sh, EvalFlags, bool &) const
+DefunNode::eval(Context &sh, EvalFlags, bool &) const
 {
 	defun(sh, this);
 
@@ -356,7 +356,7 @@ DefunNode::eval(ShellContext &sh, EvalFlags, bool &) const
 
 
 static void
-evaltreenr(ShellContext &sh, Node *n, EvalFlags flags)
+evaltreenr(Context &sh, Node *n, EvalFlags flags)
 {
 	evaltree(sh, n, flags);
 	exitshell(sh);
@@ -364,7 +364,7 @@ evaltreenr(ShellContext &sh, Node *n, EvalFlags flags)
 
 
 static int
-skiploop(ShellContext &sh)
+skiploop(Context &sh)
 {
 	int skip = sh.evalskip;
 
@@ -388,7 +388,7 @@ skiploop(ShellContext &sh)
 
 
 static shell::Result<int>
-evalloop(ShellContext &sh, const BinaryNode *n, EvalFlags flags)
+evalloop(Context &sh, const BinaryNode *n, EvalFlags flags)
 {
 	int skip;
 	int status;
@@ -420,7 +420,7 @@ evalloop(ShellContext &sh, const BinaryNode *n, EvalFlags flags)
 
 
 static shell::Result<int>
-evalfor(ShellContext &sh, const ForNode *n, EvalFlags flags)
+evalfor(Context &sh, const ForNode *n, EvalFlags flags)
 {
 	ArgList args;
 	Node *argp;
@@ -451,7 +451,7 @@ evalfor(ShellContext &sh, const ForNode *n, EvalFlags flags)
 
 
 static shell::Result<int>
-evalcase(ShellContext &sh, const CaseNode *n, EvalFlags flags)
+evalcase(Context &sh, const CaseNode *n, EvalFlags flags)
 {
 	Node *cp;
 	Node *patp;
@@ -486,7 +486,7 @@ out:
 
 
 static inline bool
-have_traps(const ShellContext& sh)
+have_traps(const Context& sh)
 {
 	return sh.trapcnt != 0;
 }
@@ -497,7 +497,7 @@ have_traps(const ShellContext& sh)
  */
 
 static shell::Result<int>
-evalsubshell(ShellContext &sh, const Node *n, EvalFlags flags)
+evalsubshell(Context &sh, const Node *n, EvalFlags flags)
 {
 	shell::Job *jp;
 	bool backgnd = n->type == Node::Type::Backgnd;
@@ -539,7 +539,7 @@ nofork:
  */
 
 static shell::Result<void>
-expredir(ShellContext &sh, Node *n)
+expredir(Context &sh, Node *n)
 {
 	Node *redir;
 
@@ -578,7 +578,7 @@ expredir(ShellContext &sh, Node *n)
  */
 
 static shell::Result<int>
-evalpipe(ShellContext &sh, const PipeNode *n, EvalFlags flags)
+evalpipe(Context &sh, const PipeNode *n, EvalFlags flags)
 {
 	shell::Job *jp;
 	int pipelen;
@@ -642,7 +642,7 @@ evalpipe(ShellContext &sh, const PipeNode *n, EvalFlags flags)
  */
 
 shell::Result<void>
-evalbackcmd(ShellContext &sh, Node *n, struct backcmd *result)
+evalbackcmd(Context &sh, Node *n, struct backcmd *result)
 {
 	shell::Job *jp;
 	int pip[2];
@@ -679,7 +679,7 @@ evalbackcmd(ShellContext &sh, Node *n, struct backcmd *result)
 
 /* Expand at least one more word into ArgList; return false if none. */
 static shell::Result<bool>
-fill_arglist(ShellContext &sh, ArgList *alist, Node **argpp)
+fill_arglist(Context &sh, ArgList *alist, Node **argpp)
 {
 	size_t before = alist->size();
 	Node *argp;
@@ -696,7 +696,7 @@ fill_arglist(ShellContext &sh, ArgList *alist, Node **argpp)
 
 /* Skip `command [-p] [--]` words; set *arg0 to the real command index. */
 static shell::Result<int>
-parse_command_args(ShellContext &sh, ArgList *alist, Node **argpp,
+parse_command_args(Context &sh, ArgList *alist, Node **argpp,
 			      const char **path, size_t *arg0)
 {
 	size_t start = *arg0;
@@ -740,7 +740,7 @@ parse_command_args(ShellContext &sh, ArgList *alist, Node **argpp,
  */
 
 shell::Result<int>
-evalcommand(ShellContext &sh, const CommandNode *cmd, EvalFlags flags)
+evalcommand(Context &sh, const CommandNode *cmd, EvalFlags flags)
 {
 	std::size_t localvar_stop;
 	parsefile *file_stop;
@@ -952,13 +952,13 @@ out:
 }
 
 static void
-freestdout(ShellContext &sh)
+freestdout(Context &sh)
 {
 	sh.output.discard();
 }
 
 static shell::Result<int>
-evalbltin(ShellContext &sh, const shell::BuiltinCommand *cmd, int argc, char **argv, EvalFlags flags)
+evalbltin(Context &sh, const shell::BuiltinCommand *cmd, int argc, char **argv, EvalFlags flags)
 {
 	std::string savecmdname = std::move(sh.commandname);
 	int i = 0;
@@ -996,7 +996,7 @@ evalbltin(ShellContext &sh, const shell::BuiltinCommand *cmd, int argc, char **a
 }
 
 static shell::Result<int>
-evalfun(ShellContext &sh, const std::shared_ptr<Node> &func, int argc, char **argv, EvalFlags flags)
+evalfun(Context &sh, const std::shared_ptr<Node> &func, int argc, char **argv, EvalFlags flags)
 {
 	shparam saveparam = std::move(sh.shellparam);
 	int savefuncline = sh.funcline;
@@ -1047,7 +1047,7 @@ evalfun(ShellContext &sh, const std::shared_ptr<Node> &func, int argc, char **ar
  */
 
 shell::Result<void>
-prehash(ShellContext &sh, Node *n)
+prehash(Context &sh, Node *n)
 {
 	struct cmdentry entry;
 
@@ -1071,7 +1071,7 @@ prehash(ShellContext &sh, Node *n)
  */
 
 shell::Result<int>
-bltincmd(ShellContext &sh, int argc, char **argv)
+bltincmd(Context &sh, int argc, char **argv)
 {
 	/*
 	 * Preserve sh.exitstatus of a previous possible redirection
@@ -1093,7 +1093,7 @@ bltincmd(ShellContext &sh, int argc, char **argv)
  */
 
 shell::Result<int>
-breakcmd(ShellContext &sh, int argc, char **argv)
+breakcmd(Context &sh, int argc, char **argv)
 {
 	int n = argc > 1 ? TRY_SH(number(sh, argv[1])) : 1;
 
@@ -1114,7 +1114,7 @@ breakcmd(ShellContext &sh, int argc, char **argv)
  */
 
 shell::Result<int>
-returncmd(ShellContext &sh, int argc, char **argv)
+returncmd(Context &sh, int argc, char **argv)
 {
 	int skip;
 	int status;
@@ -1137,21 +1137,21 @@ returncmd(ShellContext &sh, int argc, char **argv)
 
 
 shell::Result<int>
-falsecmd(ShellContext &sh, int argc, char **argv)
+falsecmd(Context &sh, int argc, char **argv)
 {
 	return EXIT_FAILURE;
 }
 
 
 shell::Result<int>
-truecmd(ShellContext &sh, int argc, char **argv)
+truecmd(Context &sh, int argc, char **argv)
 {
 	return EXIT_SUCCESS;
 }
 
 
 shell::Result<int>
-execcmd(ShellContext &sh, int argc, char **argv)
+execcmd(Context &sh, int argc, char **argv)
 {
 	if (argc > 1) {
 		sh.opts.interactive() = 0;		/* exit on error */
@@ -1166,7 +1166,7 @@ execcmd(ShellContext &sh, int argc, char **argv)
 
 
 int
-eprintlist(ShellContext &sh, shell::Output *out, const ArgList &list, int sep)
+eprintlist(Context &sh, shell::Output *out, const ArgList &list, int sep)
 {
 	for (const std::string &s : list) {
 		const char *p;

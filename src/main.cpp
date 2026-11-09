@@ -55,7 +55,7 @@
 #include "exec.h"
 #include "parse_error.h"
 
-static shell::Result<std::string> find_dot_file(ShellContext &sh, char *);
+static shell::Result<std::string> find_dot_file(Context &sh, char *);
 
 /*
  * Read and execute commands until EOF.  No prompting or other interactive
@@ -64,7 +64,7 @@ static shell::Result<std::string> find_dot_file(ShellContext &sh, char *);
  * propagate as ShellResult errors to the driver.
  */
 shell::Result<int>
-cmdloop(ShellContext &sh)
+cmdloop(Context &sh)
 {
 	int status = 0;
 
@@ -104,7 +104,7 @@ cmdloop(ShellContext &sh)
  * Read a file containing shell functions / commands.
  */
 shell::Result<void>
-readcmdfile(ShellContext &sh, std::string_view name)
+readcmdfile(Context &sh, std::string_view name)
 {
 	TRY_SHV(setinputfile(sh, name, INPUT_PUSH_FILE));
 	auto r = cmdloop(sh);
@@ -119,7 +119,7 @@ readcmdfile(ShellContext &sh, std::string_view name)
  * search for the file, which is necessary to find sub-commands.
  */
 static shell::Result<std::string>
-find_dot_file(ShellContext &sh, char *basename)
+find_dot_file(Context &sh, char *basename)
 {
 	const char *path = pathval(sh);
 	struct stat64 statb;
@@ -141,7 +141,7 @@ find_dot_file(ShellContext &sh, char *basename)
 }
 
 shell::Result<int>
-dotcmd(ShellContext &sh, int argc, char **argv)
+dotcmd(Context &sh, int argc, char **argv)
 {
 	int status = 0;
 
@@ -166,7 +166,7 @@ dotcmd(ShellContext &sh, int argc, char **argv)
 }
 
 shell::Result<int>
-exitcmd(ShellContext &sh, int argc, char **argv)
+exitcmd(Context &sh, int argc, char **argv)
 {
 	if (argc > 1)
 		sh.savestatus = TRY_SH(number(sh, argv[1]));

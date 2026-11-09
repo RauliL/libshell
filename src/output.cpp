@@ -62,7 +62,7 @@
 #include "main.h"
 #include "system.h"
 
-static int xvsnprintf(ShellContext &sh, char *, size_t, const char *, va_list);
+static int xvsnprintf(Context &sh, char *, size_t, const char *, va_list);
 
 namespace shell {
 
@@ -74,7 +74,7 @@ Output::ensure_buf()
 }
 
 int
-Output::emit(ShellContext &context, const char *p, std::size_t len)
+Output::emit(Context &context, const char *p, std::size_t len)
 {
 	if (sink) {
 		sink(std::string_view(p, len));
@@ -86,7 +86,7 @@ Output::emit(ShellContext &context, const char *p, std::size_t len)
 }
 
 void
-Output::flush(ShellContext &context)
+Output::flush(Context &context)
 {
 	const std::size_t len = pos;
 
@@ -101,7 +101,7 @@ Output::flush(ShellContext &context)
 }
 
 void
-Output::write(ShellContext &sh, const char *p, std::size_t len)
+Output::write(Context &sh, const char *p, std::size_t len)
 {
 	std::size_t nleft = space();
 
@@ -131,7 +131,7 @@ buffered:
 }
 
 void
-outcslow(ShellContext &sh, int c, shell::Output *dest)
+outcslow(Context &sh, int c, shell::Output *dest)
 {
 	char buf = c;
 
@@ -140,7 +140,7 @@ outcslow(ShellContext &sh, int c, shell::Output *dest)
 
 
 void
-flushall(ShellContext &sh)
+flushall(Context &sh)
 {
 	sh.output.flush(sh);
 #ifdef FLUSHERR
@@ -149,7 +149,7 @@ flushall(ShellContext &sh)
 }
 
 void
-outfmt(ShellContext &sh, shell::Output *file, const char *fmt, ...)
+outfmt(Context &sh, shell::Output *file, const char *fmt, ...)
 {
 	va_list ap;
 
@@ -160,7 +160,7 @@ outfmt(ShellContext &sh, shell::Output *file, const char *fmt, ...)
 
 
 void
-out1fmt(ShellContext &sh, const char *fmt, ...)
+out1fmt(Context &sh, const char *fmt, ...)
 {
 	va_list ap;
 
@@ -171,7 +171,7 @@ out1fmt(ShellContext &sh, const char *fmt, ...)
 
 
 static shell::Result<int>
-xvasprintf(ShellContext &sh, char **sp, size_t size, std::string &overflow,
+xvasprintf(Context &sh, char **sp, size_t size, std::string &overflow,
 	   const char *f, va_list ap)
 {
 	int len;
@@ -193,7 +193,7 @@ xvasprintf(ShellContext &sh, char **sp, size_t size, std::string &overflow,
 
 
 shell::Result<int>
-xasprintf(ShellContext &sh, std::string &out, const char *f, ...)
+xasprintf(Context &sh, std::string &out, const char *f, ...)
 {
 	va_list ap;
 	char *p = nullptr;
@@ -207,7 +207,7 @@ xasprintf(ShellContext &sh, std::string &out, const char *f, ...)
 
 
 void
-doformat(ShellContext &sh, shell::Output *dest, const char *f, va_list ap)
+doformat(Context &sh, shell::Output *dest, const char *f, va_list ap)
 {
 	char *s;
 	int len;
@@ -238,7 +238,7 @@ doformat(ShellContext &sh, shell::Output *dest, const char *f, va_list ap)
  */
 
 int
-xwrite(ShellContext &sh, int fd, const void *p, size_t n)
+xwrite(Context &sh, int fd, const void *p, size_t n)
 {
 	const char *buf = static_cast<const char *>(p);
 
@@ -262,7 +262,7 @@ xwrite(ShellContext &sh, int fd, const void *p, size_t n)
 
 
 static int
-xvsnprintf(ShellContext &sh, char *outbuf, size_t length, const char *fmt, va_list ap)
+xvsnprintf(Context &sh, char *outbuf, size_t length, const char *fmt, va_list ap)
 {
 	int ret;
 

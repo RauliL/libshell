@@ -80,4 +80,4 @@
 #define INITARGS(argv)	if (!(commandname = argv[0])) {fputs("Argc is zero\n", stderr); exit(2);} else
 #endif
 
-shell::Result<int> echocmd(ShellContext &sh, int, char **);
+shell::Result<int> echocmd(Context &sh, int, char **);

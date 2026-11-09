@@ -767,7 +767,7 @@ struct overloaded : Ts... {
 }
 
 static EvalResult
-eval(ShellContext &context, const Expr &expr, bool noeval)
+eval(Context &context, const Expr &expr, bool noeval)
 {
 	return std::visit(
 		overloaded{
@@ -886,7 +886,7 @@ eval(ShellContext &context, const Expr &expr, bool noeval)
 }
 
 static EvalResult
-eval(ShellContext &context, const ExprPtr &expr)
+eval(Context &context, const ExprPtr &expr)
 {
 	if (!expr)
 		return tl::unexpected<std::string>("expecting primary");
@@ -895,7 +895,7 @@ eval(ShellContext &context, const ExprPtr &expr)
 }
 
 shell::Result<std::intmax_t>
-ShellContext::arith(std::string_view expr)
+Context::arith(std::string_view expr)
 {
 	const auto ast = Parser(expr).parse();
 	if (!ast)

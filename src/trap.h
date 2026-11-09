@@ -47,13 +47,13 @@ extern volatile sig_atomic_t gotsigchld;
 
 using Node = shell::Node;
 
-shell::Result<int> trapcmd(ShellContext &sh, int, char **);
-void init_traps(ShellContext &sh);
-shell::Result<void> clear_traps(ShellContext &sh, const Node *);
-void setsignal(ShellContext &sh, int);
-void ignoresig(ShellContext &sh, int);
-void onsig(ShellContext &sh, int);
-shell::Result<void> dotrap(ShellContext &sh);
-void exitshell(ShellContext &sh) __attribute__((__noreturn__));
-int decode_signal(ShellContext &sh, std::string_view, int);
-void sigblockall(ShellContext &sh, sigset_t *oldmask);
+shell::Result<int> trapcmd(Context &sh, int, char **);
+void init_traps(Context &sh);
+shell::Result<void> clear_traps(Context &sh, const Node *);
+void setsignal(Context &sh, int);
+void ignoresig(Context &sh, int);
+void onsig(Context &sh, int);
+shell::Result<void> dotrap(Context &sh);
+void exitshell(Context &sh) __attribute__((__noreturn__));
+int decode_signal(Context &sh, std::string_view, int);
+void sigblockall(Context &sh, sigset_t *oldmask);

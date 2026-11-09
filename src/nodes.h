@@ -65,7 +65,7 @@ struct CommandNode : Node {
 	~CommandNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
-		ShellContext &sh,
+		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
 	) const override;
@@ -79,7 +79,7 @@ struct PipeNode : Node {
 	~PipeNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
-		ShellContext &sh,
+		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
 	) const override;
@@ -94,7 +94,7 @@ struct RedirNode : Node {
 	~RedirNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
-		ShellContext &sh,
+		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
 	) const override;
@@ -108,7 +108,7 @@ struct BinaryNode : Node {
 	~BinaryNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
-		ShellContext &sh,
+		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
 	) const override;
@@ -123,7 +123,7 @@ struct IfNode : Node {
 	~IfNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
-		ShellContext &sh,
+		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
 	) const override;
@@ -139,7 +139,7 @@ struct ForNode : Node {
 	~ForNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
-		ShellContext &sh,
+		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
 	) const override;
@@ -154,7 +154,7 @@ struct CaseNode : Node {
 	~CaseNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
-		ShellContext &sh,
+		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
 	) const override;
@@ -179,7 +179,7 @@ struct DefunNode : Node {
 	~DefunNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
-		ShellContext &sh,
+		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
 	) const override;
@@ -228,7 +228,7 @@ struct NotNode : Node {
 	~NotNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
-		ShellContext &sh,
+		Context &sh,
 		EvalFlags flags,
 		bool &checkexit
 	) const override;

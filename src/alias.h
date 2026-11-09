@@ -41,10 +41,10 @@
 
 #include "error.h"
 
-struct ShellContext;
-
-std::shared_ptr<shell::Alias> lookupalias(ShellContext &sh, std::string_view, bool check);
-shell::Result<int> aliascmd(ShellContext &sh, int, char **);
-shell::Result<int> unaliascmd(ShellContext &sh, int, char **);
-shell::Result<int> unalias(ShellContext &sh, std::string_view);
-void printalias(ShellContext &sh, const shell::Alias &);
+namespace shell { struct Context; }
+using Context = shell::Context;
+std::shared_ptr<shell::Alias> lookupalias(Context &sh, std::string_view, bool check);
+shell::Result<int> aliascmd(Context &sh, int, char **);
+shell::Result<int> unaliascmd(Context &sh, int, char **);
+shell::Result<int> unalias(Context &sh, std::string_view);
+void printalias(Context &sh, const shell::Alias &);

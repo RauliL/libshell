@@ -57,30 +57,29 @@ struct cmdentry {
 #define DO_ALTPATH	0x08	/* using alternate path */
 #define DO_REGBLTIN	0x10	/* regular built-ins and functions only */
 
-struct ShellContext;
-
+using Context = shell::Context;
 using Node = shell::Node;
 
 extern const char *pathopt;	/* set by padvance */
 
 struct stat64;
 
-void shellexec(ShellContext &, char **, const char *, int);
-int padvance_magic(ShellContext &sh, const char **path, const char *name,
+void shellexec(Context &, char **, const char *, int);
+int padvance_magic(Context &sh, const char **path, const char *name,
 		   int magic, std::string &out);
-shell::Result<void> find_command(ShellContext &, char *, struct cmdentry *, int, const char *);
-void hashcd(ShellContext &);
-void changepath(ShellContext &, std::string_view);
-void defun(ShellContext &, const DefunNode *);
-void unsetfunc(ShellContext &, std::string_view);
-shell::Result<int> hashcmd(ShellContext &sh, int, char **);
-shell::Result<int> typecmd(ShellContext &sh, int, char **);
-shell::Result<int> commandcmd(ShellContext &sh, int, char **);
+shell::Result<void> find_command(Context &, char *, struct cmdentry *, int, const char *);
+void hashcd(Context &);
+void changepath(Context &, std::string_view);
+void defun(Context &, const DefunNode *);
+void unsetfunc(Context &, std::string_view);
+shell::Result<int> hashcmd(Context &sh, int, char **);
+shell::Result<int> typecmd(Context &sh, int, char **);
+shell::Result<int> commandcmd(Context &sh, int, char **);
 
-int test_file_access(ShellContext &sh, const char *path, int mode);
+int test_file_access(Context &sh, const char *path, int mode);
 int test_access(const struct stat64 *sp, int stmode);
 
-inline int padvance(ShellContext &sh, const char **path, const char *name,
+inline int padvance(Context &sh, const char **path, const char *name,
 		    std::string &out)
 {
 	return padvance_magic(sh, path, name, 1, out);

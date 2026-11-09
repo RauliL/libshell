@@ -48,10 +48,10 @@
 #include "syntax.h"
 #include "var.h"
 
-static shell::Result<void> setalias(ShellContext &sh, const char *, const char *);
+static shell::Result<void> setalias(Context &sh, const char *, const char *);
 
 static shell::Result<void>
-setalias(ShellContext &sh, const char *name, const char *val)
+setalias(Context &sh, const char *name, const char *val)
 {
 	const char *p = name;
 
@@ -76,7 +76,7 @@ setalias(ShellContext &sh, const char *name, const char *val)
 }
 
 shell::Result<int>
-unalias(ShellContext &sh, std::string_view name)
+unalias(Context &sh, std::string_view name)
 {
 	return with_interrupts_off(sh, [&]() -> shell::Result<int> {
 		const bool found = sh.aliases.erase(std::string(name)) != 0;
@@ -86,7 +86,7 @@ unalias(ShellContext &sh, std::string_view name)
 }
 
 static shell::Result<void>
-rmaliases(ShellContext &sh)
+rmaliases(Context &sh)
 {
 	return with_interrupts_off(sh, [&]() -> shell::Result<void> {
 		sh.aliases.clear();
@@ -96,7 +96,7 @@ rmaliases(ShellContext &sh)
 }
 
 std::shared_ptr<shell::Alias>
-lookupalias(ShellContext &sh, std::string_view name, bool check)
+lookupalias(Context &sh, std::string_view name, bool check)
 {
 	auto it = sh.aliases.find(std::string(name));
 
@@ -107,7 +107,7 @@ lookupalias(ShellContext &sh, std::string_view name, bool check)
 }
 
 shell::Result<int>
-aliascmd(ShellContext &sh, int argc, char **argv)
+aliascmd(Context &sh, int argc, char **argv)
 {
 	char *n;
 	int ret = EXIT_SUCCESS;
@@ -140,7 +140,7 @@ aliascmd(ShellContext &sh, int argc, char **argv)
 }
 
 shell::Result<int>
-unaliascmd(ShellContext &sh, int argc, char **argv)
+unaliascmd(Context &sh, int argc, char **argv)
 {
 	int i;
 
@@ -162,7 +162,7 @@ unaliascmd(ShellContext &sh, int argc, char **argv)
 }
 
 void
-printalias(ShellContext &sh, const shell::Alias &ap)
+printalias(Context &sh, const shell::Alias &ap)
 {
 	sh.out1->write(
 		sh,

@@ -49,15 +49,14 @@
 using Node = shell::Node;
 using RedirFrame = shell::RedirFrame;
 
-struct ShellContext;
-
-shell::Result<void> redirect(ShellContext &sh, Node *, int);
-shell::Result<void> popredir(ShellContext &sh, int);
-shell::Result<int> savefd(ShellContext &sh, int, int);
-shell::Result<int> redirectsafe(ShellContext &sh, Node *, int);
-shell::Result<void> unwindredir(ShellContext &sh, std::size_t stop);
-std::size_t pushredir(ShellContext &sh, Node *redir);
+using Context = shell::Context;
+shell::Result<void> redirect(Context &sh, Node *, int);
+shell::Result<void> popredir(Context &sh, int);
+shell::Result<int> savefd(Context &sh, int, int);
+shell::Result<int> redirectsafe(Context &sh, Node *, int);
+shell::Result<void> unwindredir(Context &sh, std::size_t stop);
+std::size_t pushredir(Context &sh, Node *redir);
 /** Drop saved redirection frames when entering a subshell. */
-void redir_forkreset(ShellContext &sh);
-shell::Result<int> sh_open(ShellContext &sh, const std::filesystem::path &pathname, int flags, int mayfail);
-shell::Result<int> sh_pipe(ShellContext &sh, int pip[2], int memfd);
+void redir_forkreset(Context &sh);
+shell::Result<int> sh_open(Context &sh, const std::filesystem::path &pathname, int flags, int mayfail);
+shell::Result<int> sh_pipe(Context &sh, int pip[2], int memfd);

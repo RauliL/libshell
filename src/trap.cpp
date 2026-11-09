@@ -63,21 +63,21 @@
 
 static void signal_entry(int signo)
 {
-	if (ShellContext::signaled)
-		onsig(*ShellContext::signaled, signo);
+	if (Context::signaled)
+		onsig(*Context::signaled, signo);
 }
 
-static int decode_signum(ShellContext &sh, std::string_view);
+static int decode_signum(Context &sh, std::string_view);
 
 void
-init_traps(ShellContext &sh)
+init_traps(Context &sh)
 {
 	sh.sigmode[SIGCHLD - 1] = S_DFL;
 	setsignal(sh, SIGCHLD);
 }
 
 shell::Result<int>
-trapcmd(ShellContext &sh, int argc, char **argv)
+trapcmd(Context &sh, int argc, char **argv)
 {
 	const char *action;
 	char **ap;
@@ -134,7 +134,7 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 }
 
 shell::Result<void>
-clear_traps(ShellContext &sh, const Node *n)
+clear_traps(Context &sh, const Node *n)
 {
 	const auto simplecmd = issimplecmd(n, builtin_trap.name);
 
@@ -157,7 +157,7 @@ clear_traps(ShellContext &sh, const Node *n)
 }
 
 void
-setsignal(ShellContext &sh, int signo)
+setsignal(Context &sh, int signo)
 {
 	int action;
 	int lvforked;
@@ -228,7 +228,7 @@ setsignal(ShellContext &sh, int signo)
 }
 
 void
-ignoresig(ShellContext &sh, int signo)
+ignoresig(Context &sh, int signo)
 {
 	if (sh.sigmode[signo - 1] == S_IGN || sh.sigmode[signo - 1] == S_HARD_IGN)
 		return;
@@ -238,7 +238,7 @@ ignoresig(ShellContext &sh, int signo)
 }
 
 void
-onsig(ShellContext &sh, int signo)
+onsig(Context &sh, int signo)
 {
 	if (sh.vforked && getpid() != sh.vforked)
 		return;
@@ -260,7 +260,7 @@ onsig(ShellContext &sh, int signo)
 }
 
 shell::Result<void>
-dotrap(ShellContext &sh)
+dotrap(Context &sh)
 {
 	char *q;
 	int i;
@@ -305,7 +305,7 @@ dotrap(ShellContext &sh)
 }
 
 void
-exitshell(ShellContext &sh)
+exitshell(Context &sh)
 {
 	sh.savestatus = sh.exitstatus;
 	if (sh.trap[0]) {
@@ -326,7 +326,7 @@ exitshell(ShellContext &sh)
 }
 
 static int
-decode_signum(ShellContext &sh, std::string_view string)
+decode_signum(Context &sh, std::string_view string)
 {
 	int signo = -1;
 
@@ -342,7 +342,7 @@ decode_signum(ShellContext &sh, std::string_view string)
 }
 
 int
-decode_signal(ShellContext &sh, std::string_view string, int minsig)
+decode_signal(Context &sh, std::string_view string, int minsig)
 {
 	int signo = decode_signum(sh, string);
 
@@ -353,7 +353,7 @@ decode_signal(ShellContext &sh, std::string_view string, int minsig)
 }
 
 void
-sigblockall(ShellContext &sh, sigset_t *oldmask)
+sigblockall(Context &sh, sigset_t *oldmask)
 {
 	sigset_t mask;
 

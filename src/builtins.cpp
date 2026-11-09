@@ -16,22 +16,22 @@
 #include "trap.h"
 #include "var.h"
 
-shell::Result<int> echocmd(ShellContext &sh, int, char **);
-shell::Result<int> printfcmd(ShellContext &sh, int, char **);
-shell::Result<int> testcmd(ShellContext &sh, int argc, char **argv);
-shell::Result<int> timescmd(ShellContext &sh, int argc, char *argv[]);
-shell::Result<int> breakcmd(ShellContext &sh, int argc, char **argv);
-shell::Result<int> returncmd(ShellContext &sh, int argc, char **argv);
-shell::Result<int> falsecmd(ShellContext &sh, int argc, char **argv);
-shell::Result<int> truecmd(ShellContext &sh, int argc, char **argv);
-shell::Result<int> execcmd(ShellContext &sh, int argc, char **argv);
-shell::Result<int> hashcmd(ShellContext &sh, int argc, char **argv);
-shell::Result<int> typecmd(ShellContext &sh, int argc, char **argv);
-shell::Result<int> commandcmd(ShellContext &sh, int argc, char **argv);
-shell::Result<int> readcmd(ShellContext &sh, int argc, char **argv);
-shell::Result<int> umaskcmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> echocmd(Context &sh, int, char **);
+shell::Result<int> printfcmd(Context &sh, int, char **);
+shell::Result<int> testcmd(Context &sh, int argc, char **argv);
+shell::Result<int> timescmd(Context &sh, int argc, char *argv[]);
+shell::Result<int> breakcmd(Context &sh, int argc, char **argv);
+shell::Result<int> returncmd(Context &sh, int argc, char **argv);
+shell::Result<int> falsecmd(Context &sh, int argc, char **argv);
+shell::Result<int> truecmd(Context &sh, int argc, char **argv);
+shell::Result<int> execcmd(Context &sh, int argc, char **argv);
+shell::Result<int> hashcmd(Context &sh, int argc, char **argv);
+shell::Result<int> typecmd(Context &sh, int argc, char **argv);
+shell::Result<int> commandcmd(Context &sh, int argc, char **argv);
+shell::Result<int> readcmd(Context &sh, int argc, char **argv);
+shell::Result<int> umaskcmd(Context &sh, int argc, char **argv);
 #if HAVE_GETRLIMIT
-shell::Result<int> ulimitcmd(ShellContext &sh, int argc, char **argv);
+shell::Result<int> ulimitcmd(Context &sh, int argc, char **argv);
 #endif
 
 namespace {

@@ -118,21 +118,21 @@ static const std::unordered_map<std::string_view, Token> keyword_map = {
 };
 
 
-static Node::ptr list(ShellContext &sh, int nlflag, bool *eof_out = nullptr);
-static Node::ptr andor(ShellContext &sh);
-static Node::ptr pipeline(ShellContext &sh);
-Node::ptr command(ShellContext &sh);
-static Node::ptr simplecmd(ShellContext &sh);
-static Node::ptr makename(ShellContext &sh);
-static void parsefname(ShellContext &sh);
-static void parseheredoc(ShellContext &sh);
-static Token readtoken(ShellContext &sh);
-static Token xxreadtoken(ShellContext &sh);
-static int pgetc_eatbnl(ShellContext &sh);
-static Token readtoken1(ShellContext &sh, int, char const *, const std::string *, bool);
-static void synexpect(ShellContext &sh, std::optional<Token> = std::nullopt) __attribute__((__noreturn__));
-static void synerror(ShellContext &sh, const char *) __attribute__((__noreturn__));
-static void setprompt(ShellContext &sh, int);
+static Node::ptr list(Context &sh, int nlflag, bool *eof_out = nullptr);
+static Node::ptr andor(Context &sh);
+static Node::ptr pipeline(Context &sh);
+Node::ptr command(Context &sh);
+static Node::ptr simplecmd(Context &sh);
+static Node::ptr makename(Context &sh);
+static void parsefname(Context &sh);
+static void parseheredoc(Context &sh);
+static Token readtoken(Context &sh);
+static Token xxreadtoken(Context &sh);
+static int pgetc_eatbnl(Context &sh);
+static Token readtoken1(Context &sh, int, char const *, const std::string *, bool);
+static void synexpect(Context &sh, std::optional<Token> = std::nullopt) __attribute__((__noreturn__));
+static void synerror(Context &sh, const char *) __attribute__((__noreturn__));
+static void setprompt(Context &sh, int);
 
 
 template <
@@ -317,7 +317,7 @@ static bool is_end_of_list_token(Token t)
  */
 
 ParseCmdResult
-parsecmd(ShellContext &sh, int interact)
+parsecmd(Context &sh, int interact)
 {
 	sh.parse.tokpushback = 0;
 	sh.parse.checkkwd = 0;
@@ -333,7 +333,7 @@ parsecmd(ShellContext &sh, int interact)
 
 
 static Node::ptr
-list(ShellContext &sh, int nlflag, bool *eof_out)
+list(Context &sh, int nlflag, bool *eof_out)
 {
 	int chknl = nlflag & 1 ? 0 : CHKNL;
 	Node::ptr n1, n2, n3;
@@ -409,7 +409,7 @@ out_eof:
 
 
 static Node::ptr
-andor(ShellContext &sh)
+andor(Context &sh)
 {
 	Node::ptr n1, n2, n3;
 
@@ -439,7 +439,7 @@ andor(ShellContext &sh)
 
 
 static Node::ptr
-pipeline(ShellContext &sh)
+pipeline(Context &sh)
 {
 	Node::ptr n1, n2, pipenode;
 	bool negate = false;
@@ -474,7 +474,7 @@ pipeline(ShellContext &sh)
 
 
 Node::ptr
-command(ShellContext &sh)
+command(Context &sh)
 {
 	Node::ptr n1, n2;
 	Node::ptr ap;
@@ -669,7 +669,7 @@ redir:
 
 
 static Node::ptr
-simplecmd(ShellContext &sh)
+simplecmd(Context &sh)
 {
 	Node::ptr args;
 	Node::ptr *app = &args;
@@ -749,7 +749,7 @@ out:
 }
 
 static Node::ptr
-makename(ShellContext &sh)
+makename(Context &sh)
 {
 	Node::ptr n = make_node<ArgNode>();
 
@@ -761,7 +761,7 @@ makename(ShellContext &sh)
 }
 
 void
-fixredir(ShellContext &sh, Node *n, const char *text, int err)
+fixredir(Context &sh, Node *n, const char *text, int err)
 {
 	if (!err)
 		as<DupNode>(n)->vname.reset();
@@ -780,7 +780,7 @@ fixredir(ShellContext &sh, Node *n, const char *text, int err)
 
 
 static void
-parsefname(ShellContext &sh)
+parsefname(Context &sh)
 {
 	auto n = sh.parse.redirnode.get();
 
@@ -810,7 +810,7 @@ parsefname(ShellContext &sh)
  */
 
 static void
-parseheredoc(ShellContext &sh)
+parseheredoc(Context &sh)
 {
 	auto docs = std::move(sh.parse.heredoclist);
 
@@ -831,7 +831,7 @@ parseheredoc(ShellContext &sh)
 }
 
 static Token
-readtoken(ShellContext &sh)
+readtoken(Context &sh)
 {
 	Token t;
 	int kwd = sh.parse.checkkwd;
@@ -884,7 +884,7 @@ out:
 }
 
 static void
-nlprompt(ShellContext &sh)
+nlprompt(Context &sh)
 {
 	plinno++;
 	if (sh.parse.doprompt)
@@ -892,7 +892,7 @@ nlprompt(ShellContext &sh)
 }
 
 static void
-nlnoprompt(ShellContext &sh)
+nlnoprompt(Context &sh)
 {
 	plinno++;
 	sh.parse.needprompt = sh.parse.doprompt;
@@ -918,7 +918,7 @@ nlnoprompt(ShellContext &sh)
 #define RETURN(token)	return sh.parse.lasttoken = token
 
 static Token
-xxreadtoken(ShellContext &sh)
+xxreadtoken(Context &sh)
 {
 	int c;
 
@@ -973,7 +973,7 @@ xxreadtoken(ShellContext &sh)
 }
 
 static int
-pgetc_eatbnl(ShellContext &sh)
+pgetc_eatbnl(Context &sh)
 {
 	int c;
 
@@ -990,13 +990,13 @@ pgetc_eatbnl(ShellContext &sh)
 }
 
 static int
-pgetc_top(ShellContext &sh, struct synstack *stack)
+pgetc_top(Context &sh, struct synstack *stack)
 {
 	return stack->syntax == SQSYNTAX ? pgetc(sh) : pgetc_eatbnl(sh);
 }
 
 static void
-synstack_push(ShellContext &sh, struct synstack **stack, struct synstack *next,
+synstack_push(Context &sh, struct synstack **stack, struct synstack *next,
 			  const char *syntax)
 {
 	memset(next, 0, sizeof(*next));
@@ -1007,13 +1007,13 @@ synstack_push(ShellContext &sh, struct synstack **stack, struct synstack *next,
 }
 
 static void
-synstack_pop(ShellContext &sh, struct synstack **stack)
+synstack_pop(Context &sh, struct synstack **stack)
 {
 	*stack = (*stack)->next;
 }
 
 unsigned
-getmbc(ShellContext &sh, int c, char *out, int mode)
+getmbc(Context &sh, int c, char *out, int mode)
 {
 	char *const start = out;
 	mbstate_t mbst = {};
@@ -1062,7 +1062,7 @@ getmbc(ShellContext &sh, int c, char *out, int mode)
 }
 
 static char *
-dollarsq_escape(ShellContext &sh, char *out)
+dollarsq_escape(Context &sh, char *out)
 {
 	/* 10 = length of UXXXXXXXX + NUL */
 	char str[10];
@@ -1125,7 +1125,7 @@ dollarsq_escape(ShellContext &sh, char *out)
 #define	PARSEARITH()	{goto parsearith; parsearith_return:;}
 
 static Token
-readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *eofmark, bool striptabs)
+readtoken1(Context &sh, int firstc, char const *syntax, const std::string *eofmark, bool striptabs)
 {
 	ExpandBuf eb;
 	struct synstack synbase = {
@@ -1797,7 +1797,7 @@ endofname(std::string_view name)
  */
 
 static void
-synexpect(ShellContext &sh, std::optional<Token> token)
+synexpect(Context &sh, std::optional<Token> token)
 {
 	std::string msg;
 
@@ -1813,7 +1813,7 @@ synexpect(ShellContext &sh, std::optional<Token> token)
 
 
 static void
-synerror(ShellContext &sh, const char *msg)
+synerror(Context &sh, const char *msg)
 {
 	sh.errlinno = plinno;
 
@@ -1821,7 +1821,7 @@ synerror(ShellContext &sh, const char *msg)
 }
 
 void
-report_parse_error(ShellContext &sh, const shell::ParseError &e)
+report_parse_error(Context &sh, const shell::ParseError &e)
 {
 	sh.errlinno = e.lineno();
 	sh.exitstatus = 2;
@@ -1829,7 +1829,7 @@ report_parse_error(ShellContext &sh, const shell::ParseError &e)
 }
 
 tl::expected<void, std::string>
-try_parse_string(ShellContext &sh, std::string_view s)
+try_parse_string(Context &sh, std::string_view s)
 {
 	char save_nflag = sh.opts.noexec();
 	std::string copy(s);
@@ -1856,7 +1856,7 @@ try_parse_string(ShellContext &sh, std::string_view s)
 }
 
 static void __attribute__((noinline))
-setprompt(ShellContext &sh, int which)
+setprompt(Context &sh, int which)
 {
 	sh.parse.needprompt = 0;
 	sh.parse.whichprompt = which;
@@ -1866,7 +1866,7 @@ setprompt(ShellContext &sh, int which)
 }
 
 std::string
-expandstr(ShellContext &sh, const char *ps)
+expandstr(Context &sh, const char *ps)
 {
 	parsefile *file_stop;
 	std::vector<heredoc> saveheredoclist;
@@ -1915,7 +1915,7 @@ expandstr(ShellContext &sh, const char *ps)
  *    should be added here.
  */
 std::string
-getprompt(ShellContext &sh, void *unused)
+getprompt(Context &sh, void *unused)
 {
 	const char *prompt;
 
