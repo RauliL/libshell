@@ -27,6 +27,137 @@ namespace shell {
 struct Context;
 
 /**
+ * Bit set over a dense enum class whose enumerators are used as bit indices
+ * (0 .. Last inclusive). Shared by variable, eval, and skip flags.
+ */
+template<typename Enum, Enum Last>
+class Flags {
+	static_assert(std::is_enum_v<Enum>);
+
+	static constexpr std::size_t nbits =
+		static_cast<std::size_t>(Last) + 1;
+	std::bitset<nbits> bits{};
+
+	static constexpr std::size_t index(Enum flag)
+	{
+		return static_cast<std::size_t>(flag);
+	}
+
+	explicit Flags(const std::bitset<nbits> &b) : bits(b) {}
+
+public:
+	using enum_type = Enum;
+
+	Flags() = default;
+
+	Flags(Enum flag)
+	{
+		bits.set(index(flag));
+	}
+
+	bool test(Enum flag) const
+	{
+		return bits.test(index(flag));
+	}
+
+	bool any() const { return bits.any(); }
+	bool none() const { return bits.none(); }
+
+	explicit operator bool() const { return any(); }
+
+	Flags &set(Enum flag)
+	{
+		bits.set(index(flag));
+		return *this;
+	}
+
+	Flags &reset(Enum flag)
+	{
+		bits.reset(index(flag));
+		return *this;
+	}
+
+	Flags &clear()
+	{
+		bits.reset();
+		return *this;
+	}
+
+	Flags &operator|=(Enum flag) { return set(flag); }
+
+	Flags &operator|=(const Flags &other)
+	{
+		bits |= other.bits;
+		return *this;
+	}
+
+	Flags operator|(Enum flag) const
+	{
+		Flags out = *this;
+		out.set(flag);
+		return out;
+	}
+
+	Flags operator|(const Flags &other) const
+	{
+		Flags out = *this;
+		out |= other;
+		return out;
+	}
+
+	Flags &operator&=(Enum flag) { return *this &= Flags(flag); }
+
+	Flags &operator&=(const Flags &other)
+	{
+		bits &= other.bits;
+		return *this;
+	}
+
+	Flags operator&(Enum flag) const { return *this & Flags(flag); }
+
+	Flags operator&(const Flags &other) const
+	{
+		Flags out = *this;
+		out &= other;
+		return out;
+	}
+
+	Flags operator~() const { return Flags(~bits); }
+
+	unsigned long to_ulong() const { return bits.to_ulong(); }
+
+	friend bool operator==(const Flags &a, const Flags &b)
+	{
+		return a.bits == b.bits;
+	}
+
+	friend bool operator!=(const Flags &a, const Flags &b)
+	{
+		return !(a == b);
+	}
+
+	friend bool operator==(const Flags &a, Enum b)
+	{
+		return a == Flags(b);
+	}
+
+	friend bool operator!=(const Flags &a, Enum b)
+	{
+		return !(a == b);
+	}
+
+	friend bool operator==(Enum a, const Flags &b)
+	{
+		return Flags(a) == b;
+	}
+
+	friend bool operator!=(Enum a, const Flags &b)
+	{
+		return !(a == b);
+	}
+};
+
+/**
  * Enumeration of shell error codes.
  */
 enum class Error : std::uint8_t {
@@ -75,132 +206,7 @@ struct Variable {
 		Full,
 	};
 
-	class Flags {
-	private:
-		static constexpr std::size_t nbits =
-			static_cast<std::size_t>(Flag::Full) + 1;
-		std::bitset<nbits> bits{};
-
-		static constexpr std::size_t index(Flag flag)
-		{
-			return static_cast<std::size_t>(flag);
-		}
-
-		explicit Flags(const std::bitset<nbits> &b)
-			: bits(b) {}
-
-	public:
-		Flags() = default;
-
-		Flags(Flag flag)
-		{
-			bits.set(index(flag));
-		}
-
-		inline bool test(Flag flag) const
-		{
-			return bits.test(index(flag));
-		}
-
-		inline bool any() const
-		{
-			return bits.any();
-		}
-
-		inline bool none() const
-		{
-			return bits.none();
-		}
-
-		Flags &set(Flag flag)
-		{
-			bits.set(index(flag));
-
-			return *this;
-		}
-
-		Flags &reset(Flag flag)
-		{
-			bits.reset(index(flag));
-
-			return *this;
-		}
-
-		Flags &operator|=(Flag flag)
-		{
-			return set(flag);
-		}
-
-		Flags &operator|=(const Flags &other)
-		{
-			bits |= other.bits;
-
-			return *this;
-		}
-
-		Flags &operator&=(const Flags &other)
-		{
-			bits &= other.bits;
-
-			return *this;
-		}
-
-		Flags operator|(Flag flag) const
-		{
-			Flags out = *this;
-
-			out.set(flag);
-
-			return out;
-		}
-
-		Flags operator|(const Flags &other) const
-		{
-			Flags out = *this;
-
-			out |= other;
-
-			return out;
-		}
-
-		Flags operator&(Flag flag) const
-		{
-			return *this & Flags(flag);
-		}
-
-		Flags operator&(const Flags &other) const
-		{
-			Flags out = *this;
-
-			out &= other;
-
-			return out;
-		}
-
-		Flags operator~() const {
-			return Flags(~bits);
-		}
-
-		friend bool operator==(const Flags &a, const Flags &b)
-		{
-			return a.bits == b.bits;
-		}
-
-		friend bool operator!=(const Flags &a, const Flags &b)
-		{
-			return !(a == b);
-		}
-
-		friend bool operator==(Flags a, Flag b)
-		{
-			return a == Flags(b);
-		}
-
-		friend bool operator!=(Flags a, Flag b)
-		{
-			return !(a == b);
-		}
-	};
+	using Flags = shell::Flags<Flag, Flag::Full>;
 
 	Flags flags;
 	/** name=value (owned; empty value when uset) */
@@ -498,68 +504,11 @@ enum class EvalFlag : std::uint8_t {
 	Tested,
 };
 
-class EvalFlags {
-	static constexpr std::size_t nbits =
-		static_cast<std::size_t>(EvalFlag::Tested) + 1;
-	std::bitset<nbits> bits{};
-
-	static constexpr std::size_t index(EvalFlag flag)
-	{
-		return static_cast<std::size_t>(flag);
-	}
-
-public:
-	EvalFlags() = default;
-	EvalFlags(EvalFlag flag) { bits.set(index(flag)); }
-
-	bool test(EvalFlag flag) const { return bits.test(index(flag)); }
-
-	EvalFlags &set(EvalFlag flag)
-	{
-		bits.set(index(flag));
-		return *this;
-	}
-
-	EvalFlags &reset(EvalFlag flag)
-	{
-		bits.reset(index(flag));
-		return *this;
-	}
-
-	/* Keep only this flag, and only when it was already set. */
-	EvalFlags &operator&=(EvalFlag flag)
-	{
-		bool on = test(flag);
-		bits.reset();
-		if (on)
-			bits.set(index(flag));
-		return *this;
-	}
-
-	EvalFlags operator&(EvalFlag flag) const
-	{
-		EvalFlags out = *this;
-		out &= flag;
-		return out;
-	}
-
-	EvalFlags &operator|=(EvalFlag flag) { return set(flag); }
-
-	EvalFlags operator|(EvalFlag flag) const
-	{
-		EvalFlags out = *this;
-		out.set(flag);
-		return out;
-	}
-
-	unsigned long to_ulong() const { return bits.to_ulong(); }
-};
+using EvalFlags = Flags<EvalFlag, EvalFlag::Tested>;
 
 inline EvalFlags operator|(EvalFlag a, EvalFlag b)
 {
-	EvalFlags flags(a);
-	flags.set(b);
-	return flags;
+	return EvalFlags(a) | b;
 }
 
 static_assert(std::is_trivially_copyable_v<EvalFlags>);
@@ -576,96 +525,11 @@ enum class EvalSkip : std::uint8_t {
 	FuncDef,
 };
 
-class EvalSkipFlags {
-	static constexpr std::size_t nbits =
-		static_cast<std::size_t>(EvalSkip::FuncDef) + 1;
-	std::bitset<nbits> bits{};
-
-	static constexpr std::size_t index(EvalSkip flag)
-	{
-		return static_cast<std::size_t>(flag);
-	}
-
-	explicit EvalSkipFlags(const std::bitset<nbits> &b) : bits(b) {}
-
-public:
-	EvalSkipFlags() = default;
-	EvalSkipFlags(EvalSkip flag) { bits.set(index(flag)); }
-
-	bool test(EvalSkip flag) const { return bits.test(index(flag)); }
-	bool any() const { return bits.any(); }
-	bool none() const { return bits.none(); }
-
-	explicit operator bool() const { return any(); }
-
-	EvalSkipFlags &set(EvalSkip flag)
-	{
-		bits.set(index(flag));
-		return *this;
-	}
-
-	EvalSkipFlags &reset(EvalSkip flag)
-	{
-		bits.reset(index(flag));
-		return *this;
-	}
-
-	EvalSkipFlags &clear()
-	{
-		bits.reset();
-		return *this;
-	}
-
-	EvalSkipFlags &operator|=(EvalSkip flag) { return set(flag); }
-
-	EvalSkipFlags operator|(EvalSkip flag) const
-	{
-		EvalSkipFlags out = *this;
-		out.set(flag);
-		return out;
-	}
-
-	EvalSkipFlags &operator&=(const EvalSkipFlags &other)
-	{
-		bits &= other.bits;
-		return *this;
-	}
-
-	EvalSkipFlags operator&(const EvalSkipFlags &other) const
-	{
-		EvalSkipFlags out = *this;
-		out &= other;
-		return out;
-	}
-
-	EvalSkipFlags operator~() const { return EvalSkipFlags(~bits); }
-
-	friend bool operator==(const EvalSkipFlags &a, const EvalSkipFlags &b)
-	{
-		return a.bits == b.bits;
-	}
-
-	friend bool operator!=(const EvalSkipFlags &a, const EvalSkipFlags &b)
-	{
-		return !(a == b);
-	}
-
-	friend bool operator==(const EvalSkipFlags &a, EvalSkip b)
-	{
-		return a == EvalSkipFlags(b);
-	}
-
-	friend bool operator!=(const EvalSkipFlags &a, EvalSkip b)
-	{
-		return !(a == b);
-	}
-};
+using EvalSkipFlags = Flags<EvalSkip, EvalSkip::FuncDef>;
 
 inline EvalSkipFlags operator|(EvalSkip a, EvalSkip b)
 {
-	EvalSkipFlags flags(a);
-	flags.set(b);
-	return flags;
+	return EvalSkipFlags(a) | b;
 }
 
 inline EvalSkipFlags operator~(EvalSkip flag)
