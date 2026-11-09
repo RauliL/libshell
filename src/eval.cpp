@@ -101,11 +101,11 @@ void
 eval_exitreset(Context &sh)
 {
 	if (sh.savestatus >= 0) {
-		if (sh.exception == shell::Error::Exit || sh.evalskip == SKIPFUNCDEF)
+		if (sh.exception == shell::Error::Exit || sh.evalskip == EvalSkip::FuncDef)
 			sh.exitstatus = sh.savestatus;
 		sh.savestatus = -1;
 	}
-	sh.evalskip = 0;
+	sh.evalskip.clear();
 	sh.loopnest = 0;
 	sh.inps4 = 0;
 
@@ -363,24 +363,17 @@ evaltreenr(Context &sh, Node *n, EvalFlags flags)
 }
 
 
-static int
+static EvalSkipFlags
 skiploop(Context &sh)
 {
-	int skip = sh.evalskip;
+	EvalSkipFlags skip = sh.evalskip;
 
-	switch (skip) {
-	case 0:
-		break;
-
-	case SKIPBREAK:
-	case SKIPCONT:
+	if (skip == EvalSkip::Break || skip == EvalSkip::Continue) {
 		if (likely(--sh.skipcount <= 0)) {
-			sh.evalskip = 0;
-			break;
+			sh.evalskip.clear();
+		} else {
+			skip = EvalSkip::Break;
 		}
-
-		skip = SKIPBREAK;
-		break;
 	}
 
 	return skip;
@@ -390,7 +383,7 @@ skiploop(Context &sh)
 static shell::Result<int>
 evalloop(Context &sh, const BinaryNode *n, EvalFlags flags)
 {
-	int skip;
+	EvalSkipFlags skip;
 	int status;
 
 	sh.loopnest++;
@@ -401,7 +394,7 @@ evalloop(Context &sh, const BinaryNode *n, EvalFlags flags)
 
 		i = TRY_SH(evaltree(sh, n->ch1.get(), EvalFlag::Tested));
 		skip = skiploop(sh);
-		if (skip == SKIPFUNC)
+		if (skip == EvalSkip::Func)
 			status = i;
 		if (skip)
 			continue;
@@ -411,7 +404,7 @@ evalloop(Context &sh, const BinaryNode *n, EvalFlags flags)
 			break;
 		status = TRY_SH(evaltree(sh, n->ch2.get(), flags));
 		skip = skiploop(sh);
-	} while (!(skip & ~SKIPCONT));
+	} while (!(skip & ~EvalSkip::Continue));
 	sh.loopnest--;
 
 	return status;
@@ -440,7 +433,7 @@ evalfor(Context &sh, const ForNode *n, EvalFlags flags)
 	for (const std::string &word : args) {
 		TRY_SHV(setvar(sh, n->var, word));
 		status = TRY_SH(evaltree(sh, n->body.get(), flags));
-		if (skiploop(sh) & ~SKIPCONT)
+		if (skiploop(sh) & ~EvalSkip::Continue)
 			break;
 	}
 	sh.loopnest--;
@@ -464,14 +457,14 @@ evalcase(Context &sh, const CaseNode *n, EvalFlags flags)
 
 	expandarg(sh, n->expr.get(), &args, FNMATCH_IS_ENABLED ? EXP_TILDE :
 					   EXP_TILDE | EXP_MBCHAR);
-	for (cp = n->cases.get() ; cp && sh.evalskip == 0 ; cp = as<CaseListNode>(cp)->next.get()) {
+	for (cp = n->cases.get() ; cp && !sh.evalskip ; cp = as<CaseListNode>(cp)->next.get()) {
 		for (patp = as<CaseListNode>(cp)->pattern.get() ; patp ; patp = as<ArgNode>(patp)->next.get()) {
 			if (casematch(sh, patp, args[0].data())) {
 				/* Ensure body is non-empty as otherwise
 				 * EvalFlag::Exit may prevent us from setting the
 				 * exit status.
 				 */
-				if (sh.evalskip == 0 && as<CaseListNode>(cp)->body) {
+				if (!sh.evalskip && as<CaseListNode>(cp)->body) {
 					status = TRY_SH(evaltree(sh,
 							as<CaseListNode>(cp)->body.get(),
 							flags));
@@ -1031,7 +1024,7 @@ evalfun(Context &sh, const std::shared_ptr<Node> &func, int argc, char **argv, E
 	sh.funcline = savefuncline;
 	sh.shellparam = std::move(saveparam);
 	INTON(sh);
-	sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+	sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
 	if (failed)
 		return tl::unexpected(fail_err);
 
@@ -1102,7 +1095,7 @@ breakcmd(Context &sh, int argc, char **argv)
 	if (n > sh.loopnest)
 		n = sh.loopnest;
 	if (n > 0) {
-		sh.evalskip = (**argv == 'c')? SKIPCONT : SKIPBREAK;
+		sh.evalskip = (**argv == 'c') ? EvalSkip::Continue : EvalSkip::Break;
 		sh.skipcount = n;
 	}
 	return 0;
@@ -1116,7 +1109,7 @@ breakcmd(Context &sh, int argc, char **argv)
 shell::Result<int>
 returncmd(Context &sh, int argc, char **argv)
 {
-	int skip;
+	EvalSkip skip;
 	int status;
 
 	/*
@@ -1124,10 +1117,10 @@ returncmd(Context &sh, int argc, char **argv)
 	 * skip the rest of the file.
 	 */
 	if (argv[1]) {
-		skip = SKIPFUNC;
+		skip = EvalSkip::Func;
 		status = TRY_SH(number(sh, argv[1]));
 	} else {
-		skip = SKIPFUNCDEF;
+		skip = EvalSkip::FuncDef;
 		status = sh.exitstatus;
 	}
 	sh.evalskip = skip;

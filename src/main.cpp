@@ -69,7 +69,7 @@ cmdloop(Context &sh)
 	int status = 0;
 
 	for (;;) {
-		int skip;
+		EvalSkipFlags skip;
 
 		try {
 			ParseCmdResult cmd = parsecmd(sh, 0);
@@ -92,7 +92,7 @@ cmdloop(Context &sh)
 
 		skip = sh.evalskip;
 		if (skip) {
-			sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+			sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
 			break;
 		}
 	}

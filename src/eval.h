@@ -55,6 +55,8 @@ struct backcmd {		/* result of evalbackcmd */
 using Context = shell::Context;
 using EvalFlag = shell::EvalFlag;
 using EvalFlags = shell::EvalFlags;
+using EvalSkip = shell::EvalSkip;
+using EvalSkipFlags = shell::EvalSkipFlags;
 using Node = shell::Node;
 
 shell::Result<int> evaltree(Context &sh, Node *, EvalFlags);
@@ -62,11 +64,4 @@ shell::Result<void> evalbackcmd(Context &sh, Node *, struct backcmd *);
 /** Clear eval skip/loop state and close the temporary pipe on unwind. */
 void eval_exitreset(Context &sh);
 
-extern int evalskip;
-
-/* reasons for skipping commands (see comment on breakcmd routine) */
-#define SKIPBREAK	(1 << 0)
-#define SKIPCONT	(1 << 1)
-#define SKIPFUNC	(1 << 2)
-#define SKIPFUNCDEF	(1 << 3)
 #endif

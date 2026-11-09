@@ -296,7 +296,7 @@ dotrap(Context &sh)
 			sh.savestatus = last_status;
 			return tl::unexpected(r.error());
 		}
-		if (sh.evalskip != SKIPFUNC)
+		if (sh.evalskip != EvalSkip::Func)
 			sh.exitstatus = status;
 	}
 
@@ -312,10 +312,10 @@ exitshell(Context &sh)
 		std::string exittrap = std::move(*sh.trap[0]);
 		sh.trap[0].reset();
 		if (!sh.ptrap) {
-			sh.evalskip = 0;
+			sh.evalskip.clear();
 			/* EXIT trap failure must not skip teardown. */
 			sh.eval(exittrap);
-			sh.evalskip = SKIPFUNCDEF;
+			sh.evalskip = EvalSkip::FuncDef;
 		}
 	}
 	exitreset(sh);

@@ -115,7 +115,7 @@ run_interactive(Context &sh)
 	int numeof = 0;
 
 	for (;;) {
-		int skip;
+		EvalSkipFlags skip;
 
 		try {
 			ParseCmdResult cmd = parsecmd(sh, 1);
@@ -143,7 +143,7 @@ run_interactive(Context &sh)
 					if (r.error() == Error::Generic) {
 						skip = sh.evalskip;
 						if (skip) {
-							sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+							sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
 							break;
 						}
 						continue;
@@ -157,7 +157,7 @@ run_interactive(Context &sh)
 			report_parse_error(sh, e);
 			skip = sh.evalskip;
 			if (skip) {
-				sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+				sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
 				break;
 			}
 			continue;
@@ -165,7 +165,7 @@ run_interactive(Context &sh)
 
 		skip = sh.evalskip;
 		if (skip) {
-			sh.evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
+			sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
 			break;
 		}
 	}

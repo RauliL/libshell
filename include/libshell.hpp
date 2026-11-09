@@ -565,6 +565,117 @@ inline EvalFlags operator|(EvalFlag a, EvalFlag b)
 static_assert(std::is_trivially_copyable_v<EvalFlags>);
 static_assert(std::is_trivially_destructible_v<EvalFlags>);
 
+/**
+ * Why command evaluation is skipping ahead (break / continue / return).
+ * Stored as a bit set on Context::evalskip; see breakcmd().
+ */
+enum class EvalSkip : std::uint8_t {
+	Break,
+	Continue,
+	Func,
+	FuncDef,
+};
+
+class EvalSkipFlags {
+	static constexpr std::size_t nbits =
+		static_cast<std::size_t>(EvalSkip::FuncDef) + 1;
+	std::bitset<nbits> bits{};
+
+	static constexpr std::size_t index(EvalSkip flag)
+	{
+		return static_cast<std::size_t>(flag);
+	}
+
+	explicit EvalSkipFlags(const std::bitset<nbits> &b) : bits(b) {}
+
+public:
+	EvalSkipFlags() = default;
+	EvalSkipFlags(EvalSkip flag) { bits.set(index(flag)); }
+
+	bool test(EvalSkip flag) const { return bits.test(index(flag)); }
+	bool any() const { return bits.any(); }
+	bool none() const { return bits.none(); }
+
+	explicit operator bool() const { return any(); }
+
+	EvalSkipFlags &set(EvalSkip flag)
+	{
+		bits.set(index(flag));
+		return *this;
+	}
+
+	EvalSkipFlags &reset(EvalSkip flag)
+	{
+		bits.reset(index(flag));
+		return *this;
+	}
+
+	EvalSkipFlags &clear()
+	{
+		bits.reset();
+		return *this;
+	}
+
+	EvalSkipFlags &operator|=(EvalSkip flag) { return set(flag); }
+
+	EvalSkipFlags operator|(EvalSkip flag) const
+	{
+		EvalSkipFlags out = *this;
+		out.set(flag);
+		return out;
+	}
+
+	EvalSkipFlags &operator&=(const EvalSkipFlags &other)
+	{
+		bits &= other.bits;
+		return *this;
+	}
+
+	EvalSkipFlags operator&(const EvalSkipFlags &other) const
+	{
+		EvalSkipFlags out = *this;
+		out &= other;
+		return out;
+	}
+
+	EvalSkipFlags operator~() const { return EvalSkipFlags(~bits); }
+
+	friend bool operator==(const EvalSkipFlags &a, const EvalSkipFlags &b)
+	{
+		return a.bits == b.bits;
+	}
+
+	friend bool operator!=(const EvalSkipFlags &a, const EvalSkipFlags &b)
+	{
+		return !(a == b);
+	}
+
+	friend bool operator==(const EvalSkipFlags &a, EvalSkip b)
+	{
+		return a == EvalSkipFlags(b);
+	}
+
+	friend bool operator!=(const EvalSkipFlags &a, EvalSkip b)
+	{
+		return !(a == b);
+	}
+};
+
+inline EvalSkipFlags operator|(EvalSkip a, EvalSkip b)
+{
+	EvalSkipFlags flags(a);
+	flags.set(b);
+	return flags;
+}
+
+inline EvalSkipFlags operator~(EvalSkip flag)
+{
+	return ~EvalSkipFlags(flag);
+}
+
+static_assert(std::is_trivially_copyable_v<EvalSkipFlags>);
+static_assert(std::is_trivially_destructible_v<EvalSkipFlags>);
+
 struct Node {
 	using ptr = std::unique_ptr<Node>;
 
@@ -818,7 +929,7 @@ struct Context {
 
 	ExpandState expand;
 
-	int evalskip = 0;
+	EvalSkipFlags evalskip;
 	int skipcount = 0;
 	int loopnest = 0;
 	int funcline = 0;
