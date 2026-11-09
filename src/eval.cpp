@@ -219,7 +219,7 @@ evaltree(ShellContext &sh, Node *n, EvalFlags flags)
 	bool checkexit = false;
 	int status = 0;
 
-	if (nflag)
+	if (sh.opts.noexec())
 		goto out;
 
 	if (!n) {
@@ -234,7 +234,7 @@ evaltree(ShellContext &sh, Node *n, EvalFlags flags)
 out:
 	TRY_SHV(dotrap(sh));
 
-	if (eflag && checkexit && !flags.test(EvalFlag::tested) && status)
+	if (sh.opts.errexit() && checkexit && !flags.test(EvalFlag::tested) && status)
 		goto exexit;
 
 	if (flags.test(EvalFlag::exit)) {
@@ -844,7 +844,7 @@ evalcommand(ShellContext &sh, const Node::Command *cmd, EvalFlags flags)
 	argv = argv_store.data() + 1;
 
 	lastarg = nullptr;
-	if (iflag && sh.funcline == 0 && argc > 0)
+	if (sh.opts.interactive() && sh.funcline == 0 && argc > 0)
 		lastarg = argv[argc - 1];
 
 	sh.preverrout.fd = 2;
@@ -874,8 +874,8 @@ bail:
 		}
 	}
 
-	/* Print the command if xflag is set. */
-	if (xflag && !sh.inps4) {
+	/* Print the command if sh.opts.xtrace() is set. */
+	if (sh.opts.xtrace() && !sh.inps4) {
 		struct output *out;
 		int sep;
 
@@ -1158,8 +1158,8 @@ shell::Result<int>
 execcmd(ShellContext &sh, int argc, char **argv)
 {
 	if (argc > 1) {
-		iflag = 0;		/* exit on error */
-		mflag = 0;
+		sh.opts.interactive() = 0;		/* exit on error */
+		sh.opts.monitor() = 0;
 		optschanged(sh);
 		flush_input(sh);
 		shellexec(sh, argv + 1, pathval(sh), 0);

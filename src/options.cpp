@@ -132,15 +132,15 @@ procargs(ShellContext &sh, char **xargv)
 	if (!*xargv) {
 		if (result.minusc)
 			return sh_error(sh, "-c requires an argument");
-		sflag = 1;
+		sh.opts.stdin_opt() = 1;
 	}
-	if (iflag == 2 && sflag == 1) {
+	if (sh.opts.interactive() == 2 && sh.opts.stdin_opt() == 1) {
 		input_init(sh);
 		if (sh.input.stdin_istty && isatty(2))
-			iflag = 1;
+			sh.opts.interactive() = 1;
 	}
-	if (mflag == 2)
-		mflag = iflag;
+	if (sh.opts.monitor() == 2)
+		sh.opts.monitor() = sh.opts.interactive();
 	for (i = 0; i < NOPTS; i++)
 		if (sh.opts.list[i] == 2)
 			sh.opts.list[i] = 0;
@@ -149,7 +149,7 @@ procargs(ShellContext &sh, char **xargv)
 		*result.minusc = *xargv++;
 		if (*xargv)
 			goto setarg0;
-	} else if (!sflag) {
+	} else if (!sh.opts.stdin_opt()) {
 		TRY_SHV(setinputfile(sh, *xargv, 0));
 setarg0:
 		sh.arg0 = *xargv++;
@@ -199,7 +199,7 @@ options(ShellContext &sh, int cmdline, std::optional<std::string> *minusc)
                                 if (!cmdline) {
                                         /* "-" means turn off -x and -v */
                                         if (p[0] == '\0')
-                                                xflag = vflag = 0;
+                                                sh.opts.xtrace() = sh.opts.verbose() = 0;
                                         /* "--" means reset params */
                                         else if (!*sh.bopt.argptr)
 						setparam(sh, sh.bopt.argptr);

@@ -216,11 +216,11 @@ shell::Result<struct var *> setvar(ShellContext &sh, const std::string &name,
 				       VarFlags flags = {});
 shell::Result<struct var *> setvareq(ShellContext &sh, std::string s,
 					 VarFlags flags = {});
-std::vector<char *> listvars(ShellContext &sh, VarFlags on, VarFlags off);
-inline std::vector<char *> environment(ShellContext &sh)
-{
-	return listvars(sh, VarFlag::exported, VarFlag::unset);
-}
+/** Name=value strings for variables matching on/off flags (no sentinel). */
+std::vector<std::string_view> listvars(ShellContext &sh, VarFlags on,
+				       VarFlags off);
+/** Environ block for execve: pointers into the variable map + trailing nullptr. */
+std::vector<char *> environment(ShellContext &sh);
 shell::Result<int> showvars(ShellContext &sh, std::string_view prefix,
 				VarFlags on, VarFlags off);
 shell::Result<int> exportcmd(ShellContext &sh, int, char **);

@@ -123,21 +123,22 @@ struct ifs_state {
 
 
 
-static shell::Result<char *> argstr(ShellContext &sh, ExpandBuf &eb, char *p, int flag);
-static char * exptilde(ShellContext &sh, ExpandBuf &eb, char *startp, int flag);
-static shell::Result<char *> expari(ShellContext &sh, ExpandBuf &eb, char *start, int flag);
-static shell::Result<void> expbackq(ShellContext &sh, ExpandBuf &eb, Node *, int);
-static shell::Result<char *> evalvar(ShellContext &sh, ExpandBuf &eb, char *, int);
-static size_t strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, int flags);
-static size_t memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, int flags);
-static shell::Result<ssize_t> varvalue(ShellContext &sh, ExpandBuf &eb, char *, int, unsigned);
+static shell::Result<char *> argstr(ShellContext &sh, ExpandBuf &eb, char *p, ExpandFlags flag);
+static char * exptilde(ShellContext &sh, ExpandBuf &eb, char *startp, ExpandFlags flag);
+static shell::Result<char *> expari(ShellContext &sh, ExpandBuf &eb, char *start, ExpandFlags flag);
+static shell::Result<void> expbackq(ShellContext &sh, ExpandBuf &eb, Node *, ExpandFlags);
+static shell::Result<char *> evalvar(ShellContext &sh, ExpandBuf &eb, char *, ExpandFlags);
+static size_t strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, ExpandFlags flags);
+static size_t memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, ExpandFlags flags);
+static shell::Result<ssize_t> varvalue(ShellContext &sh, ExpandBuf &eb, char *,
+				       int, ExpandFlags);
 static shell::Result<void> expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &);
 static void addglob(ShellContext &sh, const glob64_t *);
 static char * expmeta(ShellContext &sh, ExpandBuf &eb, char *, unsigned, size_t);
 static void addfname(ShellContext &sh, char *);
 static int patmatch(ShellContext &sh, char *, const char *, ExpandBuf *eb = nullptr);
 static int pmatch(ShellContext &sh, char *, const char *);
-static size_t cvtnum(ShellContext &sh, ExpandBuf &eb, intmax_t num, int flags);
+static size_t cvtnum(ShellContext &sh, ExpandBuf &eb, intmax_t num, ExpandFlags flags);
 static tl::unexpected<shell::Error> varunset(ShellContext &sh, const char *, const char *, const char *, int);
 
 
@@ -223,7 +224,7 @@ getpwhome(ShellContext &sh, const char *name)
  */
 
 shell::Result<void>
-expandarg(ShellContext &sh, Node *arg, ArgList *alist, int flag)
+expandarg(ShellContext &sh, Node *arg, ArgList *alist, ExpandFlags flag)
 {
 	ExpandBuf eb;
 	char *p;
@@ -254,7 +255,7 @@ expandarg(ShellContext &sh, Node *arg, ArgList *alist, int flag)
 }
 
 shell::Result<std::string>
-expandarg_to_string(ShellContext &sh, Node *arg, int flag)
+expandarg_to_string(ShellContext &sh, Node *arg, ExpandFlags flag)
 {
 	ExpandBuf eb;
 
@@ -277,7 +278,7 @@ expandarg_to_string(ShellContext &sh, Node *arg, int flag)
  */
 
 static shell::Result<char *>
-argstr(ShellContext &sh, ExpandBuf &eb, char *p, int flag)
+argstr(ShellContext &sh, ExpandBuf &eb, char *p, ExpandFlags flag)
 {
 	static const char spclchars[] = {
 		'=',
@@ -295,13 +296,13 @@ argstr(ShellContext &sh, ExpandBuf &eb, char *p, int flag)
 	const char *reject = spclchars;
 	int c;
 	int breakall = (flag & (EXP_WORD | EXP_QUOTED)) == EXP_WORD;
-	int inquotes;
+	ExpandFlags inquotes;
 	size_t length;
 	int startloc;
 
 	reject += !!(flag & EXP_VARTILDE2);
 	reject += flag & EXP_VARTILDE ? 0 : 2;
-	inquotes = 0;
+	inquotes = {};
 	length = 0;
 	if (flag & EXP_TILDE) {
 		flag &= ~EXP_TILDE;
@@ -411,7 +412,7 @@ addquote:
 }
 
 static char *
-exptilde(ShellContext &sh, ExpandBuf &eb, char *startp, int flag)
+exptilde(ShellContext &sh, ExpandBuf &eb, char *startp, ExpandFlags flag)
 {
 	signed char c;
 	char *name;
@@ -495,7 +496,7 @@ removerecordregions(ShellContext &sh, int endoff)
  * evaluate, place result in (backed up) result, adjust string position.
  */
 static shell::Result<char *>
-expari(ShellContext &sh, ExpandBuf &eb, char *start, int flag)
+expari(ShellContext &sh, ExpandBuf &eb, char *start, ExpandFlags flag)
 {
 	int begoff;
 	int endoff;
@@ -539,7 +540,7 @@ out:
  */
 
 static shell::Result<void>
-expbackq(ShellContext &sh, ExpandBuf &eb, Node *cmd, int flag)
+expbackq(ShellContext &sh, ExpandBuf &eb, Node *cmd, ExpandFlags flag)
 {
 	struct backcmd in;
 	int i;
@@ -681,10 +682,10 @@ scanright(ShellContext &sh, char *startp, char *endp, char *rmesc, char *rmescen
 
 static shell::Result<char *>
 subevalvar(ShellContext &sh, ExpandBuf &eb, char *start, char *str, int strloc, int startloc,
-			int varflags, int flag)
+			int varflags, ExpandFlags flag)
 {
 	int subtype = varflags & VSTYPE;
-	int quotes = flag & QUOTES_ESC;
+	int quotes = (flag & QUOTES_ESC).value();
 	char *startp;
 	char *loc;
 	long amount;
@@ -696,7 +697,7 @@ subevalvar(ShellContext &sh, ExpandBuf &eb, char *start, char *str, int strloc, 
 	char *p;
 
 	p = TRY_SH(argstr(sh, eb, start, (flag & EXP_DISCARD) | EXP_TILDE |
-			  (str ?  0 : EXP_CASE)));
+			  (str ? ExpandFlags{} : ExpandFlags{EXP_CASE})));
 	if (flag & EXP_DISCARD)
 		return p;
 
@@ -778,7 +779,7 @@ out:
  * input string.
  */
 static shell::Result<char *>
-evalvar(ShellContext &sh, ExpandBuf &eb, char *p, int flag)
+evalvar(ShellContext &sh, ExpandBuf &eb, char *p, ExpandFlags flag)
 {
 	int subtype;
 	int varflags;
@@ -786,9 +787,9 @@ evalvar(ShellContext &sh, ExpandBuf &eb, char *p, int flag)
 	int patloc;
 	int startloc;
 	ssize_t varlen;
-	int discard;
-	int quoted;
-	int mbchar;
+	ExpandFlags discard;
+	ExpandFlags quoted;
+	ExpandFlags mbchar;
 
 	varflags = *p++ & ~VSBIT;
 	subtype = varflags & VSTYPE;
@@ -798,7 +799,7 @@ evalvar(ShellContext &sh, ExpandBuf &eb, char *p, int flag)
 	startloc = eb.dest - eb.base();
 	p = strchr(p, '=') + 1;
 
-	mbchar = 0;
+	mbchar = {};
 	switch (subtype) {
 	case VSTRIMLEFT:
 	case VSTRIMLEFTMAX:
@@ -813,7 +814,7 @@ again:
 	if (varflags & VSNUL)
 		varlen--;
 
-	discard = varlen < 0 ? EXP_DISCARD : 0;
+	discard = varlen < 0 ? ExpandFlags{EXP_DISCARD} : ExpandFlags{};
 
 	switch (subtype) {
 	case VSPLUS:
@@ -840,7 +841,7 @@ again:
 		goto again;
 	}
 
-	if ((discard & ~flag) && uflag)
+	if ((discard & ~flag) && sh.opts.nounset())
 		return varunset(sh, p, var, 0, 0);
 
 	if (subtype == VSLENGTH) {
@@ -871,12 +872,15 @@ record:
 		return p;
 
 really_record:
-	if (quoted) {
-		quoted = *var == '@' && !sh.shellparam.p.empty();
-		if (!quoted)
-			return p;
+	{
+		int nulonly = 0;
+		if (quoted) {
+			nulonly = *var == '@' && !sh.shellparam.p.empty();
+			if (!nulonly)
+				return p;
+		}
+		recordregion(sh, startloc, eb.dest - eb.base(), nulonly);
 	}
-	recordregion(sh, startloc, eb.dest - eb.base(), quoted);
 	return p;
 }
 
@@ -929,7 +933,7 @@ out:
  */
 
 static size_t
-memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, int flags)
+memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, ExpandFlags flags)
 {
 	const char *syntax;
 	size_t count = 0;
@@ -942,34 +946,39 @@ memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, int flags)
 	/* CTLMBCHAR, 2, c, c, 2, CTLMBCHAR */
 	q = eb.makespace(len * 3, eb.dest);
 
-#if QUOTES_ESC != 0x11 || EXP_MBCHAR != 0x20 || EXP_QUOTED != 0x100
-#error QUOTES_ESC != 0x11 || EXP_MBCHAR != 0x20 || EXP_QUOTED != 0x100
-#endif
-	expq = flags & EXP_QUOTED;
-	if (likely(!(flags & (expq >> 3 | expq >> 4 | expq >> 8) &
-		     (QUOTES_ESC | EXP_MBCHAR)))) {
-		while (len >= 8) {
-			uint64_t x;
+	static_assert((static_cast<unsigned>(ExpandFlag::full) |
+		       static_cast<unsigned>(ExpandFlag::case_pat)) == 0x11 &&
+		      static_cast<unsigned>(ExpandFlag::mbchar) == 0x20 &&
+		      static_cast<unsigned>(ExpandFlag::quoted) == 0x100,
+		      "QUOTES_ESC != 0x11 || EXP_MBCHAR != 0x20 || EXP_QUOTED != 0x100");
+	{
+		unsigned fbits = flags.value();
+		expq = fbits & static_cast<unsigned>(EXP_QUOTED);
+		if (likely(!(fbits & (expq >> 3 | expq >> 4 | expq >> 8) &
+			     (QUOTES_ESC | EXP_MBCHAR).value()))) {
+			while (len >= 8) {
+				uint64_t x;
 
-			memcpy(&x, p + count, sizeof(x));
+				memcpy(&x, p + count, sizeof(x));
 
-			if ((x | (x - 0x0101010101010101)) &
-			    0x8080808080808080)
-				break;
+				if ((x | (x - 0x0101010101010101)) &
+				    0x8080808080808080)
+					break;
 
-			memcpy(q + count, &x, sizeof(x));
+				memcpy(q + count, &x, sizeof(x));
 
-			count += 8;
-			len -= 8;
-		}
+				count += 8;
+				len -= 8;
+			}
 
-		q += count;
-		p += count;
+			q += count;
+			p += count;
 
-		syntax = flags & (QUOTES_ESC | EXP_MBCHAR) ?
-			 BASESYNTAX : is_type;
-	} else
-		syntax = SQSYNTAX;
+			syntax = flags & (QUOTES_ESC | EXP_MBCHAR) ?
+				 BASESYNTAX : is_type;
+		} else
+			syntax = SQSYNTAX;
+	}
 
 	for (; len; len--) {
 		int c = (signed char)*p++;
@@ -999,7 +1008,7 @@ memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, int flags)
 
 
 static size_t
-strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, int flags)
+strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, ExpandFlags flags)
 {
 	size_t len = strlen(p);
 	return memtodest(sh, eb, p, len, flags);
@@ -1012,20 +1021,20 @@ strtodest(ShellContext &sh, ExpandBuf &eb, const char *p, int flags)
  */
 
 static shell::Result<ssize_t>
-varvalue(ShellContext &sh, ExpandBuf &eb, char *name, int varflags, unsigned flags)
+varvalue(ShellContext &sh, ExpandBuf &eb, char *name, int varflags, ExpandFlags flags)
 {
 	int subtype = varflags & VSTYPE;
 	unsigned long seplen;
 	const char *seps;
 	ssize_t len = 0;
 	size_t start;
-	int discard;
+	bool discard;
 	int num;
 	char *p;
 	int i;
 
-	discard = (subtype == VSPLUS || subtype == VSLENGTH) |
-		  (flags & EXP_DISCARD);
+	discard = (subtype == VSPLUS || subtype == VSLENGTH) ||
+		  bool(flags & EXP_DISCARD);
 
 	if (unlikely(!subtype)) {
 		if (discard)
@@ -1034,9 +1043,10 @@ varvalue(ShellContext &sh, ExpandBuf &eb, char *name, int varflags, unsigned fla
 		return sh_error(sh, "Bad substitution");
 	}
 
-	flags &= discard ? ~QUOTES_ESC : ~0;
+	if (discard)
+		flags &= ~QUOTES_ESC;
 	seps = "";
-	seplen = flags & EXP_FULL;
+	seplen = flags.test(EXP_FULL) ? 1u : 0u;
 	start = eb.dest - eb.base();
 
 	switch (*name) {
@@ -1083,10 +1093,10 @@ numvar:
 		 * CHAR_BIT (which is the only bit that can be set
 		 * in sep).
 		 */
-#if EXP_QUOTED >> CHAR_BIT != EXP_FULL
-#error The following two lines expect EXP_QUOTED == EXP_FULL << CHAR_BIT
-#endif
-		seplen &= ~(flags >> CHAR_BIT);
+	static_assert(static_cast<unsigned>(ExpandFlag::quoted) >> CHAR_BIT ==
+			      static_cast<unsigned>(ExpandFlag::full),
+		      "EXP_QUOTED == EXP_FULL << CHAR_BIT expected");
+		seplen &= ~(flags.value() >> CHAR_BIT);
 		if (!seplen)
 			seps = sh.expand.ncifs;
 		seplen = ((seplen - 1) & (sh.expand.ifsmb0len - 1)) + 1;
@@ -1455,7 +1465,7 @@ expandmeta_glob(ShellContext &sh, ArgList &strs)
 		glob64_t pglob;
 		int i;
 
-		if (fflag)
+		if (sh.opts.noglob())
 			goto nometa;
 
 #ifdef __GLIBC__
@@ -1532,7 +1542,7 @@ expandmeta(ShellContext &sh, ExpandBuf &eb, ArgList &strs)
 		char *p;
 		unsigned len;
 
-		if (fflag)
+		if (sh.opts.noglob())
 			goto nometa;
 		if (!strpbrk(s.c_str(), "*?]") || !strcmp(s.c_str(), "]"))
 			goto nometa;
@@ -2090,7 +2100,7 @@ casematch(ShellContext &sh, Node *pattern, char *val)
  * Our own itoa().
  */
 static std::size_t
-cvtnum(ShellContext &sh, ExpandBuf &eb, std::intmax_t num, int flags)
+cvtnum(ShellContext &sh, ExpandBuf &eb, std::intmax_t num, ExpandFlags flags)
 {
 	auto buf = std::format("{}", num);
 

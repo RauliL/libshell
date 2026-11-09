@@ -318,7 +318,7 @@ waitcmd(ShellContext &sh, int argc, char **argv)
 		if (!dowait(sh, DOWAIT_WAITCMD, job))
 			goto sigout;
 		job->waited = true;
-		retval = job->calc_status(pipefail);
+		retval = job->calc_status(sh.opts.pipefail());
 repeat:
 		;
 	} while (*++argv);
@@ -590,7 +590,7 @@ waitforjob(ShellContext &sh, Job *jp)
 	if (!jp)
 		return sh.exitstatus;
 
-	st = jp->calc_status(pipefail);
+	st = jp->calc_status(sh.opts.pipefail());
 	if (jp->state == Job::State::Done)
 		freejob(sh, jp);
 	return st;

@@ -36,6 +36,7 @@
  * Errors — shell unwind via ShellResult (tl::expected), not exceptions.
  */
 
+#include <atomic>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -93,6 +94,30 @@ onint(ShellContext &sh)
 	sh.exitstatus = SIGINT + 128;
 
 	return exraise(sh, shell::Error::Interrupt);
+}
+
+InterruptSuppress::InterruptSuppress(ShellContext &sh) : sh_(sh)
+{
+	++sh_.suppressint;
+	std::atomic_signal_fence(std::memory_order_acq_rel);
+}
+
+InterruptSuppress::~InterruptSuppress()
+{
+	if (!active_)
+		return;
+	std::atomic_signal_fence(std::memory_order_acq_rel);
+	--sh_.suppressint;
+}
+
+shell::Result<void>
+InterruptSuppress::resume()
+{
+	active_ = false;
+	std::atomic_signal_fence(std::memory_order_acq_rel);
+	if (--sh_.suppressint == 0 && sh_.intpending)
+		return onint(sh_);
+	return {};
 }
 
 static void

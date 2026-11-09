@@ -361,7 +361,7 @@ eof:
 	*q = '\0';
 	INTON_DEFER(sh);
 
-	if (vflag) {
+	if (sh.opts.verbose()) {
 		out2str(in.current->nextc);
 #ifdef FLUSHERR
 		sh.out2->flush(sh);
@@ -473,7 +473,8 @@ setinputfd(ShellContext &sh, InputStack &in, int fd, int push)
 	if (!push)
 		in.top = in.current;
 	in.current->fd = fd;
-	in.current->nextc = in.current->buf = ckmalloc(IBUFSIZ);
+	in.current->owned_buf = std::make_unique<char[]>(IBUFSIZ);
+	in.current->nextc = in.current->buf = in.current->owned_buf.get();
 }
 
 
@@ -533,7 +534,8 @@ popfile(ShellContext &sh, InputStack &in)
 
 	if (pf->fd >= 0)
 		close(pf->fd);
-	ckfree(pf->buf);
+	pf->owned_buf.reset();
+	pf->buf = nullptr;
 	if (!pf->pending_alias_release.empty())
 		release_pending_aliases(sh, *pf);
 	while (!pf->string_stack.empty()) {

@@ -36,6 +36,7 @@
  *	@(#)options.h	8.2 (Berkeley) 5/4/95
  */
 
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -52,9 +53,40 @@ struct shparam {
 
 /** Shell `set` / startup option bits (`$-`, `set -e`, …). */
 struct ShellOptions {
-	char list[NOPTS] = {};
+	std::array<char, NOPTS> list{};
 	/** True when the host started the shell with `-c`. */
 	bool c_mode = false;
+
+	char &errexit() { return list[0]; }
+	char errexit() const { return list[0]; }
+	char &noglob() { return list[1]; }
+	char noglob() const { return list[1]; }
+	char &ignoreeof() { return list[2]; }
+	char ignoreeof() const { return list[2]; }
+	char &interactive() { return list[3]; }
+	char interactive() const { return list[3]; }
+	char &monitor() { return list[4]; }
+	char monitor() const { return list[4]; }
+	char &noexec() { return list[5]; }
+	char noexec() const { return list[5]; }
+	char &stdin_opt() { return list[6]; }
+	char stdin_opt() const { return list[6]; }
+	char &xtrace() { return list[7]; }
+	char xtrace() const { return list[7]; }
+	char &verbose() { return list[8]; }
+	char verbose() const { return list[8]; }
+	char &noclobber() { return list[9]; }
+	char noclobber() const { return list[9]; }
+	char &allexport() { return list[10]; }
+	char allexport() const { return list[10]; }
+	char &notify() { return list[11]; }
+	char notify() const { return list[11]; }
+	char &nounset() { return list[12]; }
+	char nounset() const { return list[12]; }
+	char &pipefail() { return list[13]; }
+	char pipefail() const { return list[13]; }
+	char &debug() { return list[14]; }
+	char debug() const { return list[14]; }
 };
 
 /**
@@ -74,22 +106,6 @@ struct ProcArgsResult {
 	int login = 0;
 	std::optional<std::string> minusc;
 };
-
-#define eflag (sh.opts.list[0])
-#define fflag (sh.opts.list[1])
-#define Iflag (sh.opts.list[2])
-#define iflag (sh.opts.list[3])
-#define mflag (sh.opts.list[4])
-#define nflag (sh.opts.list[5])
-#define sflag (sh.opts.list[6])
-#define xflag (sh.opts.list[7])
-#define vflag (sh.opts.list[8])
-#define	Cflag (sh.opts.list[9])
-#define	aflag (sh.opts.list[10])
-#define	bflag (sh.opts.list[11])
-#define	uflag (sh.opts.list[12])
-#define	pipefail (sh.opts.list[13])
-#define	debug (sh.opts.list[14])
 
 extern const char optletters[NOPTS];
 

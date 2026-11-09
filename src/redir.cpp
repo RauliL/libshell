@@ -212,7 +212,7 @@ do_open:
 		goto do_open;
 	case Node::Type::To:
 		/* Take care of noclobber mode. */
-		if (Cflag) {
+		if (sh.opts.noclobber()) {
 			fname = as<Node::File>(redir)->expfname.c_str();
 			if (stat64(fname, &sb) < 0) {
 				flags = O_WRONLY|O_CREAT|O_EXCL;

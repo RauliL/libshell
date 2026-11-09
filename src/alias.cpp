@@ -63,34 +63,32 @@ setalias(ShellContext &sh, const char *name, const char *val)
 	size_t namelen = static_cast<size_t>(val - name - 1); /* bytes before '=' */
 	std::string key(name, namelen);
 
-	INTOFF(sh);
-	auto &slot = sh.aliases[key];
-	if (!slot)
-		slot = std::make_shared<alias>();
-	slot->name = std::move(key);
-	slot->val = val;
-	INTON(sh);
-
-	return {};
+	return with_interrupts_off(sh, [&]() -> shell::Result<void> {
+		auto &slot = sh.aliases[key];
+		if (!slot)
+			slot = std::make_shared<alias>();
+		slot->name = std::move(key);
+		slot->val = val;
+		return {};
+	});
 }
 
 shell::Result<int>
 unalias(ShellContext &sh, std::string_view name)
 {
-	INTOFF(sh);
-	const bool found = sh.aliases.erase(std::string(name)) != 0;
-	INTON(sh);
-	return found ? 0 : 1;
+	return with_interrupts_off(sh, [&]() -> shell::Result<int> {
+		const bool found = sh.aliases.erase(std::string(name)) != 0;
+		return found ? 0 : 1;
+	});
 }
 
 static shell::Result<void>
 rmaliases(ShellContext &sh)
 {
-	INTOFF(sh);
-	sh.aliases.clear();
-	INTON(sh);
-
-	return {};
+	return with_interrupts_off(sh, [&]() -> shell::Result<void> {
+		sh.aliases.clear();
+		return {};
+	});
 }
 
 std::shared_ptr<alias>

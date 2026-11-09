@@ -81,7 +81,8 @@ struct parsefile {
 	int nleft = 0;			/* number of chars left in this line */
 	int eof = 0;			/* do not read again once we hit EOF */
 	char *nextc = nullptr;		/* next char in buffer */
-	char *buf = nullptr;		/* input buffer */
+	char *buf = nullptr;		/* input buffer (owned_buf or shared basebuf) */
+	std::unique_ptr<char[]> owned_buf; /* heap buffer for pushed files */
 	std::vector<StringPush> string_stack;
 
 	/* Aliases whose in_use flag is cleared on the next pgetc. */

@@ -51,12 +51,12 @@ resume:
 	if (!failed && state < 4) {
 		state = 4;
 		if (minusc)
-			take(sh.eval(*minusc, sflag ? EvalFlags{} : EvalFlag::exit));
+			take(sh.eval(*minusc, sh.opts.stdin_opt() ? EvalFlags{} : EvalFlag::exit));
 	}
 	if (!failed) {
-		if (iflag)
+		if (sh.opts.interactive())
 			take(run_interactive(sh));
-		else if (sflag || !minusc)
+		else if (sh.opts.stdin_opt() || !minusc)
 			take(cmdloop(sh));
 	}
 
@@ -70,7 +70,7 @@ handle_err:
 			ecode == shell::Error::End ||
 			ecode == shell::Error::Exit ||
 			state == 0 ||
-			iflag == 0 ||
+			sh.opts.interactive() == 0 ||
 			sh.shlvl
 		)
 			goto exit;
@@ -125,7 +125,7 @@ run_interactive(ShellContext &sh)
 			if (cmd.eof) {
 				if (numeof >= 50)
 					break;
-				if (!Iflag) {
+				if (!sh.opts.ignoreeof()) {
 					out2c('\n');
 #ifdef FLUSHERR
 					sh.out2->flush(sh);

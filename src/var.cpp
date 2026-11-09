@@ -32,6 +32,7 @@
  * SUCH DAMAGE.
  */
 
+#include <algorithm>
 #include <cstring>
 #include <format>
 #include <locale.h>
@@ -63,6 +64,7 @@
 #include "parser.h"
 #include "system.h"
 
+static int varcmp(std::string_view p, std::string_view q);
 
 const char defpathvar[] =
 	"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
@@ -90,7 +92,6 @@ changelocale(ShellContext &, std::string_view val)
 	setlocale(LC_ALL, "");
 }
 
-static int vpcmp(const void *, const void *);
 static var *findvar(const ShellContext &sh, std::string_view name);
 
 /* Name part of "name" or "name=value". */
@@ -279,7 +280,7 @@ setvareq(ShellContext &sh, std::string s, VarFlags flags)
 		VarFlag::exported | VarFlag::readonly | VarFlag::str_fixed |
 		VarFlag::unset;
 
-	if (aflag)
+	if (sh.opts.allexport())
 		flags |= VarFlag::exported;
 
 	std::string name(varname(s));
@@ -355,58 +356,62 @@ ShellContext::get_int_var(std::string_view name) const
  * Generate a list of variables satisfying the given conditions.
  */
 
-std::vector<char *>
+std::vector<std::string_view>
 listvars(ShellContext &sh, VarFlags on, VarFlags off)
 {
 	VarFlags mask = on | off;
-	std::vector<char *> list;
+	std::vector<std::string_view> list;
 
 	for (auto &[name, vp] : sh.variables) {
 		(void)name;
 		if ((vp.flags & mask) == on)
-			list.push_back(const_cast<char *>(vp.text.c_str()));
+			list.emplace_back(vp.text);
 	}
-	list.push_back(nullptr);
 	return list;
+}
+
+std::vector<char *>
+environment(ShellContext &sh)
+{
+	auto views = listvars(sh, VarFlag::exported, VarFlag::unset);
+	std::vector<char *> env;
+	env.reserve(views.size() + 1);
+	for (auto view : views)
+		env.push_back(const_cast<char *>(view.data()));
+	env.push_back(nullptr);
+	return env;
 }
 
 
 
 /*
- * POSIX requires that 'set' (but not export or readonly) sh.output the
+ * POSIX requires that 'set' (but not export or readonly) output the
  * variables in lexicographic order - by the locale's collating order (sigh).
- * Maybe we could keep them in an ordered balanced binary tree
- * instead of hashed lists.
- * For now just roll 'em through qsort for printing...
  */
 
 shell::Result<int>
 showvars(ShellContext &sh, std::string_view prefix, VarFlags on, VarFlags off)
 {
-	const char *sep;
-	std::vector<char *> list = listvars(sh, on, off);
-	char **ep = list.data();
-	char **epend = list.data() + list.size() - 1;
+	auto list = listvars(sh, on, off);
 	std::string prefix_str(prefix);
+	const char *sep = prefix.empty() ? "" : " ";
 
-	qsort(ep, static_cast<size_t>(epend - ep), sizeof(char *), vpcmp);
+	std::sort(list.begin(), list.end(), [](std::string_view a, std::string_view b) {
+		return varcmp(a, b) < 0;
+	});
 
-	sep = prefix.empty() ? "" : " ";
-
-	for (; ep < epend; ep++) {
-		const char *p;
-		const char *q;
-
-		p = strchrnul(*ep, '=');
+	for (auto entry : list) {
+		const char *ep = entry.data();
+		const char *p = strchrnul(ep, '=');
 		std::string quoted;
-		q = "";
+		const char *q = "";
 		if (*p) {
 			quoted = single_quote(++p);
 			q = quoted.c_str();
 		}
 
 		out1fmt(sh, "%s%s%.*s%s\n", prefix_str.c_str(), sep,
-			static_cast<int>(p - *ep), *ep, q);
+			static_cast<int>(p - ep), ep, q);
 	}
 
 	return 0;
@@ -482,7 +487,7 @@ mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
 
 	INTOFF(sh);
 	if (name == "-") {
-		lv.text.assign(sh.opts.list, sizeof(sh.opts.list));
+		lv.text.assign(sh.opts.list.data(), sh.opts.list.size());
 		vp = nullptr;
 	} else {
 		const auto eq = name.find('=');
@@ -527,7 +532,8 @@ poplocalvars(ShellContext &sh)
 		struct var *vp = it->vp;
 
 		if (!vp) {	/* $- saved */
-			std::memcpy(sh.opts.list, it->text.data(), sizeof(sh.opts.list));
+			std::memcpy(sh.opts.list.data(), it->text.data(),
+				    sh.opts.list.size());
 			optschanged(sh);
 		} else if (it->flags == VarFlag::unset) {
 			vp->flags &= ~(VarFlag::str_fixed | VarFlag::readonly);
@@ -649,12 +655,6 @@ varcmp(std::string_view p, std::string_view q)
 	}
 
 	return c - d;
-}
-
-static int
-vpcmp(const void *a, const void *b)
-{
-	return varcmp(*(const char **)a, *(const char **)b);
 }
 
 static var *

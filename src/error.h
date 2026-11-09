@@ -38,6 +38,7 @@
 #include <csignal>
 #include <format>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 #include <libshell.hpp>
@@ -98,6 +99,23 @@ shell::Result<void> __inton(ShellContext &sh);
 		--(sh).suppressint; \
 	} while (0)
 
+/**
+ * RAII interrupt deferral. Destructor matches INTON_DEFER; call resume()
+ * for full INTON semantics (may return onint).
+ */
+class InterruptSuppress {
+	ShellContext &sh_;
+	bool active_ = true;
+
+public:
+	explicit InterruptSuppress(ShellContext &sh);
+	InterruptSuppress(const InterruptSuppress &) = delete;
+	InterruptSuppress &operator=(const InterruptSuppress &) = delete;
+	~InterruptSuppress();
+
+	shell::Result<void> resume();
+};
+
 /* Avoid `.error()` in macros: bltin.h `#define error(...)` would rewrite it. */
 template <typename T>
 inline tl::unexpected<shell::Error>
@@ -120,6 +138,21 @@ shell_fail_of(const shell::Result<T> &r)
 		if (auto _try_sh_r = (expr); !_try_sh_r) \
 			return shell_fail_of(_try_sh_r); \
 	} while (0)
+
+template <typename F>
+auto with_interrupts_off(ShellContext &sh, F &&f) -> decltype(f())
+{
+	InterruptSuppress guard(sh);
+	if constexpr (std::is_void_v<decltype(f())>) {
+		std::forward<F>(f)();
+		/* Destructor unlocks as INTON_DEFER. */
+	} else {
+		auto result = std::forward<F>(f)();
+		if (auto resumed = guard.resume(); !resumed)
+			return shell_fail_of(resumed);
+		return result;
+	}
+}
 
 tl::unexpected<shell::Error> exraise(ShellContext &sh, shell::Error);
 tl::unexpected<shell::Error> sh_error_msg(ShellContext &sh, std::string msg);

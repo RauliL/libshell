@@ -184,13 +184,13 @@ setsignal(ShellContext &sh, int signo)
 		switch (signo) {
 		case SIGINT:
 			/* Catch so INTOFF/INTON can defer; onint re-raises. */
-			if (sh.opts.c_mode || sflag == 0)
+			if (sh.opts.c_mode || sh.opts.stdin_opt() == 0)
 				action = S_CATCH;
 			break;
 #if JOBS
 		case SIGTSTP:
 		case SIGTTOU:
-			if (mflag)
+			if (sh.opts.monitor())
 				action = S_IGN;
 			break;
 #endif
@@ -207,7 +207,7 @@ setsignal(ShellContext &sh, int signo)
 			return;
 		}
 		if (act.sa_handler == SIG_IGN) {
-			if (mflag && (signo == SIGTSTP ||
+			if (sh.opts.monitor() && (signo == SIGTSTP ||
 			     signo == SIGTTIN || signo == SIGTTOU)) {
 				tsig = S_IGN;
 			} else

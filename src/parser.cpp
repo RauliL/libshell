@@ -1825,11 +1825,11 @@ report_parse_error(ShellContext &sh, const shell::ParseError &e)
 tl::expected<void, std::string>
 try_parse_string(ShellContext &sh, std::string_view s)
 {
-	char save_nflag = nflag;
+	char save_nflag = sh.opts.noexec();
 	std::string copy(s);
 
 	setinputstring(sh, copy.data());
-	nflag = 1;
+	sh.opts.noexec() = 1;
 
 	try {
 		for (;;) {
@@ -1838,12 +1838,12 @@ try_parse_string(ShellContext &sh, std::string_view s)
 				break;
 		}
 		popfile(sh);
-		nflag = save_nflag;
+		sh.opts.noexec() = save_nflag;
 		return {};
 	} catch (const shell::ParseError &e) {
 		sh.errlinno = e.lineno();
 		popfile(sh);
-		nflag = save_nflag;
+		sh.opts.noexec() = save_nflag;
 
 		return tl::unexpected(std::string(e.what()));
 	}
