@@ -3,10 +3,9 @@
  */
 #include "parser.h"
 #include "syntax.h"
-
+#include <array>
 
 using namespace shell;
-
 
 namespace shell {
 

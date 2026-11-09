@@ -48,18 +48,14 @@
 #include <cstdlib>
 #include <cstring>
 #include "shell.h"
-#include "shell_context.h"
 #include "syntax.h"
 #include "error.h"
 #include "mystring.h"
-#include "memalloc.h"
 #include "parser.h"
-#include "system.h"
-
-
+#include <string>
+#include <string_view>
 
 using namespace shell;
-
 
 char nullstr[1];		/* zero length string */
 
@@ -144,8 +140,6 @@ number(Context &sh, std::string_view s)
 	return static_cast<int>(n);
 }
 
-
-
 /*
  * Check for a valid number.  This should be elsewhere.
  */
@@ -159,7 +153,6 @@ is_number(std::string_view text)
 		return is_digit(static_cast<unsigned char>(c));
 	});
 }
-
 
 /*
  * Produce a possibly single quoted string suitable as input to the shell.

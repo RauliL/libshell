@@ -36,6 +36,9 @@
 #pragma once
 
 #include <cerrno>
+#include <string_view>
+
+#include <libshell.hpp>
 
 /* shell level: 0 for the main shell, 1 for its children, and so on */
 

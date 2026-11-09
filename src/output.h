@@ -45,6 +45,7 @@
 
 #include <sys/types.h>
 
+#include <libshell.hpp>
 
 namespace shell {
 

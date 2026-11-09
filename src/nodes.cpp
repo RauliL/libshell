@@ -4,10 +4,10 @@
  */
 
 #include "nodes.h"
-
+#include <memory>
+#include <vector>
 
 using namespace shell;
-
 
 namespace shell {
 
@@ -23,7 +23,6 @@ std::vector<Node::ptr> clonelist(const std::vector<Node::ptr> &src)
 	return out;
 }
 } // namespace
-
 
 CommandNode::~CommandNode() = default;
 

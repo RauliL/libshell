@@ -44,8 +44,6 @@
  */
 
 #include <sys/types.h>		/* quad_t */
-#include <sys/param.h>		/* BSD4_4 */
-#include <sys/ioctl.h>
 
 #include <stdio.h>	/* defines BUFSIZ */
 #include <string>
@@ -55,24 +53,20 @@
 #include <limits.h>
 
 #include "shell.h"
-#include "shell_context.h"
-#include "syntax.h"
 #include "output.h"
 #include "error.h"
-#include "main.h"
-#include "system.h"
-
+#include <cerrno>
+#include <cstdarg>
+#include <cstddef>
+#include <cstring>
 
 using namespace shell;
-
 
 namespace shell {
 
 namespace {
 int xvsnprintf(Context &sh, char *, size_t, const char *, va_list);
 } // namespace
-
-
 
 void
 Output::ensure_buf()
@@ -144,7 +138,6 @@ outcslow(Context &sh, int c, Output *dest)
 	dest->write(sh, &buf, 1);
 }
 
-
 void
 flushall(Context &sh)
 {
@@ -164,7 +157,6 @@ outfmt(Context &sh, Output *file, const char *fmt, ...)
 	va_end(ap);
 }
 
-
 void
 out1fmt(Context &sh, const char *fmt, ...)
 {
@@ -174,7 +166,6 @@ out1fmt(Context &sh, const char *fmt, ...)
 	doformat(sh, sh.out1, fmt, ap);
 	va_end(ap);
 }
-
 
 namespace {
 Result<int>
@@ -199,8 +190,6 @@ xvasprintf(Context &sh, char **sp, size_t size, std::string &overflow,
 }
 } // namespace
 
-
-
 Result<int>
 xasprintf(Context &sh, std::string &out, const char *f, ...)
 {
@@ -213,7 +202,6 @@ xasprintf(Context &sh, std::string &out, const char *f, ...)
 	va_end(ap);
 	return ret;
 }
-
 
 void
 doformat(Context &sh, Output *dest, const char *f, va_list ap)
@@ -239,8 +227,6 @@ doformat(Context &sh, Output *dest, const char *f, va_list ap)
 	}
 	dest->write(sh, s, static_cast<std::size_t>(len));
 }
-
-
 
 /*
  * Version of write which resumes after a signal is caught.
@@ -268,7 +254,6 @@ xwrite(Context &sh, int fd, const void *p, size_t n)
 	}
 	return 0;
 }
-
 
 namespace {
 int

@@ -38,8 +38,6 @@
 
 #include <atomic>
 #include <csignal>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -48,25 +46,17 @@
 
 #include <libshell.hpp>
 
-#include "jobs.h"
-#include "shell.h"
-#include "shell_context.h"
-#include "main.h"
 #include "output.h"
 #include "error.h"
-#include "eval.h"
-#include "parser.h"
 #include "system.h"
-
+#include <format>
 
 /*
  * Raise a shell unwind.  Stores the code in sh.exception and returns
  * tl::unexpected for the caller to propagate as ShellResult.
  */
 
-
 using namespace shell;
-
 
 namespace shell {
 
@@ -82,7 +72,6 @@ exraise(Context &sh, Error e)
 
 	return tl::unexpected(e);
 }
-
 
 /*
  * Called when a deferred SIGINT is delivered (INTON).  Restore the
@@ -146,7 +135,6 @@ exwarning_msg(Context &sh, std::string_view msg)
 }
 } // namespace
 
-
 tl::unexpected<Error>
 sh_error_msg(Context &sh, std::string msg)
 {
@@ -173,7 +161,6 @@ sh_warnx_msg(Context &sh, std::string msg)
 	exwarning_msg(sh, msg);
 }
 
-
 const char *
 errmsg(int e, int action)
 {
@@ -187,7 +174,6 @@ errmsg(int e, int action)
 	else
 		return "not found";
 }
-
 
 #ifdef REALLY_SMALL
 Result<void>

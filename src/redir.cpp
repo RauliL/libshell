@@ -35,8 +35,6 @@
 
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/param.h>	/* PIPE_BUF */
 #include <signal.h>
 #include <string.h>
 #include <fcntl.h>
@@ -51,16 +49,14 @@
 #include "expand.h"
 #include "input.h"
 #include "jobs.h"
-#include "main.h"
 #include "nodes.h"
-#include "options.h"
 #include "output.h"
 #include "redir.h"
 #include "shell.h"
-#include "shell_context.h"
 #include "system.h"
-#include "trap.h"
-
+#include <cerrno>
+#include <cstddef>
+#include <utility>
 
 #define EMPTY -2		/* marks an unused slot in redirtab */
 #define CLOSED -1		/* fd opened for redir needs to be closed */
@@ -75,15 +71,12 @@ using namespace shell;
 
 namespace shell {
 
-
 /* Bit map of currently closed file descriptors. */
-
 
 namespace {
 Result<int> openredirect(Context &sh, Node *);
 Result<void> dupredirect(Context &sh, Node *, int);
 Result<int> openhere(Context &sh, Node *);
-
 
 unsigned
 update_closed_redirs(Context &sh, int fd, int nfd)
@@ -99,8 +92,6 @@ update_closed_redirs(Context &sh, int fd, int nfd)
 	return val & bit;
 }
 } // namespace
-
-
 
 /*
  * Process a list of redirection commands.  If the REDIR_PUSH flag is set,
@@ -165,7 +156,6 @@ redirect(Context &sh, Node *redir, int flags)
 	return {};
 }
 
-
 namespace {
 tl::unexpected<Error>
 sh_open_fail(Context &sh, const std::filesystem::path &pathname, int flags, int e)
@@ -184,8 +174,6 @@ sh_open_fail(Context &sh, const std::filesystem::path &pathname, int flags, int 
 }
 } // namespace
 
-
-
 Result<int>
 sh_open(Context &sh, const std::filesystem::path &pathname, int flags, int mayfail)
 {
@@ -202,7 +190,6 @@ sh_open(Context &sh, const std::filesystem::path &pathname, int flags, int mayfa
 
 	return sh_open_fail(sh, pathname, flags, e);
 }
-
 
 namespace {
 Result<int>
@@ -301,7 +288,6 @@ Result<void> dupredirect(Context &sh, Node *redir, int f)
 }
 } // namespace
 
-
 Result<int>
 sh_pipe(Context &sh, int pip[2], int memfd)
 {
@@ -367,9 +353,6 @@ out:
 }
 } // namespace
 
-
-
-
 /*
  * Undo the effects of the last redirection.
  */
@@ -418,8 +401,6 @@ redir_forkreset(Context &sh)
 	sh.redirlist.clear();
 }
 
-
-
 /*
  * Move a file descriptor to > 10.  Invokes sh_error on error unless
  * the original file dscriptor is not open.
@@ -449,7 +430,6 @@ savefd(Context &sh, int from, int ofd)
 	return newfd;
 }
 
-
 Result<int>
 redirectsafe(Context &sh, Node *redir, int flags)
 {
@@ -468,7 +448,6 @@ redirectsafe(Context &sh, Node *redir, int flags)
 	return err;
 }
 
-
 Result<void>
 unwindredir(Context &sh, std::size_t stop)
 {
@@ -476,7 +455,6 @@ unwindredir(Context &sh, std::size_t stop)
 		TRY_SHV(popredir(sh, 0));
 	return {};
 }
-
 
 std::size_t
 pushredir(Context &sh, Node *redir)

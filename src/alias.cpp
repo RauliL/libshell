@@ -36,21 +36,16 @@
 #include <string>
 #include <string_view>
 
-#include "shell.h"
-#include "shell_context.h"
-#include "input.h"
-#include "output.h"
 #include "error.h"
-#include "memalloc.h"
 #include "mystring.h"
 #include "alias.h"
 #include "options.h"
 #include "syntax.h"
-#include "var.h"
-
+#include <cstdlib>
+#include <format>
+#include <utility>
 
 using namespace shell;
-
 
 namespace shell {
 
@@ -83,7 +78,6 @@ setalias(Context &sh, const char *name, const char *val)
 }
 } // namespace
 
-
 Result<int>
 unalias(Context &sh, std::string_view name)
 {
@@ -105,7 +99,6 @@ rmaliases(Context &sh)
 	});
 }
 } // namespace
-
 
 std::shared_ptr<Alias>
 lookupalias(Context &sh, std::string_view name, bool check)

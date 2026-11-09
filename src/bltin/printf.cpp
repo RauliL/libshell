@@ -1,7 +1,6 @@
 #include <cinttypes>
 
 #include "shell.h"
-#include "shell_context.h"
 /*
  * Copyright (c) 1989, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -33,17 +32,16 @@
  * SUCH DAMAGE.
  */
 
-#include <arpa/inet.h>
-#include <ctype.h>
-#include <errno.h>
-#include <inttypes.h>
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
 #include <limits.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdarg>
+#include <cstdlib>
+#include <string>
 #include <string_view>
-#include <sys/types.h>
-#include <unistd.h>
+
+#include <arpa/inet.h>
 
 /** Argument/result scratch for one `printf` builtin invocation. */
 
@@ -107,7 +105,6 @@ void check_conversion(Context &sh, PrintfState &, const char *,
 	*ret; \
 })
 
-
 namespace {
 Result<int>
 print_escape_str(Context &sh, const char *f, int *param, int *array, const char *s)
@@ -141,8 +138,6 @@ print_escape_str(Context &sh, const char *f, int *param, int *array, const char 
 	return done;
 }
 } // namespace
-
-
 
 Result<int>
 printfcmd(Context &sh, int argc, char *argv[])
@@ -286,7 +281,6 @@ out:
 	return st.rval;
 }
 
-
 /*
  * Print SysV echo(1) style escape string
  *	Halts processing string if a \c escape is encountered.
@@ -335,7 +329,6 @@ putchar:
 	return c;
 }
 } // namespace
-
 
 /*
  * Print "standard" escape characters
@@ -581,7 +574,6 @@ check_conversion(Context &sh, PrintfState &st, const char *s,
 	}
 }
 } // namespace
-
 
 Result<int>
 echocmd(Context &sh, int argc, char **argv)

@@ -2,15 +2,18 @@
  * Arithmetic expression lexer, recursive-descent parser, and evaluator.
  */
 #include <cinttypes>
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <variant>
 
+#include "error.h"
 #include "shell_context.h"
 #include "var.h"
 
-
 using namespace shell;
-
 
 namespace shell {
 
@@ -211,7 +214,6 @@ is_name_char(unsigned char c)
 	return std::isalnum(c) || c == '_';
 }
 } // namespace
-
 
 namespace {
 
@@ -734,7 +736,6 @@ private:
 	bool has_pending_ = false;
 };
 
-
 } /* namespace */
 
 namespace {
@@ -767,7 +768,6 @@ assign_to_binop(Op op)
 	}
 }
 } // namespace
-
 
 namespace {
 
@@ -907,7 +907,6 @@ eval(Context &context, const ExprPtr &expr)
 	return eval(context, *expr, false);
 }
 } // namespace
-
 
 Result<std::intmax_t>
 Context::arith(std::string_view expr)

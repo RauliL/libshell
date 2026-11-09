@@ -7,10 +7,10 @@
 
 #include "mystring.h"
 #include "shell_context.h"
-
+#include <optional>
+#include <string_view>
 
 using namespace shell;
-
 
 namespace shell {
 

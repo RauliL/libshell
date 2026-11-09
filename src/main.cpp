@@ -35,36 +35,28 @@
 #include <string>
 #include <string.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
-#include "shell.h"
-
-#include "shell_context.h"
 #include "main.h"
 #include "options.h"
 #include "output.h"
 #include "parser.h"
-#include "nodes.h"
 #include "eval.h"
 #include "input.h"
-#include "trap.h"
 #include "var.h"
-#include "memalloc.h"
 #include "error.h"
 #include "mystring.h"
 #include "exec.h"
 #include "parse_error.h"
-
+#include <string_view>
+#include <utility>
 
 using namespace shell;
-
 
 namespace shell {
 
 namespace {
 Result<std::string> find_dot_file(Context &sh, char *);
 } // namespace
-
 
 /*
  * Read and execute commands until EOF.  No prompting or other interactive
@@ -220,7 +212,6 @@ find_dot_file(Context &sh, char *basename)
 	return sh_error(sh, "{}: not found", basename);
 }
 } // namespace
-
 
 Result<int>
 dotcmd(Context &sh, int argc, char **argv)

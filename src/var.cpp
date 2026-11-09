@@ -44,10 +44,8 @@
 #include <vector>
 
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
 #ifdef HAVE_PATHS_H
-#include <paths.h>
 #endif
 
 /*
@@ -55,23 +53,20 @@
  */
 
 #include "cd.h"
-#include "shell.h"
-#include "shell_context.h"
 #include "output.h"
 #include "expand.h"
-#include "nodes.h"	/* for other headers */
 #include "exec.h"
-#include "syntax.h"
 #include "options.h"
 #include "var.h"
 #include "error.h"
 #include "mystring.h"
 #include "parser.h"
 #include "system.h"
-
+#include <cstdint>
+#include <optional>
+#include <utility>
 
 using namespace shell;
-
 
 namespace shell {
 
@@ -79,10 +74,8 @@ namespace {
 int varcmp(std::string_view p, std::string_view q);
 } // namespace
 
-
 const char defpathvar[] =
 	"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-
 
 void
 changelocale(Context &, std::string_view val)
@@ -110,7 +103,6 @@ namespace {
 Variable *findvar(const Context &sh, std::string_view name);
 } // namespace
 
-
 /* Name part of "name" or "name=value". */
 namespace {
 std::string_view
@@ -119,7 +111,6 @@ varname(std::string_view s)
 	return s.substr(0, s.find('='));
 }
 } // namespace
-
 
 /*
  * Initialize the varable symbol tables and import the environment
@@ -179,7 +170,6 @@ varfunc(Context &sh, Variable *vp)
 	vp->func(sh, s);
 }
 } // namespace
-
 
 /*
  * Seed permanent builtin variables.  Called when the shell is initialized.
@@ -408,8 +398,6 @@ environment(Context &sh)
 	return env;
 }
 
-
-
 /*
  * POSIX requires that 'set' (but not export or readonly) output the
  * variables in lexicographic order - by the locale's collating order (sigh).
@@ -444,8 +432,6 @@ showvars(Context &sh, std::string_view prefix, const Variable::Flags &on, const 
 	return 0;
 }
 
-
-
 /*
  * The export and readonly commands.
  */
@@ -478,7 +464,6 @@ exportcmd(Context &sh, int argc, char **argv)
 	return 0;
 }
 
-
 /*
  * The "local" command.
  */
@@ -497,7 +482,6 @@ localcmd(Context &sh, int argc, char **argv)
 	}
 	return 0;
 }
-
 
 /*
  * Make a variable a local variable.  When a variable is made local, it's
@@ -542,7 +526,6 @@ mklocal(Context &sh, std::string_view name, const Variable::Flags &flags)
 	return {};
 }
 
-
 /*
  * Called after a function returns.
  * Interrupts must be off.
@@ -581,8 +564,6 @@ poplocalvars(Context &sh)
 }
 } // namespace
 
-
-
 /*
  * Create a new localvar environment.
  */
@@ -601,7 +582,6 @@ pushlocalvars(Context &sh, int push)
 	return stop;
 }
 
-
 Result<void>
 unwindlocalvars(Context &sh, std::size_t stop)
 {
@@ -609,7 +589,6 @@ unwindlocalvars(Context &sh, std::size_t stop)
 		TRY_SHV(poplocalvars(sh));
 	return {};
 }
-
 
 /*
  * The unset builtin command.  We unset the function before we unset the
@@ -639,7 +618,6 @@ unsetcmd(Context &sh, int argc, char **argv)
 	return 0;
 }
 
-
 /*
  * Unset the specified variable.
  */
@@ -650,8 +628,6 @@ unsetvar(Context &sh, const std::string &s)
 	TRY_SHV(setvar(sh, s, std::nullopt));
 	return {};
 }
-
-
 
 /**
  * Compares two strings up to the first = or end.  Either side may use

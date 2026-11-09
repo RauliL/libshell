@@ -48,37 +48,26 @@
 #include <paths.h>
 #endif
 #include <sys/types.h>
-#include <sys/param.h>
 #ifdef BSD
 #include <sys/wait.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 #endif
 
-#include "shell.h"
-#include "shell_context.h"
 #include "exec.h"
-#include "eval.h"
 #include "init.h"
 #include "redir.h"
-#include "main.h"
 #include "parser.h"
 #include "nodes.h"
 #include "jobs.h"
 #include "options.h"
 #include "trap.h"
-#include "syntax.h"
 #include "input.h"
-#include "output.h"
-#include "memalloc.h"
 #include "error.h"
 #include "mystring.h"
 #include "system.h"
-
+#include <cerrno>
+#include <utility>
 
 using namespace shell;
-
-
 
 namespace shell {
 
@@ -115,8 +104,6 @@ void cmdtxt(Context &sh, const Node *, std::string &);
 void cmdlist(Context &sh, Node *, int, std::string &);
 void cmdputs(std::string &, std::string_view);
 } // namespace
-
-
 
 Job::Process &
 Job::add_process(pid_t pid, const std::string &command)
@@ -167,8 +154,6 @@ set_curjob(Context &sh, Job *jp, unsigned mode)
 	}
 }
 } // namespace
-
-
 
 Result<int>
 killcmd(Context &sh, int argc, char **argv)
@@ -279,7 +264,6 @@ sprint_status(int status)
 }
 } // namespace
 
-
 /*
  * Mark a job structure as unused.
  */
@@ -295,9 +279,6 @@ freejob(Context &sh, Job *jp)
 	INTON_DEFER(sh);
 }
 } // namespace
-
-
-
 
 Result<int>
 waitcmd(Context &sh, int argc, char **argv)
@@ -359,7 +340,6 @@ sigout:
 	retval = 128 + sh.pending_sig;
 	goto out;
 }
-
 
 /*
  * Convert a job name to a job structure.
@@ -462,9 +442,6 @@ err:
 	}
 }
 } // namespace
-
-
-
 
 /*
  * Return a new job structure.
@@ -569,7 +546,6 @@ forkparent(Context &sh, Job *jp, const Node *n, int mode, pid_t pid)
 }
 } // namespace
 
-
 Result<int>
 forkshell(Context &sh, Job *jp, Node *n, int mode)
 {
@@ -630,8 +606,6 @@ waitforjob(Context &sh, Job *jp)
 		freejob(sh, jp);
 	return st;
 }
-
-
 
 /*
  * Wait for a process to terminate.
@@ -714,7 +688,6 @@ dowait(Context &sh, int block, Job *jp)
 }
 } // namespace
 
-
 /*
  * Do a wait system call.  If block is zero, we return -1 rather than
  * blocking.  If block is DOWAIT_WAITCMD, we return 0 when a signal
@@ -729,7 +702,6 @@ dowait(Context &sh, int block, Job *jp)
  * must ensure that it is called over and over again until all dead
  * children have been reaped.  Otherwise zombies may linger.
  */
-
 
 namespace {
 int
@@ -764,13 +736,10 @@ waitproc(Context &sh, int block, int *status)
 }
 } // namespace
 
-
 /*
  * Return a string identifying a command, so kill and wait can match %job
  * names.
  */
-
-
 
 namespace {
 std::string
@@ -939,7 +908,6 @@ cmdlist(Context &sh, Node *np, int sep, std::string &out)
 			cmdputs(out, " ");
 	}
 }
-
 
 void
 cmdputs(std::string &out, std::string_view s)

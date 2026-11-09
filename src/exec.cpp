@@ -37,10 +37,8 @@
 #include <string>
 #include <vector>
 
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <fcntl.h>
 #ifdef HAVE_PATHS_H
 #include <paths.h>
 #endif
@@ -52,33 +50,26 @@
  */
 
 #include "shell.h"
-#include "shell_context.h"
 #include "main.h"
 #include "nodes.h"
 #include "parser.h"
-#include "redir.h"
-#include "eval.h"
 #include "exec.h"
 #include "builtins.h"
 #include "var.h"
 #include "options.h"
 #include "output.h"
-#include "syntax.h"
-#include "memalloc.h"
 #include "error.h"
-#include "init.h"
 #include "mystring.h"
-#include "jobs.h"
 #include "alias.h"
 #include "system.h"
-
+#include <cerrno>
+#include <cstring>
+#include <format>
+#include <memory>
 
 		/* index in path of %builtin, or -1 */
 
-
-
 using namespace shell;
-
 
 namespace shell {
 
@@ -92,8 +83,6 @@ void delete_cmd_entry(Context &sh, const char *);
 void addcmdentry(Context &sh, const char *, const struct cmdentry *);
 Result<int> describe_command(Context &sh, Output *, char *, const char *, int);
 } // namespace
-
-
 
 /*
  * Exec a program.  If you change this routine, you may have to change
@@ -140,7 +129,6 @@ shellexec(Context &sh, char **argv, const char *path, int idx)
 	/* NOTREACHED */
 }
 
-
 namespace {
 void
 tryexec(Context &sh, char *cmd, char **argv, char **envp)
@@ -186,7 +174,6 @@ legal_pathopt(Context &sh, const char *opt, const char *term, int magic)
 }
 } // namespace
 
-
 /*
  * Do a path search.  The variable path (passed by reference) should be
  * set to the start of the path before the first call; padvance will update
@@ -200,8 +187,6 @@ legal_pathopt(Context &sh, const char *opt, const char *term, int magic)
  * 1 we shall recognise %builtin/%func.  Otherwise we shall accept any
  * sh.pathopt.
  */
-
-
 
 int
 padvance_magic(Context &sh, const char **path, const char *name, int magic,
@@ -252,10 +237,7 @@ padvance_magic(Context &sh, const char **path, const char *name, int magic,
 	return static_cast<int>(out.size());
 }
 
-
-
 /*** Command hashing code ***/
-
 
 /*
  * True for entries that a cd or a PATH change must invalidate.
@@ -271,8 +253,6 @@ hash_affected(const TableEntry &cmdp, int builtinloc)
 	);
 }
 } // namespace
-
-
 
 Result<int>
 hashcmd(Context &sh, int argc, char **argv)
@@ -310,7 +290,6 @@ hashcmd(Context &sh, int argc, char **argv)
 	return c;
 }
 
-
 namespace {
 void
 printentry(Context &sh, const std::string &cmdname, const TableEntry &cmdp)
@@ -345,7 +324,6 @@ test_exec(Context &sh, const char *fullname, struct stat64 *statb)
 	return 1;
 }
 } // namespace
-
 
 /*
  * Resolve a command name.  If you change this routine, you may have to
@@ -520,13 +498,9 @@ success:
 	return {};
 }
 
-
-
 /*
  * Search the table of builtin commands.
  */
-
-
 
 /*
  * Called when a cd is done.  Marks all commands so the next time they
@@ -541,8 +515,6 @@ hashcd(Context &sh)
 			entry.second.rehash = true;
 	}
 }
-
-
 
 /*
  * Fix command hash table when PATH sh.changed.
@@ -577,7 +549,6 @@ changepath(Context &sh, std::string_view newval)
 	clearcmdentry(sh);
 }
 
-
 /*
  * Clear out command entries.  The argument specifies the first entry in
  * PATH which has sh.changed.
@@ -598,9 +569,6 @@ clearcmdentry(Context &sh)
 }
 } // namespace
 
-
-
-
 /*
  * Locate a command in the command hash table.  If "add" is nonzero,
  * add the command to the table if it is not already present.
@@ -608,9 +576,6 @@ clearcmdentry(Context &sh)
  * Interrupts must be off if called with add != 0.
  * The returned pointer is invalidated by a later insertion.
  */
-
-
-
 
 namespace {
 TableEntry *
@@ -626,7 +591,6 @@ cmdlookup(Context &sh, const char *name, int add)
 }
 } // namespace
 
-
 /*
  * Delete the command entry for this name, if one exists.
  */
@@ -640,9 +604,6 @@ delete_cmd_entry(Context &sh, const char *name)
 	INTON_DEFER(sh);
 }
 } // namespace
-
-
-
 
 /*
  * Add a new command entry, replacing any existing command entry for
@@ -662,8 +623,6 @@ addcmdentry(Context &sh, const char *name, const struct cmdentry *entry)
 }
 } // namespace
 
-
-
 /*
  * Define a shell function.
  */
@@ -679,7 +638,6 @@ defun(Context &sh, const DefunNode *func)
 	addcmdentry(sh, func->text.c_str(), &entry);
 	INTON_DEFER(sh);
 }
-
 
 /*
  * Delete a function if it exists.
@@ -826,7 +784,6 @@ out:
 	return 0;
 }
 } // namespace
-
 
 Result<int>
 commandcmd(Context &sh, int argc, char **argv)

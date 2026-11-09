@@ -49,28 +49,25 @@
 #include "alias.h"
 #include "builtins.h"
 #include "error.h"
-#include "exec.h"
 #include "expand.h"	/* defines rmescapes() */
 #include "expand_buf.h"
 #include "input.h"
-#include "jobs.h"
-#include "memalloc.h"
 #include "mystring.h"
 #include "nodes.h"
-#include "options.h"
 #include "output.h"
 #include "parse_error.h"
 #include "parser.h"
 #include "shell.h"
-#include "shell_context.h"
 #include "syntax.h"
 #include "system.h"
 #include "var.h"
-
+#include <cstring>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 using namespace shell;
-
-
 
 namespace shell {
 
@@ -79,11 +76,9 @@ ParseSession::~ParseSession() = default;
 ParseSession::ParseSession(ParseSession &&) noexcept = default;
 ParseSession &ParseSession::operator=(ParseSession &&) noexcept = default;
 
-
 /*
  * Shell command parser.
  */
-
 
 /* Used by expandstr to get here-doc like behaviour (address only). */
 namespace {
@@ -105,7 +100,6 @@ struct synstack {
 	int dqvarnest;		/* levels of variables expansion within double quotes */
 };
 
-
 namespace {
 const std::unordered_map<std::string_view, Token> keyword_map = {
 	{ "!", Token::Not },
@@ -125,7 +119,6 @@ const std::unordered_map<std::string_view, Token> keyword_map = {
 	{ "{", Token::Begin },
 	{ "}", Token::End },
 };
-
 
 Node::ptr list(Context &sh, int nlflag, bool *eof_out = nullptr);
 Node::ptr andor(Context &sh);
@@ -147,8 +140,6 @@ void synerror(Context &sh, const char *) __attribute__((__noreturn__));
 void setprompt(Context &sh, int);
 } // namespace
 
-
-
 namespace {
 template <
 	typename T,
@@ -162,8 +153,6 @@ make_node(Args &&...args)
 }
 } // namespace
 
-
-
 bool
 isassignment(std::string_view p)
 {
@@ -175,14 +164,12 @@ isassignment(std::string_view p)
 	return n < p.size() && p[n] == '=';
 }
 
-
 bool
 issimplecmd(const Node *n, std::string_view name)
 {
 	return n && n->type == Node::Type::Cmd && as<CommandNode>(n)->args &&
 	       as<ArgNode>(as<CommandNode>(n)->args.get())->text == name;
 }
-
 
 namespace {
 inline bool
@@ -191,15 +178,12 @@ realeofmark(const std::string *eofmark)
 	return eofmark && eofmark != FAKEEOFMARK;
 }
 
-
 void
 grabstackblock(ExpandBuf &eb, std::size_t len)
 {
 	eb.commit(len);
 }
 } // namespace
-
-
 
 /**
  * Returns textual description of token.
@@ -305,8 +289,6 @@ token_name(Token t)
 }
 } // namespace
 
-
-
 /**
  * Tests whether given token is considered to mark end of a list.
  */
@@ -335,8 +317,6 @@ bool is_end_of_list_token(Token t)
 }
 } // namespace
 
-
-
 /*
  * Read and parse a command.  eof is set on end of file.  (A null tree is a
  * valid parse tree indicating a blank line.)
@@ -356,7 +336,6 @@ parsecmd(Context &sh, int interact)
 	Node::ptr tree = list(sh, 1, &eof);
 	return {eof, std::move(tree)};
 }
-
 
 namespace {
 Node::ptr
@@ -433,8 +412,6 @@ out_eof:
 	}
 }
 
-
-
 Node::ptr
 andor(Context &sh)
 {
@@ -462,8 +439,6 @@ andor(Context &sh)
 		n1 = std::move(n3);
 	}
 }
-
-
 
 Node::ptr
 pipeline(Context &sh)
@@ -498,9 +473,6 @@ pipeline(Context &sh)
 		return n1;
 }
 } // namespace
-
-
-
 
 Node::ptr
 command(Context &sh)
@@ -696,7 +668,6 @@ redir:
 	return n1;
 }
 
-
 namespace {
 Node::ptr
 simplecmd(Context &sh)
@@ -791,7 +762,6 @@ makename(Context &sh)
 }
 } // namespace
 
-
 void
 fixredir(Context &sh, Node *n, const char *text, int err)
 {
@@ -809,7 +779,6 @@ fixredir(Context &sh, Node *n, const char *text, int err)
 		as<DupNode>(n)->vname = makename(sh);
 	}
 }
-
 
 namespace {
 void
@@ -837,8 +806,6 @@ parsefname(Context &sh)
 	}
 }
 } // namespace
-
-
 
 /*
  * Input any here documents.
@@ -934,8 +901,6 @@ nlnoprompt(Context &sh)
 	sh.parse.needprompt = sh.parse.doprompt;
 }
 } // namespace
-
-
 
 /*
  * Read the next input token.
@@ -1052,7 +1017,6 @@ synstack_pop(Context &sh, struct synstack **stack)
 }
 } // namespace
 
-
 unsigned
 getmbc(Context &sh, int c, char *out, int mode)
 {
@@ -1147,7 +1111,6 @@ dollarsq_escape(Context &sh, char *out)
 	return out;
 }
 } // namespace
-
 
 /*
  * If eofmark is nullptr, read a word or a redirection symbol.  If eofmark
@@ -1397,8 +1360,6 @@ endword:
 	return sh.parse.lasttoken = Token::Word;
 /* end of readtoken routine */
 
-
-
 /*
  * Check to see whether we are at the end of the here document.  When this
  * is called, c is set to the first character of the next input line.  If
@@ -1453,7 +1414,6 @@ more_heredoc:
 	}
 	goto checkend_return;
 }
-
 
 /*
  * Parse a redirection operator.  The variable "out" points to a string
@@ -1524,7 +1484,6 @@ parseredir: {
 	sh.parse.redirnode = std::move(np);
 	goto parseredir_return;
 }
-
 
 /*
  * Parse a substitution.  At this point, we have read the dollar sign
@@ -1682,7 +1641,6 @@ badsub:
 	goto parsesub_return;
 }
 
-
 /*
  * Called to parse command substitutions.  Newstyle is set if the command
  * is enclosed inside $(...); nlpp is a pointer to the head of the linked
@@ -1818,8 +1776,6 @@ parsearith: {
 } // namespace
  /* end of readtoken */
 
-
-
 /*
  * Return of a legal variable name (a letter or underscore followed by zero or
  * more letters, underscores, and digits).
@@ -1835,7 +1791,6 @@ endofname(std::string_view name)
 		++i;
 	return i;
 }
-
 
 /*
  * Called when an unexpected token is read during the parse.  The argument
@@ -1859,7 +1814,6 @@ synexpect(Context &sh, std::optional<Token> token)
 	/* NOTREACHED */
 }
 
-
 void
 synerror(Context &sh, const char *msg)
 {
@@ -1868,7 +1822,6 @@ synerror(Context &sh, const char *msg)
 	throw ParseError(std::format("Syntax error: {}", msg), plinno);
 }
 } // namespace
-
 
 void
 report_parse_error(Context &sh, const ParseError &e)
@@ -1916,7 +1869,6 @@ setprompt(Context &sh, int which)
 		out2str(getprompt(sh, nullptr));
 }
 } // namespace
-
 
 std::string
 expandstr(Context &sh, const char *ps)

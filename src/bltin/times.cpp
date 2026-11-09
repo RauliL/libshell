@@ -5,12 +5,9 @@
 
 #include <sys/times.h>
 #include <unistd.h>
-#include "system.h"
 #include "bltin.h"
 
-
 using namespace shell;
-
 
 namespace shell {
 

@@ -1,7 +1,5 @@
 #include "./config.hpp"
 
-#include "shell.h"
-#include "shell_context.h"
 /*
  * test(1); version 7-like  --  author Erik Baalbergen
  * modified by Eric Gisin to be used as built-in.
@@ -14,15 +12,12 @@
 
 #include <fcntl.h>
 #include <inttypes.h>
-#include <cstdarg>
-#include <cstdlib>
 #include <cstring>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
-#include <vector>
 #include "../exec.h"
 #include "bltin.h"
+#include <cstdint>
 
 /* test(1) accepts the following grammar:
 	oexpr	::= aexpr | aexpr "-o" oexpr ;
@@ -41,9 +36,7 @@
 	operand ::= <any legal UNIX file name>
 */
 
-
 using namespace shell;
-
 
 namespace shell {
 
@@ -153,9 +146,6 @@ const struct t_op ops[] = {
 	{0,	0,	0}
 };
 
-
-
-
 tl::unexpected<Error> syntax(Context &sh, const char *,
 					  const char *);
 Result<int> oexpr(Context &sh, TestState &, enum token);
@@ -171,7 +161,6 @@ bool olderf(const char *, const char *);
 int equalf(const char *, const char *);
 const t_op *getop(const char *s);
 } // namespace
-
 
 #ifdef HAVE_FACCESSAT
 # ifdef HAVE_TRADITIONAL_FACCESSAT
@@ -209,7 +198,6 @@ getop(const char *s)
 	return nullptr;
 }
 } // namespace
-
 
 Result<int>
 testcmd(Context &sh, int argc, char **argv)
@@ -554,7 +542,6 @@ equalf(const char *f1, const char *f2)
 }
 } // namespace
 
-
 #ifdef HAVE_FACCESSAT
 namespace {
 int
@@ -567,7 +554,6 @@ has_exec_bit_set(Context &sh, const char *path)
 	return st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH);
 }
 } // namespace
-
 
 int
 test_file_access(Context &sh, const char *path, int mode)

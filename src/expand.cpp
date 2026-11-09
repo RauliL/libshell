@@ -34,8 +34,6 @@
 #include "./config.hpp"
 
 #include <algorithm>
-#include <cctype>
-#include <cinttypes>
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
@@ -48,7 +46,6 @@
 #include <string_view>
 
 #include <sys/types.h>
-#include <sys/time.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -72,25 +69,24 @@
 #include "expand.h"
 #include "expand_buf.h"
 #include "jobs.h"
-#include "main.h"
 #include "memalloc.h"
 #include "mystring.h"
 #include "nodes.h"
 #include "options.h"
-#include "output.h"
 #include "parser.h"
 #include "shell.h"
-#include "shell_context.h"
 #include "syntax.h"
 #include "system.h"
 #include "var.h"
+#include <cerrno>
+#include <cstdint>
+#include <utility>
 
 /*
  * _rmescape() flags
  */
 
 using namespace shell;
-
 
 namespace shell {
 
@@ -125,12 +121,6 @@ struct ifs_state {
 
 /* holds expanded arg list */
 
-
-
-
-
-
-
 namespace {
 Result<char *> argstr(Context &sh, ExpandBuf &eb, char *p, ExpandFlags flag);
 char * exptilde(Context &sh, ExpandBuf &eb, char *startp, ExpandFlags flag);
@@ -151,8 +141,6 @@ size_t cvtnum(Context &sh, ExpandBuf &eb, intmax_t num, ExpandFlags flags);
 tl::unexpected<Error> varunset(Context &sh, const char *, const char *, const char *, int);
 } // namespace
 
-
-
 /*
  * Prepare a pattern for a glob(3) call.
  *
@@ -171,7 +159,6 @@ preglob(Context &sh, const char *pattern, int flag, ExpandBuf *eb = nullptr)
 	flag |= RMESCAPE_GLOB;
 	return _rmescapes(sh, const_cast<char *>(pattern), flag, eb);
 }
-
 
 size_t
 mesclen(Context &sh, const char *start, const char *p, char mesc)
@@ -228,8 +215,6 @@ getpwhome(Context &sh, const char *name)
 }
 } // namespace
 
-
-
 /*
  * Perform variable substitution and command substitution on an argument,
  * placing the resulting list of arguments in ArgList.  If EXP_FULL is true,
@@ -282,8 +267,6 @@ expandarg_to_string(Context &sh, Node *arg, ExpandFlags flag)
 	ifsfree(sh);
 	return result;
 }
-
-
 
 /*
  * Perform variable and command substitution.  If EXP_FULL is set, sh.output CTLESC
@@ -475,8 +458,6 @@ lose:
 }
 } // namespace
 
-
-
 Result<void>
 removerecordregions(Context &sh, int endoff)
 {
@@ -506,7 +487,6 @@ removerecordregions(Context &sh, int endoff)
 	INTON(sh);
 	return {};
 }
-
 
 /*
  * Expand arithmetic expression.  Backup to start of expression,
@@ -552,8 +532,6 @@ out:
 	return p;
 }
 } // namespace
-
-
 
 /*
  * Expand stuff in backwards quotes.
@@ -619,7 +597,6 @@ out:
 	return {};
 }
 
-
 char *
 scanleft(Context &sh, char *startp, char *endp, char *rmesc, char *rmescend,
 		      char *str, int quotes, int zero)
@@ -656,7 +633,6 @@ scanleft(Context &sh, char *startp, char *endp, char *rmesc, char *rmescend,
 	} while (1);
 	return 0;
 }
-
 
 char *
 scanright(Context &sh, char *startp, char *endp, char *rmesc, char *rmescend,
@@ -794,8 +770,6 @@ out:
 	return p;
 }
 } // namespace
-
-
 
 /*
  * Expand a variable, and return a pointer to the next character in the
@@ -953,7 +927,6 @@ out:
 }
 } // namespace
 
-
 /*
  * Put a string on the stack.
  */
@@ -1033,7 +1006,6 @@ memtodest(Context &sh, ExpandBuf &eb, const char *p, size_t len, ExpandFlags fla
 	return count;
 }
 
-
 size_t
 strtodest(Context &sh, ExpandBuf &eb, const char *p, ExpandFlags flags)
 {
@@ -1041,9 +1013,6 @@ strtodest(Context &sh, ExpandBuf &eb, const char *p, ExpandFlags flags)
 	return memtodest(sh, eb, p, len, flags);
 }
 } // namespace
-
-
-
 
 /*
  * Add the value of a specialized variable to the stack string.
@@ -1183,9 +1152,6 @@ value:
 }
 } // namespace
 
-
-
-
 /*
  * Record the fact that we have to scan this region of the
  * string for IFS characters.
@@ -1320,7 +1286,6 @@ out_zero_ifsspc:
 	return p;
 }
 } // namespace
-
 
 /*
  * Break the argument string into pieces based upon IFS and add the
@@ -1554,8 +1519,6 @@ nometa:
 }
 } // namespace
 
-
-
 /*
  * Add the result of glob(3) to the list.
  */
@@ -1661,7 +1624,6 @@ expmeta_rmescapes(Context &sh, char *enddir, const char *name)
 	return enddir - 1;
 }
 } // namespace
-
 
 #ifndef HAVE_MEMRCHR
 namespace {
@@ -1800,8 +1762,6 @@ out_opendir:
 }
 } // namespace
 
-
-
 /*
  * Add a file name to the list.
  */
@@ -1814,10 +1774,6 @@ addfname(Context &sh, char *name)
 }
 } // namespace
 
-
-
-
-
 /*
  * Returns true if the pattern matches the string.
  */
@@ -1828,7 +1784,6 @@ patmatch(Context &sh, char *pattern, const char *string, ExpandBuf *eb)
 {
 	return pmatch(sh, preglob(sh, pattern, 0, eb), string);
 }
-
 
 __attribute__((noinline)) int
 ccmatch(Context &sh, char *p, const char *mbc, int ml,
@@ -2017,9 +1972,6 @@ breakloop:
 }
 } // namespace
 
-
-
-
 /*
  * Remove any CTLESC characters from a string.
  */
@@ -2131,8 +2083,6 @@ setnesc:
 	return r;
 }
 
-
-
 /*
  * See if a pattern matches in a case statement.
  */
@@ -2180,7 +2130,6 @@ varunset(Context &sh, const char *end, const char *var, const char *umsg, int va
 	return sh_error(sh, "{}: {}{}", std::string_view(var, end - var - 1), msg, tail);
 }
 } // namespace
-
 
 Result<void>
 restore_handler_expandarg(Context &sh, int err)

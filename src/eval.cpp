@@ -33,12 +33,10 @@
  */
 
 #include <cstdlib>
-#include <csignal>
 #include <string>
 #include <vector>
 
 #include <unistd.h>
-#include <sys/types.h>
 
 #include <libshell.hpp>
 
@@ -47,11 +45,8 @@
  */
 
 #include "init.h"
-#include "main.h"
 #include "shell.h"
-#include "shell_context.h"
 #include "nodes.h"
-#include "syntax.h"
 #include "expand.h"
 #include "parser.h"
 #include "jobs.h"
@@ -64,15 +59,15 @@
 #include "output.h"
 #include "trap.h"
 #include "var.h"
-#include "memalloc.h"
 #include "error.h"
 #include "mystring.h"
 #include "parse_error.h"
-
-
+#include <cstddef>
+#include <memory>
+#include <string_view>
+#include <utility>
 
 using namespace shell;
-
 
 namespace shell {
 
@@ -92,15 +87,12 @@ Result<void> prehash(Context &sh, Node *);
 int eprintlist(Context &sh, Output *, const ArgList &, int);
 Result<int> bltincmd(Context &sh, int, char **);
 
-
 const struct BuiltinCommand bltin = {
 	.name = "",
 	.builtin = bltincmd,
 	.flags = BuiltinCommand::Flag::Regular,
 };
 } // namespace
-
-
 
 /*
  * Called to reset things after an sh.exception.
@@ -123,8 +115,6 @@ eval_exitreset(Context &sh)
 		close(sh.tpip[1]);
 	}
 }
-
-
 
 /*
  * The eval commmand.
@@ -153,8 +143,6 @@ parser_eof(const Context &sh)
 	return sh.parse.tokpushback && sh.parse.lasttoken == Token::Eof;
 }
 } // namespace
-
-
 
 /*
  * Execute a command or commands contained in a string.
@@ -203,7 +191,6 @@ eval_input(Context &sh, EvalFlags flags)
 }
 } // namespace
 
-
 Result<int>
 Context::eval(const std::string &script, EvalFlags flags)
 {
@@ -219,7 +206,6 @@ Context::eval_file(std::string_view path, EvalFlags flags)
 	TRY_SHV(setinputfile(*this, path, INPUT_PUSH_FILE));
 	return eval_input(*this, flags);
 }
-
 
 /*
  * Evaluate a parse tree.  The value is left in sh.exitstatus.
@@ -369,7 +355,6 @@ DefunNode::eval(Context &sh, EvalFlags, bool &) const
 	return EXIT_SUCCESS;
 }
 
-
 namespace {
 void
 evaltreenr(Context &sh, Node *n, EvalFlags flags)
@@ -377,7 +362,6 @@ evaltreenr(Context &sh, Node *n, EvalFlags flags)
 	evaltree(sh, n, flags);
 	exitshell(sh);
 }
-
 
 EvalSkipFlags
 skiploop(Context &sh)
@@ -394,7 +378,6 @@ skiploop(Context &sh)
 
 	return skip;
 }
-
 
 Result<int>
 evalloop(Context &sh, const BinaryNode *n, EvalFlags flags)
@@ -426,8 +409,6 @@ evalloop(Context &sh, const BinaryNode *n, EvalFlags flags)
 	return status;
 }
 
-
-
 Result<int>
 evalfor(Context &sh, const ForNode *n, EvalFlags flags)
 {
@@ -456,8 +437,6 @@ evalfor(Context &sh, const ForNode *n, EvalFlags flags)
 
 	return status;
 }
-
-
 
 Result<int>
 evalcase(Context &sh, const CaseNode *n, EvalFlags flags)
@@ -493,15 +472,12 @@ out:
 	return status;
 }
 
-
 inline bool
 have_traps(const Context& sh)
 {
 	return sh.trapcnt != 0;
 }
 } // namespace
-
-
 
 /*
  * Kick off a subshell to evaluate a tree.
@@ -545,9 +521,6 @@ nofork:
 }
 } // namespace
 
-
-
-
 /*
  * Compute the names of the files in a redirection list.
  */
@@ -583,9 +556,6 @@ expredir(Context &sh, Node *n)
 	return {};
 }
 } // namespace
-
-
-
 
 /*
  * Evaluate a pipeline.  All the processes in the pipeline are children
@@ -651,9 +621,6 @@ evalpipe(Context &sh, const PipeNode *n, EvalFlags flags)
 }
 } // namespace
 
-
-
-
 /*
  * Execute a command inside back quotes.  If it's a builtin command, we
  * want to save its sh.output in a block obtained from malloc.  Otherwise
@@ -716,7 +683,6 @@ fill_arglist(Context &sh, ArgList *alist, Node **argpp)
 }
 } // namespace
 
-
 /* Skip `command [-p] [--]` words; set *arg0 to the real command index. */
 namespace {
 Result<int>
@@ -759,7 +725,6 @@ parse_command_args(Context &sh, ArgList *alist, Node **argpp,
 	return DO_NOFUNC;
 }
 } // namespace
-
 
 /*
  * Execute a simple command.
@@ -1087,8 +1052,6 @@ prehash(Context &sh, Node *n)
 	return {};
 }
 
-
-
 /*
  * Builtin commands.  Builtin commands whose functions are closely
  * tied to evaluation are implemented here.
@@ -1111,7 +1074,6 @@ bltincmd(Context &sh, int argc, char **argv)
 	return sh.back_exitstatus;
 }
 } // namespace
-
 
 /*
  * Handle break and continue commands.  Break, continue, and return are
@@ -1140,7 +1102,6 @@ breakcmd(Context &sh, int argc, char **argv)
 	return 0;
 }
 
-
 /*
  * The return command.
  */
@@ -1167,20 +1128,17 @@ returncmd(Context &sh, int argc, char **argv)
 	return status;
 }
 
-
 Result<int>
 falsecmd(Context &sh, int argc, char **argv)
 {
 	return EXIT_FAILURE;
 }
 
-
 Result<int>
 truecmd(Context &sh, int argc, char **argv)
 {
 	return EXIT_SUCCESS;
 }
-
 
 Result<int>
 execcmd(Context &sh, int argc, char **argv)
@@ -1195,7 +1153,6 @@ execcmd(Context &sh, int argc, char **argv)
 
 	return EXIT_SUCCESS;
 }
-
 
 namespace {
 int

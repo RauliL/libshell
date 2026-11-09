@@ -35,25 +35,22 @@
 #include <signal.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <string.h>
 #include <string>
 #include <utility>
 
 #include "builtins.h"
 #include "shell.h"
-#include "shell_context.h"
 #include "main.h"
-#include "nodes.h"	/* for other headers */
-#include "eval.h"
 #include "init.h"
 #include "options.h"
-#include "syntax.h"
 #include "output.h"
 #include "parser.h"
-#include "memalloc.h"
 #include "error.h"
 #include "trap.h"
 #include "mystring.h"
+#include <csignal>
+#include <format>
+#include <string_view>
 
 #define S_DFL 1			/* default signal handling (SIG_DFL) */
 #define S_CATCH 2		/* signal is caught */
@@ -61,9 +58,7 @@
 #define S_HARD_IGN 4		/* signal is ignored permenantly */
 #define S_RESET 5		/* temporary - to reset a hard ignored sig */
 
-
 using namespace shell;
-
 
 namespace shell {
 
@@ -76,7 +71,6 @@ void signal_entry(int signo)
 
 int decode_signum(Context &sh, std::string_view);
 } // namespace
-
 
 void
 init_traps(Context &sh)
@@ -351,7 +345,6 @@ decode_signum(Context &sh, std::string_view string)
 	return signo;
 }
 } // namespace
-
 
 int
 decode_signal(Context &sh, std::string_view string, int minsig)

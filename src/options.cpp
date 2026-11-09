@@ -40,20 +40,20 @@
 #include <string_view>
 #include <vector>
 
-#include "shell.h"
-#include "shell_context.h"
 #define DEFINE_OPTIONS
 #include "options.h"
 #undef DEFINE_OPTIONS
-#include "nodes.h"	/* for other header files */
-#include "eval.h"
 #include "input.h"
 #include "output.h"
 #include "trap.h"
 #include "var.h"
-#include "memalloc.h"
 #include "error.h"
 #include "mystring.h"
+#include <cstddef>
+#include <cstring>
+#include <format>
+#include <optional>
+#include <utility>
 
 using namespace shell;
 
@@ -87,7 +87,6 @@ const char *const optnames[NOPTS] = {
 };
 } // namespace
 
-
 const char optletters[NOPTS] = {
 	'e',
 	'f',
@@ -106,9 +105,6 @@ const char optletters[NOPTS] = {
 	0,
 };
 
-
-
-
 namespace {
 Result<int> options(Context &sh, int,
 				  std::optional<std::string> *minusc);
@@ -116,8 +112,6 @@ Result<void> minus_o(Context &sh, char *, int);
 Result<void> setoption(Context &sh, int, int);
 Result<int> getopts(Context &sh, char *, char *, char **);
 } // namespace
-
-
 
 /*
  * Process the shell command line arguments.
@@ -176,7 +170,6 @@ setarg0:
 
 	return result;
 }
-
 
 void
 optschanged(Context &sh)
@@ -271,7 +264,6 @@ minus_o(Context &sh, char *name, int val)
 	return {};
 }
 
-
 Result<void>
 setoption(Context &sh, int flag, int val)
 {
@@ -285,7 +277,6 @@ setoption(Context &sh, int flag, int val)
 	return sh_error(sh, "Illegal option -{}", flag);
 }
 } // namespace
-
 
 void
 Context::set_arg0(std::string name)
@@ -335,8 +326,6 @@ Context::get_option(std::string_view name) const
 	return std::nullopt;
 }
 
-
-
 /*
  * Set the shell parameters.
  */
@@ -354,7 +343,6 @@ setparam(Context &sh, char **argv)
 	sh.shellparam.optoff = -1;
 }
 
-
 /*
  * Free the list of positional parameters.
  */
@@ -364,8 +352,6 @@ freeparam(Context &sh, ShellParam *param)
 {
 	param->p.clear();
 }
-
-
 
 /*
  * The shift builtin command.
@@ -390,8 +376,6 @@ shiftcmd(Context &sh, int argc, char **argv)
 	return EXIT_SUCCESS;
 }
 
-
-
 /*
  * The set command builtin.
  */
@@ -411,7 +395,6 @@ setcmd(Context &sh, int argc, char **argv)
 
 	return EXIT_SUCCESS;
 }
-
 
 void
 getoptsreset(Context &sh, std::string_view value)
@@ -547,7 +530,6 @@ out:
 	return done;
 }
 } // namespace
-
 
 /*
  * XXX - should get rid of.  have all builtins use getopt(3).  the

@@ -41,38 +41,29 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <stdlib.h>
-#include <sys/types.h>		/* quad_t */
-#include <sys/param.h>		/* BSD4_4 */
 #include <sys/stat.h>
-#include <sys/time.h>
 #include <sys/resource.h>
 #include <unistd.h>
 
 #include "error.h"
 #include "expand.h"
 #include "input.h"
-#include "memalloc.h"
-#include "miscbltin.h"
 #include "mystring.h"
-#include "main.h"
 #include "options.h"
 #include "output.h"
 #include "parser.h"
-#include "shell.h"
 #include "expand_buf.h"
-#include "shell_context.h"
 #include "syntax.h"
-#include "trap.h"
 #include "var.h"
-
+#include <cerrno>
+#include <cstdint>
+#include <format>
 
 using namespace shell;
-
 
 namespace shell {
 
 #undef rflag
-
 
 /** handle one line of the read command.
  *  more fields than variables -> remainder shall be part of last variable.
@@ -113,7 +104,6 @@ readcmd_handle_line(Context &sh, ExpandBuf &eb, char *s, int ac, char **ap)
 	return {};
 }
 } // namespace
-
 
 /*
  * The read builtin.  The -e option causes backslashes to escape the
@@ -207,8 +197,6 @@ start:
 	TRY_SHV(readcmd_handle_line(sh, eb, p + 1, argc - (ap - argv), ap));
 	return status;
 }
-
-
 
 /*
  * umask builtin
@@ -397,7 +385,6 @@ const struct limits limit_table[] = {
 };
 } // namespace
 
-
 enum limtype : int { SOFT = 0x1, HARD = 0x2 };
 
 namespace {
@@ -419,7 +406,6 @@ printlim(Context &sh, enum limtype how, const struct rlimit *limit,
 	}
 }
 } // namespace
-
 
 Result<int>
 ulimitcmd(Context &sh, int argc, char **argv)

@@ -8,17 +8,15 @@
 #include "alias.h"
 #include "builtins.h"
 #include "cd.h"
-#include "eval.h"
 #include "jobs.h"
 #include "main.h"
 #include "options.h"
-#include "shell.h"
 #include "trap.h"
 #include "var.h"
-
+#include <string_view>
+#include <unordered_map>
 
 using namespace shell;
-
 
 namespace shell {
 

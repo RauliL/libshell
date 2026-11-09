@@ -43,26 +43,21 @@
  * This file implements the input routines used by the parser.
  */
 
-#include "alias.h"
 #include "error.h"
-#include "eval.h"
 #include "input.h"
-#include "main.h"
-#include "memalloc.h"
-#include "options.h"
 #include "output.h"
 #include "parser.h"
 #include "redir.h"
 #include "shell.h"
-#include "shell_context.h"
 #include "syntax.h"
-#include "system.h"
-#include "trap.h"
-
-
+#include <cerrno>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <utility>
 
 using namespace shell;
-
 
 namespace shell {
 
@@ -73,7 +68,6 @@ int preadfd(Context &sh, InputStack &in);
 void setinputfd(Context &sh, InputStack &in, int fd, int push);
 int preadbuffer(Context &sh, InputStack &in);
 } // namespace
-
 
 void
 input_reset_interactive(Context &sh)
@@ -197,8 +191,6 @@ release_pending_aliases(Context &sh, ParseFile &pf)
 }
 } // namespace
 
-
-
 /*
  * Read a character from the script, returning PEOF on end of file.
  * Nul characters in the input are silently discarded.
@@ -318,7 +310,6 @@ retry:
 }
 } // namespace
 
-
 /*
  * Refill the input buffer and return the next input character:
  *
@@ -371,7 +362,6 @@ eof:
 	return (signed char)*in.current->nextc++;
 }
 } // namespace
-
 
 void
 pungetn(InputStack &in, int n)
@@ -445,7 +435,6 @@ popstring(Context &sh, InputStack &in)
 }
 } // namespace
 
-
 /*
  * Set the input to take input from a file.  If push is set, push the
  * old input onto the stack first.
@@ -470,7 +459,6 @@ out:
 	return fd;
 }
 
-
 /*
  * Like setinputfile, but takes an open file descriptor.  Call this with
  * interrupts off.
@@ -489,8 +477,6 @@ setinputfd(Context &sh, InputStack &in, int fd, int push)
 }
 } // namespace
 
-
-
 /*
  * Like setinputfile, but takes input from a string.
  */
@@ -505,8 +491,6 @@ setinputstring(Context &sh, InputStack &in, char *string)
 	in.current->eof = 2;
 	INTON_DEFER(sh);
 }
-
-
 
 /*
  * To handle the "." command, a stack of input files is used.  Pushfile
@@ -525,7 +509,6 @@ pushfile(Context &, InputStack &in)
 	in.current = pf;
 }
 } // namespace
-
 
 void
 pushstdin(Context &sh, InputStack &in)
@@ -566,14 +549,12 @@ out:
 	INTON_DEFER(sh);
 }
 
-
 void __attribute__((noinline))
 unwindfiles(Context &sh, InputStack &in, ParseFile *stop)
 {
 	while (in.base.prev || in.current != stop)
 		popfile(sh, in);
 }
-
 
 /*
  * Return to top level.

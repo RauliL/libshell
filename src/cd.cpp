@@ -31,13 +31,11 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include <climits>
 #include <cstdlib>
 #include <cstring>
 #include <optional>
 #include <string>
 
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #ifdef __CYGWIN__
@@ -48,27 +46,21 @@
  * The cd and pwd commands.
  */
 
-#include "shell.h"
 #include "shell_context.h"
 #include "var.h"
-#include "nodes.h"	/* for jobs.h */
-#include "jobs.h"
 #include "options.h"
 #include "output.h"
-#include "memalloc.h"
 #include "error.h"
 #include "exec.h"
-#include "redir.h"
-#include "main.h"
-#include "mystring.h"
 #include "cd.h"
+#include <cerrno>
+#include <format>
+#include <utility>
 
 #define CD_PHYSICAL 1
 #define CD_PRINT 2
 
-
 using namespace shell;
-
 
 namespace shell {
 
@@ -95,7 +87,6 @@ cdopt(Context &sh)
 	return flags;
 }
 } // namespace
-
 
 Result<int>
 cdcmd(Context &sh, int argc, char **argv)
@@ -163,7 +154,6 @@ out:
 	return 0;
 }
 
-
 /*
  * Actually do the chdir.  We also call hashcd to let the routines in exec.c
  * know that the current directory has sh.changed.
@@ -200,8 +190,6 @@ out:
 	return err;
 }
 } // namespace
-
-
 
 /*
  * Update curdir (the name of the current directory) in response to a
@@ -274,8 +262,6 @@ updatepwd(Context &sh, const char *dir)
 }
 } // namespace
 
-
-
 /*
  * Find out what the current directory is. If we already know the current
  * directory, this routine returns immediately.
@@ -303,7 +289,6 @@ getpwd(Context &sh)
 	return {};
 }
 } // namespace
-
 
 Result<int>
 pwdcmd(Context &sh, int argc, char **argv)
