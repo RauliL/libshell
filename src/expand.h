@@ -46,8 +46,8 @@
 
 using ArgList = std::vector<std::string>;
 
+/** Byte range of an expanded word that must be scanned for IFS. */
 struct ifsregion {
-	struct ifsregion *next = nullptr;
 	int begoff = 0;
 	int endoff = 0;
 	int nulonly = 0;
@@ -61,8 +61,7 @@ struct ifsregion {
 struct ExpandState {
 	const std::vector<Node::ptr> *argbackq = nullptr;
 	std::size_t argbackq_i = 0;
-	ifsregion ifsfirst{};
-	ifsregion *ifslastp = nullptr;
+	std::vector<ifsregion> ifsregions;
 	ArgList exparg;
 	char ifsmap[128] = {};
 	const char *ncifs = nullptr;

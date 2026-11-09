@@ -460,40 +460,30 @@ lose:
 shell::Result<void>
 removerecordregions(ShellContext &sh, int endoff)
 {
-	if (sh.expand.ifslastp == nullptr)
+	auto &regs = sh.expand.ifsregions;
+
+	if (regs.empty())
 		return {};
 
-	if (sh.expand.ifsfirst.endoff > endoff) {
-		while (sh.expand.ifsfirst.next != nullptr) {
-			struct ifsregion *ifsp;
-			INTOFF(sh);
-			ifsp = sh.expand.ifsfirst.next->next;
-			ckfree(sh.expand.ifsfirst.next);
-			sh.expand.ifsfirst.next = ifsp;
-			INTON(sh);
-		}
-		if (sh.expand.ifsfirst.begoff > endoff)
-			sh.expand.ifslastp = nullptr;
+	INTOFF(sh);
+	if (regs.front().endoff > endoff) {
+		if (regs.front().begoff > endoff)
+			regs.clear();
 		else {
-			sh.expand.ifslastp = &sh.expand.ifsfirst;
-			sh.expand.ifsfirst.endoff = endoff;
+			regs.resize(1);
+			regs.front().endoff = endoff;
 		}
+		INTON(sh);
 		return {};
 	}
 
-	sh.expand.ifslastp = &sh.expand.ifsfirst;
-	while (sh.expand.ifslastp->next && sh.expand.ifslastp->next->begoff < endoff)
-		sh.expand.ifslastp=sh.expand.ifslastp->next;
-	while (sh.expand.ifslastp->next != nullptr) {
-		struct ifsregion *ifsp;
-		INTOFF(sh);
-		ifsp = sh.expand.ifslastp->next->next;
-		ckfree(sh.expand.ifslastp->next);
-		sh.expand.ifslastp->next = ifsp;
-		INTON(sh);
-	}
-	if (sh.expand.ifslastp->endoff > endoff)
-		sh.expand.ifslastp->endoff = endoff;
+	std::size_t i = 0;
+	while (i + 1 < regs.size() && regs[i + 1].begoff < endoff)
+		++i;
+	regs.resize(i + 1);
+	if (regs[i].endoff > endoff)
+		regs[i].endoff = endoff;
+	INTON(sh);
 	return {};
 }
 
@@ -1176,21 +1166,9 @@ value:
 void
 recordregion(ShellContext &sh, int start, int end, int nulonly)
 {
-	struct ifsregion *ifsp;
-
-	if (sh.expand.ifslastp == nullptr) {
-		ifsp = &sh.expand.ifsfirst;
-	} else {
-		INTOFF(sh);
-		ifsp = static_cast<ifsregion *>(ckmalloc(sizeof(ifsregion)));
-		ifsp->next = nullptr;
-		sh.expand.ifslastp->next = ifsp;
-		INTON_DEFER(sh);
-	}
-	sh.expand.ifslastp = ifsp;
-	sh.expand.ifslastp->begoff = start;
-	sh.expand.ifslastp->endoff = end;
-	sh.expand.ifslastp->nulonly = nulonly;
+	INTOFF(sh);
+	sh.expand.ifsregions.push_back({start, end, nulonly});
+	INTON_DEFER(sh);
 }
 
 static unsigned
@@ -1323,7 +1301,6 @@ out_zero_ifsspc:
 void
 ifsbreakup(ShellContext &sh, char *string, int maxargs, ArgList *alist)
 {
-	struct ifsregion *ifsp;
 	struct ifs_state ifst;
 	const char *realifs;
 	int nulonly;
@@ -1332,23 +1309,22 @@ ifsbreakup(ShellContext &sh, char *string, int maxargs, ArgList *alist)
 	ifst.r = nullptr;
 	ifst.start = string;
 	ifst.maxargs = maxargs;
-	if (sh.expand.ifslastp != nullptr) {
+	if (!sh.expand.ifsregions.empty()) {
 		ifst.ifsspc = 0;
 		nulonly = 0;
 		realifs = sh.expand.ncifs;
-		ifsp = &sh.expand.ifsfirst;
-		do {
+		for (const auto &reg : sh.expand.ifsregions) {
 			int afternul;
 
-			p = string + ifsp->begoff;
+			p = string + reg.begoff;
 			afternul = nulonly;
-			nulonly = ifsp->nulonly;
+			nulonly = reg.nulonly;
 			ifst.ifs = nulonly ? "" : realifs;
 			ifst.ifsspc = 0;
 			for (;;) {
 				char *p0 = p;
 
-				while (string + ifsp->endoff - p >= 8) {
+				while (string + reg.endoff - p >= 8) {
 					union {
 						uint64_t qw;
 						unsigned char b[8];
@@ -1378,13 +1354,13 @@ ifsbreakup(ShellContext &sh, char *string, int maxargs, ArgList *alist)
 					ifst.ifsspc = 0;
 				}
 
-				if (p >= string + ifsp->endoff)
+				if (p >= string + reg.endoff)
 					break;
 
 				p = ifsbreakup_slow(sh, &ifst, alist,
 						    afternul | nulonly, p);
 			}
-		} while ((ifsp = ifsp->next) != nullptr);
+		}
 		if (nulonly)
 			goto add;
 		if (ifst.r)
@@ -1401,23 +1377,12 @@ add:
 void
 ifsfree(ShellContext &sh)
 {
-	struct ifsregion *p = sh.expand.ifsfirst.next;
-
-	if (!p)
-		goto out;
+	if (sh.expand.ifsregions.empty())
+		return;
 
 	INTOFF(sh);
-	do {
-		struct ifsregion *ifsp;
-		ifsp = p->next;
-		ckfree(p);
-		p = ifsp;
-	} while (p);
-	sh.expand.ifsfirst.next = nullptr;
+	sh.expand.ifsregions.clear();
 	INTON_DEFER(sh);
-
-out:
-	sh.expand.ifslastp = nullptr;
 }
 
 void
