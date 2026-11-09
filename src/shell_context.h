@@ -236,6 +236,9 @@ struct ShellContext {
 	std::optional<int> find_signal_number(std::string_view name, int minsig) const;
 };
 
+/** Fill signal_map from host SIG* names (called during ShellContext init). */
+void init_signal_names(ShellContext &sh);
+
 inline const char *bltinlookup(ShellContext &sh, std::string_view name)
 {
 	if (auto value = sh.get_var(name))

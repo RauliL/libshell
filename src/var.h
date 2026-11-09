@@ -211,6 +211,8 @@ inline constexpr char defifs[] = " \t\n";
 
 struct ShellContext;
 void initvar(ShellContext &sh);
+/** Seed builtins, import environ, and set IFS/OPTIND/PPID/PWD. */
+void init_shell_vars(ShellContext &sh);
 shell::Result<struct var *> setvar(ShellContext &sh, const std::string &name,
 				       std::optional<std::string> val,
 				       VarFlags flags = {});

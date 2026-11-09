@@ -138,6 +138,8 @@ struct ShellContext;
 struct Node;
 shell::Result<int> evaltree(ShellContext &sh, Node *, EvalFlags);
 shell::Result<void> evalbackcmd(ShellContext &sh, Node *, struct backcmd *);
+/** Clear eval skip/loop state and close the temporary pipe on unwind. */
+void eval_exitreset(ShellContext &sh);
 
 extern int evalskip;
 

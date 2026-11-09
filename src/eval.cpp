@@ -97,10 +97,9 @@ static const struct builtincmd bltin = {
  * Called to reset things after an sh.exception.
  */
 
-#ifdef mkinit
-INCLUDE "eval.h"
-
-EXITRESET {
+void
+eval_exitreset(ShellContext &sh)
+{
 	if (sh.savestatus >= 0) {
 		if (sh.exception == shell::Error::Exit || sh.evalskip == SKIPFUNCDEF)
 			sh.exitstatus = sh.savestatus;
@@ -115,7 +114,6 @@ EXITRESET {
 		close(sh.tpip[1]);
 	}
 }
-#endif
 
 
 

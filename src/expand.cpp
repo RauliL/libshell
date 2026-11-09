@@ -2133,13 +2133,3 @@ restore_handler_expandarg(ShellContext &sh, int err)
 	}
 	return {};
 }
-
-#ifdef mkinit
-
-INCLUDE "expand.h"
-
-EXITRESET {
-	ifsfree(sh);
-}
-
-#endif

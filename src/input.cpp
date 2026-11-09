@@ -66,24 +66,11 @@ static int preadfd(ShellContext &sh, InputStack &in);
 static void setinputfd(ShellContext &sh, InputStack &in, int fd, int push);
 static int preadbuffer(ShellContext &sh, InputStack &in);
 
-#ifdef mkinit
-INCLUDE <stdio.h>
-INCLUDE <string.h>
-INCLUDE <termios.h>
-INCLUDE <unistd.h>
-INCLUDE "input.h"
-INCLUDE "error.h"
-INCLUDE "syntax.h"
-
-INIT {
-	sh.input.base.nextc = sh.input.base.buf = sh.input.basebuf;
-	sh.input.base.linno = 1;
-}
-
-RESET {
+void
+input_reset_interactive(ShellContext &sh)
+{
 	int c;
 
-	/* clear input buffer */
 	popallfiles(sh, sh.input);
 
 	c = PEOF;
@@ -93,7 +80,9 @@ RESET {
 		c = pgetc(sh, sh.input);
 }
 
-FORKRESET {
+void
+input_forkreset(ShellContext &sh)
+{
 	popallfiles(sh, sh.input);
 	if (sh.input.current->fd > 0) {
 		close(sh.input.current->fd);
@@ -105,11 +94,6 @@ FORKRESET {
 		memset(sh.input.stdin.pip, 0, sizeof(sh.input.stdin.pip));
 	}
 }
-
-POSTEXITRESET {
-	flush_input(sh, sh.input);
-}
-#endif
 
 void
 input_init(ShellContext &sh, InputStack &in)

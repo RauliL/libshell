@@ -3,12 +3,14 @@
  * matches the host platform without a build-time generator.
  */
 #include <csignal>
+#include <string>
 
 #include "mystring.h"
 #include "shell_context.h"
 
-#ifdef mkinit
-INIT {
+void
+init_signal_names(ShellContext &sh)
+{
 	static const ShellContext::signal_map_type global_signals = {
 		// EXIT is trap "signal" 0.
 		{ 0, "EXIT" },
@@ -218,7 +220,6 @@ INIT {
 #endif
 #endif
 }
-#endif
 
 std::optional<std::string_view>
 ShellContext::find_signal_name(int signo) const

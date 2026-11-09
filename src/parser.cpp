@@ -1762,11 +1762,6 @@ parsearith: {
 
 
 
-#ifdef mkinit
-INCLUDE "parser.h"
-#endif
-
-
 /*
  * Return of a legal variable name (a letter or underscore followed by zero or
  * more letters, underscores, and digits).

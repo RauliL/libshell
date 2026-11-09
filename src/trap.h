@@ -36,15 +36,21 @@
 #pragma once
 
 #include <csignal>
+#include <string_view>
+
+#include "error.h"
 
 extern int trapcnt;
 extern char sigmode[];
 extern volatile sig_atomic_t pending_sig;
 extern volatile sig_atomic_t gotsigchld;
 
+struct Node;
 struct ShellContext;
 
 shell::Result<int> trapcmd(ShellContext &sh, int, char **);
+void init_traps(ShellContext &sh);
+shell::Result<void> clear_traps(ShellContext &sh, const Node *);
 void setsignal(ShellContext &sh, int);
 void ignoresig(ShellContext &sh, int);
 void onsig(ShellContext &sh, int);

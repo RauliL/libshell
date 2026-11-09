@@ -39,6 +39,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,6 +52,7 @@
  * Shell variables.
  */
 
+#include "cd.h"
 #include "shell.h"
 #include "shell_context.h"
 #include "output.h"
@@ -105,20 +108,14 @@ varname(std::string_view s)
  * Initialize the varable symbol tables and import the environment
  */
 
-#ifdef mkinit
-INCLUDE <unistd.h>
-INCLUDE <sys/types.h>
-INCLUDE <sys/stat.h>
-INCLUDE <format>
-INCLUDE "cd.h"
-INCLUDE "var.h"
-
-INIT {
+void
+init_shell_vars(ShellContext &sh)
+{
 	char **envp;
 	struct stat64 st1, st2;
 
 	initvar(sh);
-	for (envp = environ ; *envp ; envp++) {
+	for (envp = environ; *envp; envp++) {
 		std::string_view ev(*envp);
 		auto n = endofname(ev);
 		if (n > 0 && n < ev.size() && ev[n] == '=') {
@@ -140,11 +137,6 @@ INIT {
 	}
 	setpwd(sh, pwd, 0);
 }
-
-RESET {
-	unwindlocalvars(sh, 0);
-}
-#endif
 
 static std::string_view
 varvalue(std::string_view s)

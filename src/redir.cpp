@@ -395,22 +395,11 @@ popredir(ShellContext &sh, int drop)
  * Undo all redirections.  Called on error or interrupt.
  */
 
-#ifdef mkinit
-
-INCLUDE "redir.h"
-
-EXITRESET {
-	/*
-	 * Discard all saved file descriptors.
-	 */
-	unwindredir(sh, 0);
-}
-
-FORKRESET {
+void
+redir_forkreset(ShellContext &sh)
+{
 	sh.redirlist.clear();
 }
-
-#endif
 
 
 

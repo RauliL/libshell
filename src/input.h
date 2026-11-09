@@ -134,6 +134,10 @@ struct InputStack {
 
 struct ShellContext;
 void input_init(ShellContext &sh, InputStack &in);
+/** Drain the current line after an error/interrupt in an interactive shell. */
+void input_reset_interactive(ShellContext &sh);
+/** Drop nested input files and stdin pipe state when entering a subshell. */
+void input_forkreset(ShellContext &sh);
 int pgetc(ShellContext &sh, InputStack &in);
 int pgetc_eoa(ShellContext &sh, InputStack &in);
 void pungetc(ShellContext &sh, InputStack &in);

@@ -58,5 +58,7 @@ shell::Result<int> savefd(ShellContext &sh, int, int);
 shell::Result<int> redirectsafe(ShellContext &sh, Node *, int);
 shell::Result<void> unwindredir(ShellContext &sh, std::size_t stop);
 std::size_t pushredir(ShellContext &sh, Node *redir);
+/** Drop saved redirection frames when entering a subshell. */
+void redir_forkreset(ShellContext &sh);
 shell::Result<int> sh_open(ShellContext &sh, const std::filesystem::path &pathname, int flags, int mayfail);
 shell::Result<int> sh_pipe(ShellContext &sh, int pip[2], int memfd);

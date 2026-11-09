@@ -187,6 +187,7 @@ set(
   src/eval.cpp
   src/exec.cpp
   src/expand.cpp
+  src/init.cpp
   src/input.cpp
   src/jobs.cpp
   src/main.cpp
@@ -207,23 +208,8 @@ set(
   src/bltin/times.cpp
 )
 
-set(MKINIT_INPUTS)
-foreach(src ${DASH_SOURCES})
-  list(APPEND MKINIT_INPUTS "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
-endforeach()
-
-add_executable(mkinit src/mkinit.cpp)
 add_executable(mksyntax src/mksyntax.cpp)
-dash_configure_tool(mkinit)
 dash_configure_tool(mksyntax)
-
-add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
-  COMMAND mkinit ${MKINIT_INPUTS}
-  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  DEPENDS mkinit ${MKINIT_INPUTS}
-  COMMENT "Generating init.cpp"
-)
 
 add_custom_command(
   OUTPUT
@@ -241,7 +227,6 @@ add_custom_command(
 
 set_source_files_properties(
   ${DASH_SOURCES}
-  "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
   PROPERTIES
     OBJECT_DEPENDS
@@ -250,7 +235,6 @@ set_source_files_properties(
 
 set(
   DASH_GENERATED_SOURCES
-  "${CMAKE_CURRENT_BINARY_DIR}/init.cpp"
   "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
 )
 

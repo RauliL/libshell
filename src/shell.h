@@ -65,8 +65,6 @@
 #endif
 #endif
 
-#define MKINIT	/* empty */
-
 extern char nullstr[1];		/* null string */
 
 #if defined(__GNUC__) && __GNUC__ < 3

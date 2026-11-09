@@ -68,21 +68,13 @@ static void signal_entry(int signo)
 }
 
 static int decode_signum(ShellContext &sh, std::string_view);
-MKINIT shell::Result<void> clear_traps(ShellContext &sh, const Node *);
 
-#ifdef mkinit
-INCLUDE "memalloc.h"
-INCLUDE "trap.h"
-
-INIT {
+void
+init_traps(ShellContext &sh)
+{
 	sh.sigmode[SIGCHLD - 1] = S_DFL;
 	setsignal(sh, SIGCHLD);
 }
-
-FORKRESET {
-	clear_traps(sh, n);
-}
-#endif
 
 shell::Result<int>
 trapcmd(ShellContext &sh, int argc, char **argv)
