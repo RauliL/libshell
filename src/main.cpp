@@ -101,6 +101,76 @@ cmdloop(Context &sh)
 }
 
 /*
+ * Top-level interactive parse/eval loop: prompting, ignoreeof, and
+ * recovering from parse errors at the prompt.
+ */
+shell::Result<int>
+shell::Context::run_interactive()
+{
+	Context &sh = *this;
+	int status = 0;
+	int numeof = 0;
+
+	for (;;) {
+		EvalSkipFlags skip;
+
+		try {
+			ParseCmdResult cmd = parsecmd(sh, 1);
+			if (cmd.eof) {
+				if (numeof >= 50)
+					break;
+				if (!sh.opts.ignoreeof()) {
+					out2c('\n');
+#ifdef FLUSHERR
+					sh.out2->flush(sh);
+#endif
+					break;
+				}
+				out2str("\nUse \"exit\" to leave shell.\n");
+				numeof++;
+			} else {
+				Node *n = cmd.tree.get();
+
+				numeof = 0;
+
+				auto r = evaltree(sh, n, {});
+
+				if (!r) {
+					sh.exception = r.error();
+					if (r.error() == shell::Error::Generic) {
+						skip = sh.evalskip;
+						if (skip) {
+							sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
+							break;
+						}
+						continue;
+					}
+					return r;
+				}
+				if (n)
+					status = *r;
+			}
+		} catch (const shell::ParseError &e) {
+			report_parse_error(sh, e);
+			skip = sh.evalskip;
+			if (skip) {
+				sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
+				break;
+			}
+			continue;
+		}
+
+		skip = sh.evalskip;
+		if (skip) {
+			sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
+			break;
+		}
+	}
+
+	return status;
+}
+
+/*
  * Read a file containing shell functions / commands.
  */
 shell::Result<void>

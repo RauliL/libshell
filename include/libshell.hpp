@@ -748,6 +748,15 @@ struct InputStack {
 };
 
 /**
+ * Host-facing result of parsing process argv (`-c`, login shell, …).
+ * The `-c` script string lives here, not on Context.
+ */
+struct ProcArgsResult {
+	int login = 0;
+	std::optional<std::string> minusc;
+};
+
+/**
  * One shell. Mutable shell state lives here so the program can be used as a
  * library: the caller owns a Context and runs commands on that object.
  *
@@ -873,6 +882,39 @@ struct Context {
 	 * Parse and execute a shell script from a file path.
 	 */
 	Result<int> eval_file(std::string_view path, EvalFlags flags = {});
+
+	/**
+	 * Process host argv: options (`-c`, `-i`, …), `$0`, and positional
+	 * parameters. The optional `-c` script is returned in ProcArgsResult.
+	 */
+	Result<ProcArgsResult> parse_args(char **argv);
+
+	/**
+	 * Non-interactive read/eval loop until EOF (scripts, sourced files).
+	 */
+	Result<int> cmdloop();
+
+	/**
+	 * Interactive prompt/eval loop (ignoreeof, parse-error recovery).
+	 */
+	Result<int> run_interactive();
+
+	/** Unwind eval/redir state after a caught shell error. */
+	void exit_reset();
+
+	/** Reset input/locals so an interactive shell can continue. */
+	void reset();
+
+	/**
+	 * Run the EXIT trap (if any) and terminate the process. Does not return.
+	 */
+	[[noreturn]] void exit_shell();
+
+	/**
+	 * Deliver a deferred SIGINT (clear pending, restore default, re-raise).
+	 * Always returns an error result whose code is Error::Interrupt.
+	 */
+	Result<void> on_interrupt();
 
 	/**
 	 * Parses and evaluates an arithmetic expression. Meant for `$((...))`

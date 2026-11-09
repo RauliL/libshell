@@ -51,14 +51,7 @@ using NextOptState = shell::NextOptState;
 
 #define NOPTS shell::option_count
 
-/**
- * Host-facing result of parsing process argv (`-c`, login shell, …).
- * The `-c` script string lives here, not on Context.
- */
-struct ProcArgsResult {
-	int login = 0;
-	std::optional<std::string> minusc;
-};
+using ProcArgsResult = shell::ProcArgsResult;
 
 extern const char optletters[NOPTS];
 

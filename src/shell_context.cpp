@@ -4,7 +4,13 @@
 #include <unistd.h>
 
 #include "cd.h"
+#include "error.h"
 #include "init.h"
+#include "main.h"
+#include "options.h"
+#include "trap.h"
+
+namespace shell {
 
 Context::Context(SignalOwnership signals)
 {
@@ -30,13 +36,13 @@ Context::release_signals()
 }
 
 void
-Context::set_stdout(const shell::Output::sink_type &sink)
+Context::set_stdout(const Output::sink_type &sink)
 {
 	output.sink = sink;
 }
 
 void
-Context::set_stderr(const shell::Output::sink_type &sink)
+Context::set_stderr(const Output::sink_type &sink)
 {
 	errout.sink = sink;
 }
@@ -47,8 +53,46 @@ Context::get_cwd() const
 	return cwd.curdir;
 }
 
-shell::Result<void>
+Result<void>
 Context::set_cwd(std::string_view path)
 {
 	return setpwd(*this, path, 0);
 }
+
+Result<ProcArgsResult>
+Context::parse_args(char **argv)
+{
+	return procargs(*this, argv);
+}
+
+Result<int>
+Context::cmdloop()
+{
+	return ::cmdloop(*this);
+}
+
+void
+Context::exit_reset()
+{
+	::exitreset(*this);
+}
+
+void
+Context::reset()
+{
+	::reset(*this);
+}
+
+void
+Context::exit_shell()
+{
+	::exitshell(*this);
+}
+
+Result<void>
+Context::on_interrupt()
+{
+	return onint(*this);
+}
+
+} // namespace shell
