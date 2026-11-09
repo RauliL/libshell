@@ -253,7 +253,7 @@ setvar(
 		nameeq += *val;
 
 	INTOFF(sh);
-	variable = TRY_SH(setvareq(sh, std::move(nameeq), flags));
+	TRY_SH_SET(variable, setvareq(sh, std::move(nameeq), flags));
 	INTON(sh);
 
 	return variable;
@@ -448,7 +448,11 @@ exportcmd(Context &sh, int argc, char **argv)
 	Variable::Flags flag = argv[0][0] == 'r' ? Variable::Flag::ReadOnly : Variable::Flag::Exported;
 	int notp;
 
-	notp = TRY_SH(nextopt(sh, "p")) - 'p';
+	{
+		int tmp;
+		TRY_SH_SET(tmp, nextopt(sh, "p"));
+		notp = tmp - 'p';
+	}
 	if (notp && ((name = *(aptr = sh.bopt.argptr)))) {
 		do {
 			if ((p = std::strchr(name, '='))) {
@@ -508,10 +512,10 @@ mklocal(Context &sh, std::string_view name, const Variable::Flags &flags)
 
 		if (!(vp = findvar(sh, name))) {
 			if (eq != std::string_view::npos)
-				vp = TRY_SH(setvareq(sh, std::string(name),
+				TRY_SH_SET(vp, setvareq(sh, std::string(name),
 						     Variable::Flag::StrFixed | flags));
 			else
-				vp = TRY_SH(setvar(sh, std::string(name), std::nullopt,
+				TRY_SH_SET(vp, setvar(sh, std::string(name), std::nullopt,
 						   Variable::Flag::StrFixed | flags));
 			lv.flags = Variable::Flag::Unset;
 		} else {
@@ -606,7 +610,10 @@ unsetcmd(Context &sh, int argc, char **argv)
 	int i;
 	int flag = 0;
 
-	while ((i = TRY_SH(nextopt(sh, "vf"))) != '\0') {
+	for (;;) {
+		TRY_SH_SET(i, nextopt(sh, "vf"));
+		if (i == '\0')
+			break;
 		flag = i;
 	}
 

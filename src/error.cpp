@@ -175,14 +175,4 @@ errmsg(int e, int action)
 		return "not found";
 }
 
-#ifdef REALLY_SMALL
-Result<void>
-__inton(Context &sh)
-{
-	if (--sh.suppressint == 0 && sh.intpending)
-		return onint(sh);
-	return {};
-}
-#endif
-
 } // namespace shell

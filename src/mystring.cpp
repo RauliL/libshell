@@ -132,7 +132,8 @@ atomax10(Context &sh, std::string_view s)
 Result<int>
 number(Context &sh, std::string_view s)
 {
-	intmax_t n = TRY_SH(atomax10(sh, s));
+	intmax_t n;
+	TRY_SH_SET(n, atomax10(sh, s));
 
 	if (n < 0 || n > INT_MAX)
 		return badnum(sh, s);

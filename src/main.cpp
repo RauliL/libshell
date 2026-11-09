@@ -242,7 +242,7 @@ Result<int>
 exitcmd(Context &sh, int argc, char **argv)
 {
 	if (argc > 1)
-		sh.savestatus = TRY_SH(number(sh, argv[1]));
+		TRY_SH_SET(sh.savestatus, number(sh, argv[1]));
 
 	return exraise(sh, Error::Exit);
 }

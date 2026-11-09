@@ -77,7 +77,10 @@ cdopt(Context &sh)
 	int i, j;
 
 	j = 'L';
-	while ((i = TRY_SH(nextopt(sh, "LP")))) {
+	for (;;) {
+		TRY_SH_SET(i, nextopt(sh, "LP"));
+		if (!i)
+			break;
 		if (i != j) {
 			flags ^= CD_PHYSICAL;
 			j = i;
@@ -100,7 +103,7 @@ cdcmd(Context &sh, int argc, char **argv)
 	int len;
 	std::string candidate;
 
-	flags = TRY_SH(cdopt(sh));
+	TRY_SH_SET(flags, cdopt(sh));
 	dest = *sh.bopt.argptr;
 	if (!dest)
 		dest = bltinlookup(sh, "HOME");
@@ -136,8 +139,12 @@ dotdot:
 			if (c && c != ':')
 				flags |= CD_PRINT;
 docd:
-			if (!TRY_SH(docd(sh, p, flags)))
-				goto out;
+			{
+				int ok;
+				TRY_SH_SET(ok, docd(sh, p, flags));
+				if (!ok)
+					goto out;
+			}
 			goto err;
 		}
 	}
@@ -296,7 +303,7 @@ pwdcmd(Context &sh, int argc, char **argv)
 	int flags;
 	const char *dir = sh.cwd.curdir.c_str();
 
-	flags = TRY_SH(cdopt(sh));
+	TRY_SH_SET(flags, cdopt(sh));
 	if (flags) {
 		if (sh.cwd.physdir.empty())
 			TRY_SHV(setpwd(sh, std::nullopt, 0, true));

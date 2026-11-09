@@ -248,7 +248,11 @@ recheck:
 
 eval:
 	st.wp = argv;
-	res ^= TRY_SH(oexpr(sh, st, n));
+	{
+		int tmp;
+		TRY_SH_SET(tmp, oexpr(sh, st, n));
+		res ^= tmp;
+	}
 	argv = st.wp;
 
 	if (argv[0] && argv[1])
@@ -273,7 +277,9 @@ oexpr(Context &sh, TestState &st, enum token n)
 	int res = 0;
 
 	for (;;) {
-		res |= TRY_SH(aexpr(sh, st, n));
+		int tmp;
+		TRY_SH_SET(tmp, aexpr(sh, st, n));
+		res |= tmp;
 		if (!*st.wp)
 			break;
 		n = t_lex(st, st.wp + 1);
@@ -290,7 +296,9 @@ aexpr(Context &sh, TestState &st, enum token n)
 	int res = 1;
 
 	for (;;) {
-		if (!TRY_SH(nexpr(sh, st, n)))
+		int tmp;
+		TRY_SH_SET(tmp, nexpr(sh, st, n));
+		if (!tmp)
 			res = 0;
 		if (!*st.wp)
 			break;
@@ -311,7 +319,11 @@ nexpr(Context &sh, TestState &st, enum token n)
 	n = t_lex(st, st.wp + 1);
 	if (n != EOI)
 		st.wp++;
-	return !TRY_SH(nexpr(sh, st, n));
+	{
+		int tmp;
+		TRY_SH_SET(tmp, nexpr(sh, st, n));
+		return !tmp;
+	}
 }
 
 Result<int>
@@ -325,7 +337,7 @@ primary(Context &sh, TestState &st, enum token n)
 	if (n == LPAREN) {
 		if ((nn = t_lex(st, ++st.wp)) == RPAREN)
 			return 0;	/* missing expression */
-		res = TRY_SH(oexpr(sh, st, nn));
+		TRY_SH_SET(res, oexpr(sh, st, nn));
 		if (t_lex(st, ++st.wp) != RPAREN)
 			return syntax(sh, nullptr, "closing paren expected");
 		return res;
@@ -339,8 +351,11 @@ primary(Context &sh, TestState &st, enum token n)
 			return strlen(*st.wp) == 0;
 		case STRNZ:
 			return strlen(*st.wp) != 0;
-		case FILTT:
-			return isatty(TRY_SH(getn(sh, *st.wp)));
+		case FILTT: {
+			intmax_t tmp;
+			TRY_SH_SET(tmp, getn(sh, *st.wp));
+			return isatty(tmp);
+		}
 #ifdef HAVE_FACCESSAT
 		case FILRD:
 			return test_file_access(sh, *st.wp, R_OK);
@@ -384,18 +399,42 @@ binop(Context &sh, TestState &st)
 		return strcoll(opnd1, opnd2) < 0;
 	case STRGT:
 		return strcoll(opnd1, opnd2) > 0;
-	case INTEQ:
-		return TRY_SH(getn(sh, opnd1)) == TRY_SH(getn(sh, opnd2));
-	case INTNE:
-		return TRY_SH(getn(sh, opnd1)) != TRY_SH(getn(sh, opnd2));
-	case INTGE:
-		return TRY_SH(getn(sh, opnd1)) >= TRY_SH(getn(sh, opnd2));
-	case INTGT:
-		return TRY_SH(getn(sh, opnd1)) > TRY_SH(getn(sh, opnd2));
-	case INTLE:
-		return TRY_SH(getn(sh, opnd1)) <= TRY_SH(getn(sh, opnd2));
-	case INTLT:
-		return TRY_SH(getn(sh, opnd1)) < TRY_SH(getn(sh, opnd2));
+	case INTEQ: {
+		intmax_t a, b;
+		TRY_SH_SET(a, getn(sh, opnd1));
+		TRY_SH_SET(b, getn(sh, opnd2));
+		return a == b;
+	}
+	case INTNE: {
+		intmax_t a, b;
+		TRY_SH_SET(a, getn(sh, opnd1));
+		TRY_SH_SET(b, getn(sh, opnd2));
+		return a != b;
+	}
+	case INTGE: {
+		intmax_t a, b;
+		TRY_SH_SET(a, getn(sh, opnd1));
+		TRY_SH_SET(b, getn(sh, opnd2));
+		return a >= b;
+	}
+	case INTGT: {
+		intmax_t a, b;
+		TRY_SH_SET(a, getn(sh, opnd1));
+		TRY_SH_SET(b, getn(sh, opnd2));
+		return a > b;
+	}
+	case INTLE: {
+		intmax_t a, b;
+		TRY_SH_SET(a, getn(sh, opnd1));
+		TRY_SH_SET(b, getn(sh, opnd2));
+		return a <= b;
+	}
+	case INTLT: {
+		intmax_t a, b;
+		TRY_SH_SET(a, getn(sh, opnd1));
+		TRY_SH_SET(b, getn(sh, opnd2));
+		return a < b;
+	}
 	case FILNT:
 		return newerf(opnd1, opnd2);
 	case FILOT:

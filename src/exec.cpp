@@ -159,7 +159,10 @@ legal_pathopt(Context &sh, const char *opt, const char *term, int magic)
 		break;
 
 	case 1:
-		opt = prefix(opt, "builtin") ?: prefix(opt, "func");
+		if (const char *p = prefix(opt, "builtin"))
+			opt = p;
+		else
+			opt = prefix(opt, "func");
 		break;
 
 	default:
@@ -263,8 +266,12 @@ hashcmd(Context &sh, int argc, char **argv)
 	bool clear;
 
 	clear = false;
-	while ((c = TRY_SH(nextopt(sh, "r"))) != '\0')
+	for (;;) {
+		TRY_SH_SET(c, nextopt(sh, "r"));
+		if (c == '\0')
+			break;
 		clear = true;
+	}
 	if(clear) {
 		clearcmdentry(sh);
 		return 0;
@@ -664,7 +671,9 @@ typecmd(Context &sh, int argc, char **argv)
 
 	TRY_SHV(nextopt(sh, ""));
 	while (*sh.bopt.argptr) {
-		err |= TRY_SH(describe_command(sh, sh.out1, *sh.bopt.argptr++, nullptr, 1));
+		int tmp;
+		TRY_SH_SET(tmp, describe_command(sh, sh.out1, *sh.bopt.argptr++, nullptr, 1));
+		err |= tmp;
 	}
 	return err;
 }
@@ -797,13 +806,17 @@ commandcmd(Context &sh, int argc, char **argv)
 	int verify = 0;
 	const char *path = nullptr;
 
-	while ((c = TRY_SH(nextopt(sh, "pvV"))) != '\0')
+	for (;;) {
+		TRY_SH_SET(c, nextopt(sh, "pvV"));
+		if (c == '\0')
+			break;
 		if (c == 'V')
 			verify |= VERIFY_VERBOSE;
 		else if (c == 'v')
 			verify |= VERIFY_BRIEF;
 		else
 			path = defpath;
+	}
 
 	cmd = *sh.bopt.argptr;
 	if (verify && cmd)

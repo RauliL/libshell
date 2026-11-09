@@ -6,11 +6,9 @@ project(
   LANGUAGES CXX
 )
 
-# Statement expressions, the omitted-middle ?: operator, and alloca are part
-# of this shell. gnu++20 keeps those extensions with the C++20 library.
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(CheckCXXSourceCompiles)
 include(CheckCXXSymbolExists)
@@ -37,7 +35,6 @@ function(dash_have_symbol symbol header variable)
   set("${variable}" "${${variable}}" PARENT_SCOPE)
 endfunction()
 
-dash_have_header(alloca.h HAVE_ALLOCA_H)
 dash_have_header(paths.h HAVE_PATHS_H)
 
 if(HAVE_PATHS_H)

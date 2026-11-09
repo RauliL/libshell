@@ -37,14 +37,11 @@
 #include <cstdlib>
 #include <cwchar>
 #include <cwctype>
+#include <deque>
 #include <format>
 #include <optional>
 #include <string>
 #include <type_traits>
-
-#if HAVE_ALLOCA_H
-#include <alloca.h>
-#endif
 
 #include "alias.h"
 #include "builtins.h"
@@ -1015,6 +1012,16 @@ synstack_pop(Context &sh, struct synstack **stack)
 {
 	*stack = (*stack)->next;
 }
+
+/* Reuse a popped frame via prev, or allocate one that outlives readtoken1. */
+synstack *
+synstack_acquire(synstack *stack, std::deque<synstack> &storage)
+{
+	if (stack->prev)
+		return stack->prev;
+	storage.emplace_back();
+	return &storage.back();
+}
 } // namespace
 
 unsigned
@@ -1141,6 +1148,8 @@ readtoken1(Context &sh, int firstc, char const *syntax, const std::string *eofma
 		.syntax = syntax,
 		.dblquote = syntax == DQSYNTAX,
 	};
+	std::deque<synstack> syn_storage;
+	std::vector<std::string> pushed_strings;
 	int chkeofmark = sh.parse.checkkwd & CHKEOFMARK;
 	struct synstack *synstack = &synbase;
 	bool printesc = syntax == SQSYNTAX;
@@ -1401,12 +1410,9 @@ more_heredoc:
 				c = p[-1];
 
 				if (len) {
-					char *str;
-
-					str = static_cast<char *>(alloca(len + 1));
-					*static_cast<char *>(mempcpy(str, p, len)) = 0;
-
-					pushstring(sh, str, nullptr);
+					pushed_strings.emplace_back(p, static_cast<size_t>(len));
+					pushstring(sh, pushed_strings.back().data(),
+						   nullptr);
 				}
 			}
 		}
@@ -1616,8 +1622,7 @@ badsub:
 		if ((newsyn != synstack->syntax || synstack->innerdq) &&
 		    subtype != VSNORMAL) {
 			synstack_push(sh, &synstack,
-				      synstack->prev ?:
-				      static_cast<struct synstack *>(alloca(sizeof(*synstack))),
+				      synstack_acquire(synstack, syn_storage),
 				      newsyn);
 
 			synstack->varpushed++;
@@ -1660,7 +1665,7 @@ parsebackq: {
 
 	if (chkeofmark) {
 		synstack_push(sh, &synstack,
-			      synstack->prev ?: static_cast<struct synstack *>(alloca(sizeof(*synstack))),
+			      synstack_acquire(synstack, syn_storage),
 			      BASESYNTAX);
 		synstack->backq = oldstyle + 1;
 		printesc = 1;
@@ -1761,7 +1766,7 @@ parsebackq_out:
 parsearith: {
 
 	synstack_push(sh, &synstack,
-		      synstack->prev ?: static_cast<struct synstack *>(alloca(sizeof(*synstack))),
+		      synstack_acquire(synstack, syn_storage),
 		      ARISYNTAX);
 	synstack->dblquote = 1;
 	if (chkeofmark)

@@ -131,7 +131,11 @@ procargs(Context &sh, char **xargv)
 	for (i = 0; i < NOPTS; i++)
 		sh.opts.list[i] = 2;
 	sh.bopt.argptr = xargv;
-	result.login |= TRY_SH(options(sh, 1, &result.minusc));
+	{
+		int tmp;
+		TRY_SH_SET(tmp, options(sh, 1, &result.minusc));
+		result.login |= tmp;
+	}
 	xargv = sh.bopt.argptr;
 	if (!*xargv) {
 		if (result.minusc)
@@ -363,7 +367,7 @@ shiftcmd(Context &sh, int argc, char **argv)
 	int n = 1;
 
 	if (argc > 1)
-		n = TRY_SH(number(sh, argv[1]));
+		TRY_SH_SET(n, number(sh, argv[1]));
 	if (static_cast<std::size_t>(n) > sh.shellparam.p.size())
 		return sh_error(sh, "can't shift that many");
 	INTOFF(sh);

@@ -11,7 +11,6 @@
 #define PACKAGE_STRING "dash ${PROJECT_VERSION}"
 #define VERSION "${PROJECT_VERSION}"
 
-#cmakedefine HAVE_ALLOCA_H 1
 #cmakedefine HAVE_PATHS_H 1
 #cmakedefine HAVE_FACCESSAT 1
 #cmakedefine HAVE_GETPWNAM 1

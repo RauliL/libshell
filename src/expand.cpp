@@ -364,7 +364,9 @@ start:
 		case CTLQUOTEMARK:
 			/* "$@" syntax adherence hack */
 			if (!inquotes && !strcmp(p, dolatstr + 1)) {
-				p = TRY_SH(evalvar(sh, eb, p + 1, flag | EXP_QUOTED)) + 1;
+				char *tmp;
+				TRY_SH_SET(tmp, evalvar(sh, eb, p + 1, flag | EXP_QUOTED));
+				p = tmp + 1;
 				goto start;
 			}
 			inquotes ^= EXP_QUOTED;
@@ -397,13 +399,13 @@ addquote:
 			length++;
 			goto addquote;
 		case CTLVAR:
-			p = TRY_SH(evalvar(sh, eb, p, flag | inquotes));
+			TRY_SH_SET(p, evalvar(sh, eb, p, flag | inquotes));
 			goto start;
 		case CTLBACKQ:
 			TRY_SHV(expbackq(sh, eb, (*sh.expand.argbackq)[sh.expand.argbackq_i].get(), flag | inquotes));
 			goto start;
 		case CTLARI:
-			p = TRY_SH(expari(sh, eb, p, flag | inquotes));
+			TRY_SH_SET(p, expari(sh, eb, p, flag | inquotes));
 			goto start;
 		}
 	}
@@ -505,7 +507,7 @@ expari(Context &sh, ExpandBuf &eb, char *start, ExpandFlags flag)
 
 	p = eb.base();
 	begoff = eb.dest - p;
-	p = TRY_SH(argstr(sh, eb, start, flag & EXP_DISCARD));
+	TRY_SH_SET(p, argstr(sh, eb, start, flag & EXP_DISCARD));
 
 	if (flag & EXP_DISCARD)
 		goto out;
@@ -520,7 +522,7 @@ expari(Context &sh, ExpandBuf &eb, char *start, ExpandFlags flag)
 	{
 		std::size_t su = eb.used;
 		eb.commit(endoff);
-		result = TRY_SH(sh.arith(start));
+		TRY_SH_SET(result, sh.arith(start));
 		eb.rewind(su);
 	}
 
@@ -580,7 +582,7 @@ read:
 
 	if (in.fd >= 0) {
 		close(in.fd);
-		sh.back_exitstatus = TRY_SH(waitforjob(sh, in.jp));
+		TRY_SH_SET(sh.back_exitstatus, waitforjob(sh, in.jp));
 	}
 	INTON(sh);
 
@@ -694,7 +696,7 @@ subevalvar(Context &sh, ExpandBuf &eb, char *start, char *str, int strloc, int s
 	char *endp;
 	char *p;
 
-	p = TRY_SH(argstr(sh, eb, start, (flag & EXP_DISCARD) | EXP_TILDE |
+	TRY_SH_SET(p, argstr(sh, eb, start, (flag & EXP_DISCARD) | EXP_TILDE |
 			  (str ? ExpandFlags{} : ExpandFlags{EXP_CASE})));
 	if (flag & EXP_DISCARD)
 		return p;
@@ -809,7 +811,7 @@ evalvar(Context &sh, ExpandBuf &eb, char *p, ExpandFlags flag)
 	}
 
 again:
-	varlen = TRY_SH(varvalue(sh, eb, var, varflags, flag | mbchar));
+	TRY_SH_SET(varlen, varvalue(sh, eb, var, varflags, flag | mbchar));
 	if (varflags & VSNUL)
 		varlen--;
 
@@ -822,13 +824,13 @@ again:
 
 	case 0:
 	case VSMINUS:
-		p = TRY_SH(argstr(sh, eb, p, flag | EXP_TILDE | EXP_WORD |
+		TRY_SH_SET(p, argstr(sh, eb, p, flag | EXP_TILDE | EXP_WORD |
 			      (discard ^ EXP_DISCARD)));
 		goto record;
 
 	case VSASSIGN:
 	case VSQUESTION:
-		p = TRY_SH(subevalvar(sh, eb, p, var, 0, startloc, varflags,
+		TRY_SH_SET(p, subevalvar(sh, eb, p, var, 0, startloc, varflags,
 			       (flag & ~QUOTES_ESC) |
 			       (discard ^ EXP_DISCARD)));
 
@@ -864,7 +866,7 @@ again:
 	}
 
 	patloc = eb.dest - eb.base();
-	p = TRY_SH(subevalvar(sh, eb, p, nullptr, patloc, startloc, varflags, flag));
+	TRY_SH_SET(p, subevalvar(sh, eb, p, nullptr, patloc, startloc, varflags, flag));
 
 record:
 	if ((flag | discard) & EXP_DISCARD)
@@ -1194,7 +1196,7 @@ ifsisifs(Context &sh, const char *p, unsigned ml, const char *ifs)
 	}
 
 	if (isifs)
-		isdefifs = iswspace(wc ?: ifs0);
+		isdefifs = iswspace(wc ? wc : ifs0);
 
 out:
 	return isifs << 1 | isdefifs;

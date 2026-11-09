@@ -227,7 +227,7 @@ evaltree(Context &sh, Node *n, EvalFlags flags)
 
 	TRY_SHV(dotrap(sh));
 
-	status = TRY_SH(n->eval(sh, flags, checkexit));
+	TRY_SH_SET(status, n->eval(sh, flags, checkexit));
 	sh.exitstatus = status;
 
 out:
@@ -253,7 +253,8 @@ Node::eval(Context &, EvalFlags, bool &) const
 Result<int>
 NotNode::eval(Context &sh, EvalFlags, bool &) const
 {
-	auto status = TRY_SH(evaltree(sh, com.get(), EvalFlag::Tested));
+	int status;
+	TRY_SH_SET(status, evaltree(sh, com.get(), EvalFlag::Tested));
 
 	if (!sh.evalskip)
 		status = !status;
@@ -275,11 +276,12 @@ RedirNode::eval(Context &sh, EvalFlags flags, bool &checkexit) const
 		sh.lineno -= sh.funcline - 1;
 	TRY_SHV(expredir(sh, redirect.get()));
 	pushredir(sh, redirect.get());
-	int status = TRY_SH(redirectsafe(sh, redirect.get(), REDIR_PUSH));
+	int status;
+	TRY_SH_SET(status, redirectsafe(sh, redirect.get(), REDIR_PUSH));
 	if (status)
 		checkexit = true;
 	else
-		status = TRY_SH(evaltree(sh, n.get(), flags & EvalFlag::Tested));
+		TRY_SH_SET(status, evaltree(sh, n.get(), flags & EvalFlag::Tested));
 	if (redirect)
 		popredir(sh, 0);
 	return status;
@@ -312,7 +314,8 @@ BinaryNode::eval(Context &sh, EvalFlags flags, bool &) const
 	EvalFlags left;
 	if (type != Type::Semi || flags.test(EvalFlag::Tested))
 		left.set(EvalFlag::Tested);
-	int status = TRY_SH(evaltree(sh, ch1.get(), left));
+	int status;
+	TRY_SH_SET(status, evaltree(sh, ch1.get(), left));
 	if ((!status) == isor || sh.evalskip)
 		return status;
 	return evaltree(sh, ch2.get(), flags);
@@ -335,7 +338,8 @@ CaseNode::eval(Context &sh, EvalFlags flags, bool &) const
 Result<int>
 IfNode::eval(Context &sh, EvalFlags flags, bool &) const
 {
-	const auto status = TRY_SH(evaltree(sh, test.get(), EvalFlag::Tested));
+	int status;
+	TRY_SH_SET(status, evaltree(sh, test.get(), EvalFlag::Tested));
 
 	if (sh.evalskip)
 		return status;
@@ -391,7 +395,7 @@ evalloop(Context &sh, const BinaryNode *n, EvalFlags flags)
 	do {
 		int i;
 
-		i = TRY_SH(evaltree(sh, n->ch1.get(), EvalFlag::Tested));
+		TRY_SH_SET(i, evaltree(sh, n->ch1.get(), EvalFlag::Tested));
 		skip = skiploop(sh);
 		if (skip == EvalSkip::Func)
 			status = i;
@@ -401,7 +405,7 @@ evalloop(Context &sh, const BinaryNode *n, EvalFlags flags)
 			i = !i;
 		if (i != 0)
 			break;
-		status = TRY_SH(evaltree(sh, n->ch2.get(), flags));
+		TRY_SH_SET(status, evaltree(sh, n->ch2.get(), flags));
 		skip = skiploop(sh);
 	} while (!(skip & ~EvalSkip::Continue));
 	sh.loopnest--;
@@ -429,7 +433,7 @@ evalfor(Context &sh, const ForNode *n, EvalFlags flags)
 	flags &= EvalFlag::Tested;
 	for (const std::string &word : args) {
 		TRY_SHV(setvar(sh, n->var, word));
-		status = TRY_SH(evaltree(sh, n->body.get(), flags));
+		TRY_SH_SET(status, evaltree(sh, n->body.get(), flags));
 		if (skiploop(sh) & ~EvalSkip::Continue)
 			break;
 	}
@@ -460,7 +464,7 @@ evalcase(Context &sh, const CaseNode *n, EvalFlags flags)
 				 * exit status.
 				 */
 				if (!sh.evalskip && as<CaseListNode>(cp)->body) {
-					status = TRY_SH(evaltree(sh,
+					TRY_SH_SET(status, evaltree(sh,
 							as<CaseListNode>(cp)->body.get(),
 							flags));
 				}
@@ -502,19 +506,24 @@ evalsubshell(Context &sh, const Node *n, EvalFlags flags)
 		goto nofork;
 	}
 	jp = makejob(sh, 1);
-	if (TRY_SH(forkshell(sh, jp, as<RedirNode>(n)->n.get(), backgnd)) == 0) {
-		flags.set(EvalFlag::Exit);
-		if (backgnd)
-			flags.reset(EvalFlag::Tested);
-nofork:
-		INTON(sh);
-		TRY_SHV(redirect(sh, as<RedirNode>(n)->redirect.get(), 0));
-		evaltreenr(sh, as<RedirNode>(n)->n.get(), flags);
-		/* never returns */
+	{
+		int pid;
+		TRY_SH_SET(pid, forkshell(sh, jp, as<RedirNode>(n)->n.get(), backgnd));
+		if (pid != 0)
+			goto parent;
 	}
+	flags.set(EvalFlag::Exit);
+	if (backgnd)
+		flags.reset(EvalFlag::Tested);
+nofork:
+	INTON(sh);
+	TRY_SHV(redirect(sh, as<RedirNode>(n)->redirect.get(), 0));
+	evaltreenr(sh, as<RedirNode>(n)->n.get(), flags);
+	/* never returns */
+parent:
 	status = 0;
 	if (! backgnd)
-		status = TRY_SH(waitforjob(sh, jp));
+		TRY_SH_SET(status, waitforjob(sh, jp));
 	INTON(sh);
 
 	return status;
@@ -590,22 +599,26 @@ evalpipe(Context &sh, const PipeNode *n, EvalFlags flags)
 				return sh_error(sh, "Pipe call failed");
 			}
 		}
-		if (TRY_SH(forkshell(sh, jp, cmd, n->backgnd)) == 0) {
-			INTON(sh);
-			if (pip[1] >= 0) {
-				close(pip[0]);
+		{
+			int pid;
+			TRY_SH_SET(pid, forkshell(sh, jp, cmd, n->backgnd));
+			if (pid == 0) {
+				INTON(sh);
+				if (pip[1] >= 0) {
+					close(pip[0]);
+				}
+				if (prevfd > 0) {
+					reset_input(sh);
+					dup2(prevfd, 0);
+					close(prevfd);
+				}
+				if (pip[1] > 1) {
+					dup2(pip[1], 1);
+					close(pip[1]);
+				}
+				evaltreenr(sh, cmd, flags);
+				/* never returns */
 			}
-			if (prevfd > 0) {
-				reset_input(sh);
-				dup2(prevfd, 0);
-				close(prevfd);
-			}
-			if (pip[1] > 1) {
-				dup2(pip[1], 1);
-				close(pip[1]);
-			}
-			evaltreenr(sh, cmd, flags);
-			/* never returns */
 		}
 		if (prevfd >= 0)
 			close(prevfd);
@@ -613,7 +626,7 @@ evalpipe(Context &sh, const PipeNode *n, EvalFlags flags)
 		close(pip[1]);
 	}
 	if (n->backgnd == 0) {
-		status = TRY_SH(waitforjob(sh, jp));
+		TRY_SH_SET(status, waitforjob(sh, jp));
 	}
 	INTON(sh);
 
@@ -644,7 +657,7 @@ evalbackcmd(Context &sh, Node *n, struct backcmd *result)
 	sh.tpip[0] = pip[0];
 	sh.tpip[1] = pip[1];
 	jp = makejob(sh, 1);
-	pid = TRY_SH(forkshell(sh, jp, n, FORK_NOJOB));
+	TRY_SH_SET(pid, forkshell(sh, jp, n, FORK_NOJOB));
 	sh.tpip[0] = -1;
 	if (pid == 0) {
 		FORCEINTON(sh);
@@ -692,9 +705,12 @@ parse_command_args(Context &sh, ArgList *alist, Node **argpp,
 	size_t start = *arg0;
 
 	for (;;) {
-		if (start + 1 >= alist->size() &&
-		    !TRY_SH(fill_arglist(sh, alist, argpp)))
-			return 0;
+		if (start + 1 >= alist->size()) {
+			bool more;
+			TRY_SH_SET(more, fill_arglist(sh, alist, argpp));
+			if (!more)
+				return 0;
+		}
 		start++;
 		char *cp = (*alist)[start].data();
 		if (*cp++ != '-')
@@ -703,9 +719,12 @@ parse_command_args(Context &sh, ArgList *alist, Node **argpp,
 		if (!(c = *cp++))
 			break;
 		if (c == '-' && !*cp) {
-			if (start + 1 >= alist->size() &&
-			    !TRY_SH(fill_arglist(sh, alist, argpp)))
-				return 0;
+			if (start + 1 >= alist->size()) {
+				bool more;
+				TRY_SH_SET(more, fill_arglist(sh, alist, argpp));
+				if (!more)
+					return 0;
+			}
 			start++;
 			break;
 		}
@@ -776,50 +795,54 @@ evalcommand(Context &sh, const CommandNode *cmd, EvalFlags flags)
 
 	argc = 0;
 	argp = cmd->args.get();
-	if (TRY_SH(fill_arglist(sh, &args, &argp))) {
-		int pseudovarflag = 0;
+	{
+		bool filled;
+		TRY_SH_SET(filled, fill_arglist(sh, &args, &argp));
+		if (filled) {
+			int pseudovarflag = 0;
 
-		arg0 = 0;
-		xtrace_end = args.size();
-		for (;;) {
-			TRY_SHV(find_command(sh, args[arg0].data(), &cmdentry,
-				     cmd_flag | DO_REGBLTIN, pathval(sh)));
-
-			vlocal++;
-
-			/* implement bltin and command here */
-			if (cmdentry.type != TableEntry::Type::Builtin)
-				break;
-
-			pseudovarflag = cmdentry.u.cmd->flags & BuiltinCommand::Flag::Assign;
-			if (likely(spclbltin < 0)) {
-				spclbltin = cmdentry.u.cmd->flags & BuiltinCommand::Flag::Special;
-				vlocal = spclbltin ^ BuiltinCommand::Flag::Special;
-			}
-			execcmd = cmdentry.u.cmd == &builtin_exec;
-			if (likely(cmdentry.u.cmd != &builtin_command))
-				break;
-
-			cmd_flag = TRY_SH(parse_command_args(sh, &args, &argp, &path,
-						     &arg0));
-			if (!cmd_flag)
-				break;
+			arg0 = 0;
 			xtrace_end = args.size();
+			for (;;) {
+				TRY_SHV(find_command(sh, args[arg0].data(), &cmdentry,
+					     cmd_flag | DO_REGBLTIN, pathval(sh)));
+
+				vlocal++;
+
+				/* implement bltin and command here */
+				if (cmdentry.type != TableEntry::Type::Builtin)
+					break;
+
+				pseudovarflag = cmdentry.u.cmd->flags & BuiltinCommand::Flag::Assign;
+				if (likely(spclbltin < 0)) {
+					spclbltin = cmdentry.u.cmd->flags & BuiltinCommand::Flag::Special;
+					vlocal = spclbltin ^ BuiltinCommand::Flag::Special;
+				}
+				execcmd = cmdentry.u.cmd == &builtin_exec;
+				if (likely(cmdentry.u.cmd != &builtin_command))
+					break;
+
+				TRY_SH_SET(cmd_flag, parse_command_args(sh, &args, &argp, &path,
+							     &arg0));
+				if (!cmd_flag)
+					break;
+				xtrace_end = args.size();
+			}
+
+			for (; argp; argp = as<ArgNode>(argp)->next.get())
+				TRY_SHV(expandarg(sh, argp, &args,
+					  pseudovarflag &&
+					  isassignment(as<ArgNode>(argp)->text) ?
+					  EXP_VARTILDE : EXP_FULL | EXP_TILDE));
+
+			argc = static_cast<int>(args.size() - arg0);
+
+			if (execcmd && argc > 1)
+				vflags = Variable::Flag::Exported;
 		}
-
-		for (; argp; argp = as<ArgNode>(argp)->next.get())
-			TRY_SHV(expandarg(sh, argp, &args,
-				  pseudovarflag &&
-				  isassignment(as<ArgNode>(argp)->text) ?
-				  EXP_VARTILDE : EXP_FULL | EXP_TILDE));
-
-		argc = static_cast<int>(args.size() - arg0);
-
-		if (execcmd && argc > 1)
-			vflags = Variable::Flag::Exported;
 	}
 
-	localvar_stop = TRY_SH(pushlocalvars(sh, vlocal));
+	TRY_SH_SET(localvar_stop, pushlocalvars(sh, vlocal));
 
 	/* Reserve one extra spot at the front for shellexec. */
 	argv_store.reserve(static_cast<size_t>(argc) + 2);
@@ -837,7 +860,7 @@ evalcommand(Context &sh, const CommandNode *cmd, EvalFlags flags)
 	sh.preverrout.fd = 2;
 	TRY_SHV(expredir(sh, cmd->redirect.get()));
 	redir_stop = pushredir(sh, cmd->redirect.get());
-	status = TRY_SH(redirectsafe(sh, cmd->redirect.get(), REDIR_PUSH|REDIR_SAVEFD2));
+	TRY_SH_SET(status, redirectsafe(sh, cmd->redirect.get(), REDIR_PUSH|REDIR_SAVEFD2));
 
 	if (unlikely(status)) {
 bail:
@@ -908,7 +931,7 @@ bail:
 		/* Fork off a child process if necessary. */
 		if (!flags.test(EvalFlag::Exit) || have_traps(sh)) {
 			INTOFF(sh);
-			jp = TRY_SH(vforkexec(sh, cmd, argv, path, cmdentry.u.index));
+			TRY_SH_SET(jp, vforkexec(sh, cmd, argv, path, cmdentry.u.index));
 			break;
 		}
 		shellexec(sh, argv, path, cmdentry.u.index);
@@ -928,7 +951,7 @@ bail:
 		break;
 	}
 
-	status = TRY_SH(waitforjob(sh, jp));
+	TRY_SH_SET(status, waitforjob(sh, jp));
 	FORCEINTON(sh);
 
 out:
@@ -1089,7 +1112,11 @@ bltincmd(Context &sh, int argc, char **argv)
 Result<int>
 breakcmd(Context &sh, int argc, char **argv)
 {
-	int n = argc > 1 ? TRY_SH(number(sh, argv[1])) : 1;
+	int n;
+	if (argc > 1)
+		TRY_SH_SET(n, number(sh, argv[1]));
+	else
+		n = 1;
 
 	if (n <= 0)
 		return badnum(sh, argv[1]);
@@ -1118,7 +1145,7 @@ returncmd(Context &sh, int argc, char **argv)
 	 */
 	if (argv[1]) {
 		skip = EvalSkip::Func;
-		status = TRY_SH(number(sh, argv[1]));
+		TRY_SH_SET(status, number(sh, argv[1]));
 	} else {
 		skip = EvalSkip::FuncDef;
 		status = sh.exitstatus;

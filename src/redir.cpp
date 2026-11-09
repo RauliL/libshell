@@ -118,7 +118,7 @@ redirect(Context &sh, Node *redir, int flags)
 		sv = &sh.redirlist.back();
 	n = redir;
 	do {
-		newfd = TRY_SH(openredirect(sh, n));
+		TRY_SH_SET(newfd, openredirect(sh, n));
 		if (newfd < -1)
 			continue;
 
@@ -137,7 +137,7 @@ redirect(Context &sh, Node *redir, int flags)
 			if (likely(i == EMPTY)) {
 				i = CLOSED;
 				if (fd != newfd && !closed) {
-					i = TRY_SH(savefd(sh, fd, fd));
+					TRY_SH_SET(i, savefd(sh, fd, fd));
 					fd = -1;
 				}
 			}
@@ -204,7 +204,7 @@ openredirect(Context &sh, Node *redir)
 	case Node::Type::From:
 		flags = O_RDONLY;
 do_open:
-		f = TRY_SH(sh_open(sh, as<FileNode>(redir)->expfname, flags, 0));
+		TRY_SH_SET(f, sh_open(sh, as<FileNode>(redir)->expfname, flags, 0));
 		break;
 	case Node::Type::FromTo:
 		flags = O_RDWR|O_CREAT;
@@ -221,7 +221,7 @@ do_open:
 			if (S_ISREG(sb.st_mode))
 				goto ecreate;
 
-			f = TRY_SH(sh_open(sh, fname, O_WRONLY, 0));
+			TRY_SH_SET(f, sh_open(sh, fname, O_WRONLY, 0));
 			if (!fstat64(f, &sb) && S_ISREG(sb.st_mode)) {
 				close(f);
 				goto ecreate;
@@ -245,7 +245,7 @@ do_open:
 		/* Fall through to eliminate warning. */
 	case Node::Type::Here:
 	case Node::Type::XHere:
-		f = TRY_SH(openhere(sh, redir));
+		TRY_SH_SET(f, openhere(sh, redir));
 		break;
 	}
 
@@ -294,7 +294,7 @@ sh_pipe(Context &sh, int pip[2], int memfd)
 	if (memfd) {
 		pip[0] = USE_MEMFD_CREATE ? memfd_create("dash", 0) : -1;
 		if (pip[0] >= 0) {
-			pip[1] = TRY_SH(sh_dup2(sh, pip[0], -1, pip[0]));
+			TRY_SH_SET(pip[1], sh_dup2(sh, pip[0], -1, pip[0]));
 			return 1;
 		}
 	}
@@ -322,12 +322,12 @@ openhere(Context &sh, Node *redir)
 	std::string expanded;
 	const char *text = as<ArgNode>(as<HereNode>(redir)->doc)->text.data();
 	if (redir->type == Node::Type::XHere) {
-		expanded = TRY_SH(expandarg_to_string(sh, as<HereNode>(redir)->doc.get(), EXP_QUOTED));
+		TRY_SH_SET(expanded, expandarg_to_string(sh, as<HereNode>(redir)->doc.get(), EXP_QUOTED));
 		text = expanded.c_str();
 	}
 
 	len = strlen(text);
-	memfd = TRY_SH(sh_pipe(sh, pip, len > PIPESIZE));
+	TRY_SH_SET(memfd, sh_pipe(sh, pip, len > PIPESIZE));
 
 	if (memfd || len <= PIPESIZE) {
 		xwrite(sh, pip[1], text, len);
@@ -335,17 +335,21 @@ openhere(Context &sh, Node *redir)
 		goto out;
 	}
 
-	if (TRY_SH(forkshell(sh, nullptr, nullptr, FORK_NOJOB)) == 0) {
-		close(pip[0]);
-		signal(SIGINT, SIG_IGN);
-		signal(SIGQUIT, SIG_IGN);
-		signal(SIGHUP, SIG_IGN);
+	{
+		int pid;
+		TRY_SH_SET(pid, forkshell(sh, nullptr, nullptr, FORK_NOJOB));
+		if (pid == 0) {
+			close(pip[0]);
+			signal(SIGINT, SIG_IGN);
+			signal(SIGQUIT, SIG_IGN);
+			signal(SIGHUP, SIG_IGN);
 #ifdef SIGTSTP
-		signal(SIGTSTP, SIG_IGN);
+			signal(SIGTSTP, SIG_IGN);
 #endif
-		signal(SIGPIPE, SIG_DFL);
-		xwrite(sh, pip[1], text, len);
-		_exit(0);
+			signal(SIGPIPE, SIG_DFL);
+			xwrite(sh, pip[1], text, len);
+			_exit(0);
+		}
 	}
 out:
 	close(pip[1]);

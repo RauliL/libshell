@@ -449,11 +449,11 @@ setinputfile(Context &sh, InputStack &in, std::string_view fname, int flags)
 	std::string path(fname);
 
 	INTOFF(sh);
-	fd = TRY_SH(sh_open(sh, path.c_str(), O_RDONLY, flags & INPUT_NOFILE_OK));
+	TRY_SH_SET(fd, sh_open(sh, path.c_str(), O_RDONLY, flags & INPUT_NOFILE_OK));
 	if (fd < 0)
 		goto out;
 	if (fd < 10)
-		fd = TRY_SH(savefd(sh, fd, fd));
+		TRY_SH_SET(fd, savefd(sh, fd, fd));
 	setinputfd(sh, in, fd, flags & INPUT_PUSH_FILE);
 out:
 	INTON(sh);

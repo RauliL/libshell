@@ -127,7 +127,10 @@ readcmd(Context &sh, int argc, char **argv)
 
 	rflag = 0;
 	prompt = nullptr;
-	while ((i = TRY_SH(nextopt(sh, "p:r"))) != '\0') {
+	for (;;) {
+		TRY_SH_SET(i, nextopt(sh, "p:r"));
+		if (i == '\0')
+			break;
 		if (i == 'p')
 			prompt = sh.bopt.optionarg;
 		else
@@ -215,7 +218,10 @@ umaskcmd(Context &sh, int argc, char **argv)
 	int i;
 	int symbolic_mode = 0;
 
-	while ((i = TRY_SH(nextopt(sh, "S"))) != '\0') {
+	for (;;) {
+		TRY_SH_SET(i, nextopt(sh, "S"));
+		if (i == '\0')
+			break;
 		symbolic_mode = 1;
 	}
 
@@ -419,7 +425,8 @@ ulimitcmd(Context &sh, int argc, char **argv)
 	struct rlimit	limit;
 
 	what = 'f';
-	while ((optc = TRY_SH(nextopt(sh, "HSa"
+	for (;;) {
+		TRY_SH_SET(optc, nextopt(sh, "HSa"
 #ifdef RLIMIT_CPU
 			       "t"
 #endif
@@ -456,7 +463,9 @@ ulimitcmd(Context &sh, int argc, char **argv)
 #ifdef RLIMIT_RTPRIO
 			       "r"
 #endif
-	))) != '\0')
+		));
+		if (optc == '\0')
+			break;
 		switch (optc) {
 		case 'H':
 			how = HARD;
@@ -470,6 +479,7 @@ ulimitcmd(Context &sh, int argc, char **argv)
 		default:
 			what = optc;
 		}
+	}
 
 	for (l = limit_table; l->option != what; l++)
 		;

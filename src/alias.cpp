@@ -149,7 +149,10 @@ unaliascmd(Context &sh, int argc, char **argv)
 {
 	int i;
 
-	while ((i = TRY_SH(nextopt(sh, "a"))) != '\0') {
+	for (;;) {
+		TRY_SH_SET(i, nextopt(sh, "a"));
+		if (i == '\0')
+			break;
 		if (i == 'a') {
 			TRY_SHV(rmaliases(sh));
 
@@ -157,7 +160,9 @@ unaliascmd(Context &sh, int argc, char **argv)
 		}
 	}
 	for (i = 0; *sh.bopt.argptr; sh.bopt.argptr++) {
-		if (TRY_SH(unalias(sh, *sh.bopt.argptr))) {
+		int found;
+		TRY_SH_SET(found, unalias(sh, *sh.bopt.argptr));
+		if (found) {
 			sh.out2->write(sh, std::format("unalias: {} not found\n", *sh.bopt.argptr));
 			i = EXIT_FAILURE;
 		}

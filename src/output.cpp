@@ -198,7 +198,7 @@ xasprintf(Context &sh, std::string &out, const char *f, ...)
 	int ret;
 
 	va_start(ap, f);
-	ret = TRY_SH(xvasprintf(sh, &p, 0, out, f, ap));
+	TRY_SH_SET(ret, xvasprintf(sh, &p, 0, out, f, ap));
 	va_end(ap);
 	return ret;
 }

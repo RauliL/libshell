@@ -175,7 +175,10 @@ usage:
 		if (signo < 0) {
 			int c;
 
-			while ((c = TRY_SH(nextopt(sh, "ls:"))) != '\0')
+			for (;;) {
+				TRY_SH_SET(c, nextopt(sh, "ls:"));
+				if (c == '\0')
+					break;
 				switch (c) {
 				default:
 				case 'l':
@@ -189,6 +192,7 @@ usage:
 					}
 		                        break;
 				}
+			}
 			argv = sh.bopt.argptr;
 		} else
 			argv++;
@@ -212,7 +216,7 @@ usage:
 			}
 			return 0;
 		}
-		signo = TRY_SH(number(sh, *argv));
+		TRY_SH_SET(signo, number(sh, *argv));
 		if (signo > 128)
 			signo -= 128;
 		if (0 < signo && signo < NSIG)
@@ -226,11 +230,18 @@ usage:
 	i = 0;
 	do {
 		if (**argv == '%') {
-			jp = TRY_SH(getjob(sh, *argv));
+			TRY_SH_SET(jp, getjob(sh, *argv));
 			pid = -jp->pgid();
-		} else
-			pid = **argv == '-' ?
-				-TRY_SH(number(sh, *argv + 1)) : TRY_SH(number(sh, *argv));
+		} else {
+			int n;
+			if (**argv == '-') {
+				TRY_SH_SET(n, number(sh, *argv + 1));
+				pid = -n;
+			} else {
+				TRY_SH_SET(n, number(sh, *argv));
+				pid = n;
+			}
+		}
 		if (kill(pid, signo) != 0) {
 			sh_warnx(sh, "{}", strerror(errno));
 			i = 1;
@@ -312,7 +323,8 @@ waitcmd(Context &sh, int argc, char **argv)
 	retval = 127;
 	do {
 		if (**argv != '%') {
-			pid_t pid = TRY_SH(number(sh, *argv));
+			pid_t pid;
+			TRY_SH_SET(pid, number(sh, *argv));
 			job = nullptr;
 			for (Job *j : sh.job_order) {
 				if (!j->processes.empty() && j->processes.back().pid == pid) {
@@ -322,8 +334,9 @@ waitcmd(Context &sh, int argc, char **argv)
 			}
 			if (!job)
 				goto repeat;
-		} else
-			job = TRY_SH(getjob(sh, *argv));
+		} else {
+			TRY_SH_SET(job, getjob(sh, *argv));
+		}
 		/* loop until process terminated */
 		if (!dowait(sh, DOWAIT_WAITCMD, job))
 			goto sigout;

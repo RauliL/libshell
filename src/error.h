@@ -35,6 +35,7 @@
  */
 #pragma once
 
+#include <atomic>
 #include <csignal>
 #include <format>
 #include <string>
@@ -55,51 +56,73 @@ namespace shell {
 #define E_EXEC 04	/* executing a program */
 
 /*
- * Interrupt deferral macros require Context &sh in scope.
- * INTON/FORCEINTON return from the enclosing ShellResult
- * function when a deferred SIGINT must unwind (via onint → exraise).
+ * Interrupt deferral helpers require Context &sh in scope.
+ * INTON/FORCEINTON return from the enclosing Result function when a
+ * deferred SIGINT must unwind (via onint → exraise).
  */
 tl::unexpected<Error> onint(Context &sh);
 
-#define barrier() ({ __asm__ __volatile__ ("": : :"memory"); })
-#define INTOFF(sh) \
-	({ \
-		(sh).suppressint++; \
-		barrier(); \
-		0; \
-	})
-#ifdef REALLY_SMALL
-Result<void> __inton(Context &sh);
+/* Avoid `.error()` in macros: bltin.h `#define error(...)` would rewrite it. */
+template <typename T>
+inline tl::unexpected<Error>
+shell_fail_of(const Result<T> &r)
+{
+	return tl::unexpected(r.error());
+}
+
+inline void
+barrier() noexcept
+{
+	std::atomic_signal_fence(std::memory_order_acq_rel);
+}
+
+inline void
+intoff(Context &sh) noexcept
+{
+	++sh.suppressint;
+	barrier();
+}
+
+inline void
+inton_defer(Context &sh) noexcept
+{
+	barrier();
+	--sh.suppressint;
+}
+
+inline Result<void>
+inton(Context &sh)
+{
+	barrier();
+	if (--sh.suppressint == 0 && sh.intpending)
+		return onint(sh);
+	return {};
+}
+
+inline Result<void>
+force_inton(Context &sh)
+{
+	barrier();
+	sh.suppressint = 0;
+	if (sh.intpending)
+		return onint(sh);
+	return {};
+}
+
+#define INTOFF(sh) do { intoff(sh); } while (0)
 #define INTON(sh) \
 	do { \
-		if (const auto _r = __inton((sh)); !_r) \
-			return _r.error(); \
+		if (auto _inton_r = inton(sh); !_inton_r) \
+			return shell_fail_of(_inton_r); \
 	} while (0)
-#else
-#define INTON(sh) \
-	do { \
-		barrier(); \
-		if (--(sh).suppressint == 0 && (sh).intpending) \
-			return onint((sh)); \
-	} while (0)
-#endif
 #define FORCEINTON(sh) \
 	do { \
-		barrier(); \
-		(sh).suppressint = 0; \
-		if ((sh).intpending) \
-			return onint(sh); \
+		if (auto _inton_r = force_inton(sh); !_inton_r) \
+			return shell_fail_of(_inton_r); \
 	} while (0)
+#define INTON_DEFER(sh) do { inton_defer(sh); } while (0)
 
 #define int_pending(sh) (sh).intpending
-
-/* For void helpers that cannot return ShellResult: drop suppressint and
- * leave intpending set so a later ShellResult INTON/FORCEINTON unwinds. */
-#define INTON_DEFER(sh) \
-	do { \
-		barrier(); \
-		--(sh).suppressint; \
-	} while (0)
 
 /**
  * RAII interrupt deferral. Destructor matches INTON_DEFER; call resume()
@@ -118,23 +141,17 @@ public:
 	Result<void> resume();
 };
 
-/* Avoid `.error()` in macros: bltin.h `#define error(...)` would rewrite it. */
-template <typename T>
-inline tl::unexpected<Error>
-shell_fail_of(const Result<T> &r)
-{
-	return tl::unexpected(r.error());
-}
-
-/* Propagate a nested ShellResult; for void results use TRY_SHV.
- * Returns tl::unexpected so the enclosing ShellResult<T> may differ in T. */
-#define TRY_SH(expr) \
-	({ \
+/*
+ * Propagate a nested Result. TRY_SH_SET covers value-producing sites;
+ * TRY_SHV covers Result<void> (or ignored values). Both are portable C++.
+ */
+#define TRY_SH_SET(dst, expr) \
+	do { \
 		auto _try_sh_r = (expr); \
 		if (!_try_sh_r) \
 			return shell_fail_of(_try_sh_r); \
-		*_try_sh_r; \
-	})
+		(dst) = *_try_sh_r; \
+	} while (0)
 #define TRY_SHV(expr) \
 	do { \
 		if (auto _try_sh_r = (expr); !_try_sh_r) \

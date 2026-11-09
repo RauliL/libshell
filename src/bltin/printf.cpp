@@ -87,25 +87,21 @@ void check_conversion(Context &sh, PrintfState &, const char *,
 	} \
 }
 
-#define ASPF(out, f, func) ({ \
-	Result<int> ret; \
-	switch (reinterpret_cast<char *>(param) - reinterpret_cast<char *>(array)) { \
-	default: \
-		ret = xasprintf(sh, out, f, array[0], array[1], func); \
-		break; \
-	case sizeof(*param): \
-		ret = xasprintf(sh, out, f, array[0], func); \
-		break; \
-	case 0: \
-		ret = xasprintf(sh, out, f, func); \
-		break; \
-	} \
-	if (!ret) \
-		return shell_fail_of(ret); \
-	*ret; \
-})
-
 namespace {
+Result<int>
+asprintf_width(Context &sh, std::string &out, const char *f, int *param,
+	       int *array, const char *func)
+{
+	switch (reinterpret_cast<char *>(param) - reinterpret_cast<char *>(array)) {
+	default:
+		return xasprintf(sh, out, f, array[0], array[1], func);
+	case sizeof(*param):
+		return xasprintf(sh, out, f, array[0], func);
+	case 0:
+		return xasprintf(sh, out, f, func);
+	}
+}
+
 Result<int>
 print_escape_str(Context &sh, const char *f, int *param, int *array, const char *s)
 {
@@ -128,7 +124,8 @@ print_escape_str(Context &sh, const char *f, int *param, int *array, const char 
 	}
 
 	std::string width(static_cast<size_t>(total), 'X');
-	total = ASPF(formatted, f, width.c_str());
+	TRY_SH_SET(total, asprintf_width(sh, formatted, f, param, array,
+					 width.c_str()));
 	char *p = formatted.data();
 
 	int len = strchrnul(p, 'X') - p;
@@ -228,8 +225,12 @@ printfcmd(Context &sh, int argc, char *argv[])
 			case 'b':
 				*fmt = 's';
 				/* escape if a \c was encountered */
-				if (TRY_SH(print_escape_str(sh, start, param, array, getstr(st))))
-					goto out;
+				{
+					int done;
+					TRY_SH_SET(done, print_escape_str(sh, start, param, array, getstr(st)));
+					if (done)
+						goto out;
+				}
 				*fmt = 'b';
 				break;
 			case 'c': {
@@ -593,7 +594,7 @@ echocmd(Context &sh, int argc, char **argv)
 		if (!s || !*++argv)
 			fmt = lastfmt;
 
-		nonl = TRY_SH(print_escape_str(sh, fmt, nullptr, nullptr, s ? s : ""));
+		TRY_SH_SET(nonl, print_escape_str(sh, fmt, nullptr, nullptr, s ? s : ""));
 	} while (!nonl && *argv);
 	return 0;
 }
