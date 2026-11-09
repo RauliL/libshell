@@ -18,11 +18,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: fetchcontent-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt') }}
+          restore-keys: |
+            fetchcontent-${{ runner.os }}-
+
       - name: Configure
         run: >
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTING=ON
+          -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/.deps
 
       - name: Build
         run: cmake --build build --parallel
