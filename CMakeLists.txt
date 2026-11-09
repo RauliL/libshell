@@ -174,6 +174,7 @@ function(dash_configure_tool target)
     "${target}"
     PRIVATE
       -Wall
+      -Werror
   )
   # result.h (via parser.h / arith.h) needs tl::expected headers
   target_link_libraries("${target}" PRIVATE expected)
