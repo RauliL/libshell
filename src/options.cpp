@@ -435,7 +435,8 @@ getoptscmd(Context &sh, int argc, char **argv)
 	}
 	else {
 		optbase = &argv[3];
-		if (static_cast<unsigned>(sh.shellparam.optind) > argc - 2) {
+		if (static_cast<unsigned>(sh.shellparam.optind) >
+		    static_cast<unsigned>(argc - 2)) {
 			sh.shellparam.optind = 1;
 			sh.shellparam.optoff = -1;
 		}
@@ -459,7 +460,8 @@ getopts(Context &sh, char *optstr, char *optvar, char **optfirst)
 	sh.shellparam.optind = -1;
 	optnext = optfirst + ind - 1;
 
-	if (ind <= 1 || off < 0 || std::strlen(optnext[-1]) < off)
+	if (ind <= 1 || off < 0 ||
+	    std::strlen(optnext[-1]) < static_cast<size_t>(off))
 		p = nullptr;
 	else
 		p = optnext[-1] + off;

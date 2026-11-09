@@ -270,8 +270,8 @@ preadfd(Context &sh, InputStack &in)
 	int nr;
 
 	unget = in.current->nextc - buf;
-	if (unget > PUNGETC_MAX)
-		unget = PUNGETC_MAX;
+	if (unget > static_cast<int>(PUNGETC_MAX))
+		unget = static_cast<int>(PUNGETC_MAX);
 
 	memmove(buf, in.current->nextc - unget, unget);
 	buf += unget;

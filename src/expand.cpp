@@ -902,7 +902,8 @@ mbtodest(Context &sh, const char *p, char *q, const char *syntax,
 	size_t ml;
 
 	ml = mbrlen(--p, len, &mbs);
-	if (ml == -2 || ml == -1 || ml < 2) {
+	if (ml == static_cast<size_t>(-2) || ml == static_cast<size_t>(-1) ||
+	    ml < 2) {
 		q = chtodest(sh, (signed char)*p, syntax, q);
 		ml = 1;
 		goto out;
@@ -1417,7 +1418,7 @@ changeifs(Context &sh, std::string_view ifs_in)
 		goto out;
 
 	ml = mbrlen(ifs, len, &mbs);
-	if (ml == -2 || ml == -1)
+	if (ml == static_cast<size_t>(-2) || ml == static_cast<size_t>(-1))
 		ml = 1;
 	sh.expand.ifsmb0len = ml;
 
@@ -1812,7 +1813,7 @@ ccmatch(Context &sh, char *p, const char *mbc, int ml,
 
 	*r = q + 2;
 
-	if (mbrtowc(&wc, mbc, ml, &mbst) != ml)
+	if (mbrtowc(&wc, mbc, ml, &mbst) != static_cast<size_t>(ml))
 		return 0;
 
 	return iswctype(wc, type);

@@ -1032,7 +1032,8 @@ getmbc(Context &sh, int c, char *out, int mode)
 
 	mbc = (mode & 3) < 2 ? out + 2 + (mode == 1) : out;
 	mbc[ml] = c;
-	while ((ml2 = mbrtowc(&wc, mbc + ml++, 1, &mbst)) == -2) {
+	while ((ml2 = mbrtowc(&wc, mbc + ml++, 1, &mbst)) ==
+	       static_cast<size_t>(-2)) {
 		if (ml >= MB_LEN_MAX)
 			break;
 		c = pgetc_eoa(sh);
