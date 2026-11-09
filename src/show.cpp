@@ -150,7 +150,7 @@ trargs(ShellContext &sh, char **ap)
 void
 opentrace(ShellContext &sh)
 {
-	char s[100];
+	const char *s = "./trace";
 #ifdef O_APPEND
 	int flags;
 #endif
@@ -161,7 +161,6 @@ opentrace(ShellContext &sh)
 		/* leave open because libedit might be using it */
 		return;
 	}
-	scopy(sh, "./trace", s);
 	if (sh.tracefile) {
 #ifndef __KLIBC__
 		if (!freopen(s, "a", sh.tracefile)) {
@@ -173,7 +172,7 @@ opentrace(ShellContext &sh)
 			return;
 		}
 	} else {
-		if ((sh.tracefile = fopen(s, "a")) == NULL) {
+		if ((sh.tracefile = fopen(s, "a")) == nullptr) {
 			fprintf(stderr, "Can't open %s\n", s);
 			debug = 0;
 			return;

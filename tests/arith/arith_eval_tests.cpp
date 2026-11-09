@@ -36,7 +36,7 @@ struct EvalFixture {
 
 	std::intmax_t var_int(std::string_view name)
 	{
-		auto r = lookupvarint(sh, name);
+		auto r = sh.get_int_var(name);
 		REQUIRE(r);
 		return *r;
 	}
@@ -98,7 +98,7 @@ TEST_CASE_METHOD(EvalFixture, "arith eval: division errors", "[arith][eval]")
 	CHECK_FALSE(eval_result("1/0"));
 	CHECK_FALSE(eval_result("1%0"));
 
-	REQUIRE(setvarint(sh, "v", INTMAX_MIN));
+	REQUIRE(sh.set_int_var("v", INTMAX_MIN));
 	CHECK_FALSE(eval_result("v/-1"));
 }
 
@@ -107,28 +107,28 @@ TEST_CASE_METHOD(EvalFixture, "arith eval: logical and/or with short-circuit",
 {
 	SECTION("&& short-circuits on false lhs")
 	{
-		REQUIRE(setvarint(sh, "x", 0));
+		REQUIRE(sh.set_int_var("x", 0));
 		CHECK(eval("0&&(x=1)") == 0);
 		CHECK(var_int("x") == 0);
 	}
 
 	SECTION("&& evaluates rhs when lhs is true")
 	{
-		REQUIRE(setvarint(sh, "x", 0));
+		REQUIRE(sh.set_int_var("x", 0));
 		CHECK(eval("1&&(x=7)") == 1);
 		CHECK(var_int("x") == 7);
 	}
 
 	SECTION("|| short-circuits on true lhs")
 	{
-		REQUIRE(setvarint(sh, "x", 0));
+		REQUIRE(sh.set_int_var("x", 0));
 		CHECK(eval("1||(x=1)") == 1);
 		CHECK(var_int("x") == 0);
 	}
 
 	SECTION("|| evaluates rhs when lhs is false")
 	{
-		REQUIRE(setvarint(sh, "x", 0));
+		REQUIRE(sh.set_int_var("x", 0));
 		CHECK(eval("0||(x=9)") == 1);
 		CHECK(var_int("x") == 9);
 	}
@@ -147,8 +147,8 @@ TEST_CASE_METHOD(EvalFixture, "arith eval: conditional with short-circuit",
 {
 	SECTION("true condition takes then-branch")
 	{
-		REQUIRE(setvarint(sh, "t", 0));
-		REQUIRE(setvarint(sh, "e", 0));
+		REQUIRE(sh.set_int_var("t", 0));
+		REQUIRE(sh.set_int_var("e", 0));
 		CHECK(eval("1?(t=3):(e=4)") == 3);
 		CHECK(var_int("t") == 3);
 		CHECK(var_int("e") == 0);
@@ -156,8 +156,8 @@ TEST_CASE_METHOD(EvalFixture, "arith eval: conditional with short-circuit",
 
 	SECTION("false condition takes else-branch")
 	{
-		REQUIRE(setvarint(sh, "t", 0));
-		REQUIRE(setvarint(sh, "e", 0));
+		REQUIRE(sh.set_int_var("t", 0));
+		REQUIRE(sh.set_int_var("e", 0));
 		CHECK(eval("0?(t=3):(e=4)") == 4);
 		CHECK(var_int("t") == 0);
 		CHECK(var_int("e") == 4);
@@ -173,7 +173,7 @@ TEST_CASE_METHOD(EvalFixture, "arith eval: variables", "[arith][eval]")
 
 	SECTION("lookup of set variable")
 	{
-		REQUIRE(setvarint(sh, "n", 42));
+		REQUIRE(sh.set_int_var("n", 42));
 		CHECK(eval("n") == 42);
 	}
 }
@@ -205,14 +205,14 @@ TEST_CASE_METHOD(EvalFixture, "arith eval: assignment", "[arith][eval]")
 			Case{"v|=3", 8, 11},   /* 0b1000 |= 0b0011 */
 			Case{"v^=10", 12, 6}); /* 0b1100 ^= 0b1010 */
 
-		REQUIRE(setvarint(sh, "v", c.initial));
+		REQUIRE(sh.set_int_var("v", c.initial));
 		CHECK(eval(c.expr) == c.expected);
 		CHECK(var_int("v") == c.expected);
 	}
 
 	SECTION("compound assign division by zero")
 	{
-		REQUIRE(setvarint(sh, "v", 5));
+		REQUIRE(sh.set_int_var("v", 5));
 		CHECK_FALSE(eval_result("v/=0"));
 		CHECK(var_int("v") == 5);
 	}
@@ -223,7 +223,7 @@ TEST_CASE_METHOD(EvalFixture, "arith eval: nested expressions", "[arith][eval]")
 	CHECK(eval("(2+3)*(10-4)") == 30);
 	CHECK(eval("-((1+2)*3)") == -9);
 
-	REQUIRE(setvarint(sh, "a", 2));
+	REQUIRE(sh.set_int_var("a", 2));
 	CHECK(eval("a+=3*4") == 14);
 	CHECK(var_int("a") == 14);
 }

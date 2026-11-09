@@ -44,7 +44,7 @@ char *strchrnul(const char *s, int c)
 {
 	char *p = strchr(s, c);
 	if (!p)
-		p = (char *)s + strlen(s);
+		p = const_cast<char *>(s) + strlen(s);
 	return p;
 }
 #endif
@@ -54,8 +54,8 @@ char *strsignal(int sig)
 {
 	static char buf[19];
 
-	if ((unsigned)sig < NSIG && sys_siglist[sig])
-		return (char *)sys_siglist[sig];
+	if (static_cast<unsigned>(sig) < NSIG && sys_siglist[sig])
+		return const_cast<char *>(sys_siglist[sig]);
 	auto r = std::format_to_n(buf, sizeof(buf) - 1, "Signal {}", sig);
 	*r.out = '\0';
 	return buf;

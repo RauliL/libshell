@@ -67,11 +67,6 @@
 #endif
 #endif
 
-typedef void *pointer;
-#ifndef NULL
-#define NULL nullptr
-#endif
-
 #define MKINIT	/* empty */
 
 extern char nullstr[1];		/* null string */

@@ -145,6 +145,33 @@ struct ShellContext {
 	 */
 	shell::Result<std::intmax_t> arith(std::string_view expr);
 
+	/**
+	 * Returns value of a variable. Returns `nullptr` if not set.
+	 */
+	char* get_var(std::string_view name) const;
+
+	/**
+	 * Set the value of a variable. The flags argument is ORed with the flags
+	 * of the variable. If value is `std::nullopt`, the variable is unset.
+	 */
+	shell::Result<var *> set_var(
+		std::string_view name,
+		const std::optional<std::string>& value = std::nullopt,
+		VarFlags flags = {}
+	);
+
+	shell::Result<std::intmax_t> get_int_var(std::string_view name) const;
+
+	/**
+	 * Set the given integer as the value of a variable. The flags arugment is
+	 * ORed with the flags of the variable.
+	 */
+	shell::Result<std::intmax_t> set_int_var(
+		std::string_view name,
+		std::intmax_t value,
+		VarFlags flags = {}
+	);
+
 	std::optional<std::string_view> find_signal_name(int signal) const;
 
 	std::optional<int> find_signal_number(std::string_view name, int minsig) const;
@@ -152,5 +179,5 @@ struct ShellContext {
 
 inline char *bltinlookup(ShellContext &sh, std::string_view name)
 {
-	return lookupvar(sh, name);
+	return sh.get_var(name);
 }

@@ -202,7 +202,7 @@ testcmd(ShellContext &sh, int argc, char **argv)
 	if (*argv[0] == '[') {
 		if (*argv[--argc] != ']')
 			return error("missing ]");
-		argv[argc] = NULL;
+		argv[argc] = nullptr;
 	}
 
 recheck:
@@ -227,7 +227,7 @@ recheck:
 
 	case 4:
 		if (!strcmp(argv[0], "(") && !strcmp(argv[argc - 1], ")")) {
-			argv[--argc] = NULL;
+			argv[--argc] = nullptr;
 			argv++;
 			argc--;
 		} else if (!strcmp(argv[0], "!")) {
@@ -243,7 +243,7 @@ eval:
 	res ^= TRY_SH(oexpr(sh, st, n));
 	argv = st.wp;
 
-	if (argv[0] != NULL && argv[1] != NULL)
+	if (argv[0] != nullptr && argv[1] != nullptr)
 		return syntax(sh, argv[0], "unexpected operator");
 
 	return res;
@@ -318,12 +318,12 @@ primary(ShellContext &sh, TestState &st, enum token n)
 			return 0;	/* missing expression */
 		res = TRY_SH(oexpr(sh, st, nn));
 		if (t_lex(st, ++st.wp) != RPAREN)
-			return syntax(sh, NULL, "closing paren expected");
+			return syntax(sh, nullptr, "closing paren expected");
 		return res;
 	}
 	if (st.wp_op && st.wp_op->op_type == UNOP) {
 		/* unary expression */
-		if (*++st.wp == NULL)
+		if (*++st.wp == nullptr)
 			return syntax(sh, st.wp_op->op_text, "argument expected");
 		switch (n) {
 		case STREZ:
@@ -362,7 +362,7 @@ binop(ShellContext &sh, TestState &st)
 	t_lex(st, ++st.wp);
 	op = st.wp_op;
 
-	if ((opnd2 = *++st.wp) == (char *)0)
+	if ((opnd2 = *++st.wp) == nullptr)
 		return syntax(sh, op->op_text, "argument expected");
 
 	switch (op->op_num) {
@@ -704,7 +704,7 @@ int test_access(const struct stat64 *sp, int stmode)
 	else {
 		/* XXX stolen almost verbatim from ksh93.... */
 		/* on some systems you can be in several groups */
-		maxgroups = getgroups(0, NULL);
+		maxgroups = getgroups(0, nullptr);
 		std::vector<gid_t> groupvec(static_cast<size_t>(maxgroups));
 		n = getgroups(maxgroups, groupvec.data());
 		while (--n >= 0) {

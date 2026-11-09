@@ -779,7 +779,7 @@ eval(ShellContext &context, const Expr &expr, bool noeval)
 				if (noeval)
 					return 0;
 
-				const auto v = lookupvarint(context, node.name);
+				const auto v = context.get_int_var(node.name);
 
 				if (!v)
 					return tl::unexpected<std::string>("variable lookup failed");
@@ -864,7 +864,7 @@ eval(ShellContext &context, const Expr &expr, bool noeval)
 				std::intmax_t result = *rhs;
 
 				if (node.op != Op::Assign) {
-					const auto cur = lookupvarint(context, node.name);
+					const auto cur = context.get_int_var(node.name);
 					if (!cur)
 						return tl::unexpected<std::string>("variable lookup failed");
 
@@ -875,7 +875,7 @@ eval(ShellContext &context, const Expr &expr, bool noeval)
 					result = *combined;
 				}
 
-				if (const auto r = setvarint(context, node.name, result); !r)
+				if (const auto r = context.set_int_var(node.name, result); !r)
 					return tl::unexpected<std::string>("variable assignment failed");
 
 				return result;

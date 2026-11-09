@@ -136,7 +136,7 @@ struct event event[] = {
 	{"FORKRESET", "forkreset", forkreset, "const Node *n"},
 	{"POSTEXITRESET", "postexitreset", postexitreset},
 	{"RESET", "reset", reset},
-	{NULL, NULL}
+	{nullptr, nullptr}
 };
 
 
@@ -163,8 +163,6 @@ void *ckmalloc(int);
 char *savestr(char *);
 static void error(const char *);
 int main(int, char **);
-
-#define equal(s1, s2)	(strcmp(s1, s2) == 0)
 
 int
 main(int argc, char **argv)
@@ -198,7 +196,7 @@ readfile(char *fname)
 	curfile = fname;
 	linno = 0;
 	amiddecls = 0;
-	while (fgets(line, sizeof line, fp) != NULL) {
+	while (fgets(line, sizeof line, fp) != nullptr) {
 		linno++;
 		for (ep = event ; ep->name ; ep++) {
 			if (line[0] == ep->name[0] && match(ep->name, line)) {
@@ -281,9 +279,9 @@ doevent(struct event *ep, FILE *fp, char *fname)
 	addstr("      {\n", &ep->code);
 	for (;;) {
 		linno++;
-		if (fgets(line, sizeof line, fp) == NULL)
+		if (fgets(line, sizeof line, fp) == nullptr)
 			error("Unexpected EOF");
-		if (equal(line, "}\n"))
+		if (strcmp(line, "}\n") == 0)
 			break;
 		indent = 6;
 		for (p = line ; *p == '\t' ; p++)
@@ -324,8 +322,8 @@ doinclude(char *line)
 	*p = '\0';
 
 	/* name now contains the name of the include file */
-	for (pp = header_files ; *pp && ! equal(*pp, name) ; pp++);
-	if (*pp == NULL)
+	for (pp = header_files ; *pp && strcmp(*pp, name) != 0 ; pp++);
+	if (*pp == nullptr)
 		*pp = savestr(name);
 }
 
@@ -340,7 +338,7 @@ dodecl(char *line1, FILE *fp)
 		addchar('\n', &decls);
 		do {
 			linno++;
-			if (fgets(line, sizeof line, fp) == NULL)
+			if (fgets(line, sizeof line, fp) == nullptr)
 				error("Unterminated structure declaration");
 			addstr(line, &decls);
 		} while (line[0] != '}');
@@ -348,13 +346,13 @@ dodecl(char *line1, FILE *fp)
 	} else {
 		if (! amiddecls)
 			addchar('\n', &decls);
-		q = NULL;
-		for (p = line1 + 6 ; *p && strchr("=/\n", *p) == NULL; p++)
+		q = nullptr;
+		for (p = line1 + 6 ; *p && strchr("=/\n", *p) == nullptr; p++)
 			continue;
 		if (*p == '=') {		/* eliminate initialization */
 			for (q = p ; *q && *q != ';' ; q++);
 			if (*q == '\0')
-				q = NULL;
+				q = nullptr;
 			else {
 				while (p[-1] == ' ')
 					p--;
@@ -363,7 +361,7 @@ dodecl(char *line1, FILE *fp)
 		}
 		addstr("extern", &decls);
 		addstr(line1 + 6, &decls);
-		if (q != NULL)
+		if (q != nullptr)
 			addstr(q, &decls);
 		amiddecls = 1;
 	}
@@ -429,7 +427,7 @@ addchar(int c, struct text *text)
 
 	if (--text->nleft < 0) {
 		bp = static_cast<struct block *>(ckmalloc(sizeof *bp));
-		if (text->start == NULL)
+		if (text->start == nullptr)
 			text->start = bp;
 		else
 			text->last->next = bp;
@@ -448,7 +446,7 @@ writetext(struct text *text, FILE *fp)
 {
 	struct block *bp;
 
-	if (text->start != NULL) {
+	if (text->start != nullptr) {
 		for (bp = text->start ; bp != text->last ; bp = bp->next) {
 			if ((fwrite(bp->text, sizeof (char), BLOCKSIZE, fp)) != BLOCKSIZE)
 				error("Can't write data\n");
@@ -463,7 +461,7 @@ ckfopen(const char *file, const char *mode)
 {
 	FILE *fp;
 
-	if ((fp = fopen(file, mode)) == NULL) {
+	if ((fp = fopen(file, mode)) == nullptr) {
 		fprintf(stderr, "Can't open %s\n", file);
 		exit(2);
 	}
@@ -493,7 +491,7 @@ savestr(char *s)
 static void
 error(const char *msg)
 {
-	if (curfile != NULL)
+	if (curfile != nullptr)
 		fprintf(stderr, "%s:%d: ", curfile, linno);
 	fprintf(stderr, "%s\n", msg);
 	exit(2);

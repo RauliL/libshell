@@ -35,8 +35,6 @@
 /*
  * String functions.
  *
- *	equal(s1, s2)		Return true if strings are equal.
- *	scopy(from, to)		Copy a string.
  *	number(s)		Convert a string of digits to an integer.
  *	is_number(s)		Return true if s is a string of digits.
  */
@@ -66,15 +64,6 @@ const char cqchars[] = {
 	'\\',
 	CTLESC, CTLMBCHAR, CTLQUOTEMARK, 0
 };
-
-/*
- * equal - #defined in mystring.h
- */
-
-/*
- * scopy - #defined in mystring.h
- */
-
 
 /*
  * prefix -- see if pfx is a prefix of string.

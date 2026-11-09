@@ -214,12 +214,8 @@ void initvar(ShellContext &sh);
 shell::Result<struct var *> setvar(ShellContext &sh, const std::string &name,
 				       std::optional<std::string> val,
 				       VarFlags flags = {});
-shell::Result<intmax_t> setvarint(ShellContext &sh, const std::string &,
-				      intmax_t, VarFlags flags = {});
 shell::Result<struct var *> setvareq(ShellContext &sh, std::string s,
 					 VarFlags flags = {});
-char *lookupvar(ShellContext &sh, std::string_view name);
-shell::Result<intmax_t> lookupvarint(ShellContext &sh, std::string_view name);
 std::vector<char *> listvars(ShellContext &sh, VarFlags on, VarFlags off);
 inline std::vector<char *> environment(ShellContext &sh)
 {

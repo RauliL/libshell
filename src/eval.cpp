@@ -511,7 +511,7 @@ evalsubshell(ShellContext &sh, const Node *n, EvalFlags flags)
 	TRY_SHV(expredir(sh, as<Node::Redir>(n)->redirect.get()));
 	INTOFF(sh);
 	if (!backgnd && flags.test(EvalFlag::exit) && !have_traps(sh)) {
-		forkreset(sh, NULL);
+		forkreset(sh, nullptr);
 		goto nofork;
 	}
 	jp = makejob(sh, 1);
@@ -652,7 +652,7 @@ evalbackcmd(ShellContext &sh, Node *n, struct backcmd *result)
 	int pid;
 
 	*result = backcmd{};
-	if (n == NULL) {
+	if (n == nullptr) {
 		goto out;
 	}
 
@@ -788,7 +788,7 @@ evalcommand(ShellContext &sh, const Node::Command *cmd, EvalFlags flags)
 	spclbltin = -1;
 	vflags = {};
 	vlocal = 0;
-	path = NULL;
+	path = nullptr;
 
 	argc = 0;
 	argp = cmd->args.get();
@@ -850,7 +850,7 @@ evalcommand(ShellContext &sh, const Node::Command *cmd, EvalFlags flags)
 	argv_store.push_back(nullptr);
 	argv = argv_store.data() + 1;
 
-	lastarg = NULL;
+	lastarg = nullptr;
 	if (iflag && sh.funcline == 0 && argc > 0)
 		lastarg = argv[argc - 1];
 
@@ -910,7 +910,7 @@ bail:
 		TRY_SHV(find_command(sh, argv[0], &cmdentry, cmd_flag | DO_ERR, path));
 	}
 
-	jp = NULL;
+	jp = nullptr;
 
 	/* Execute the command. */
 	switch (cmdentry.cmdtype) {
@@ -976,7 +976,7 @@ evalbltin(ShellContext &sh, const struct builtincmd *cmd, int argc, char **argv,
 
 	sh.commandname = argv[0] ? argv[0] : "";
 	sh.bopt.argptr = argv + 1;
-	sh.bopt.optptr = NULL;			/* initialize nextopt */
+	sh.bopt.optptr = nullptr;			/* initialize nextopt */
 
 	shell::Result<int> r;
 	if (cmd == &builtin_eval)

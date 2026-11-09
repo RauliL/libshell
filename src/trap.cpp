@@ -108,7 +108,7 @@ trapcmd(ShellContext &sh, int argc, char **argv)
 		return EXIT_SUCCESS;
 	}
 	if (sh.ptrap)
-		TRY_SHV(clear_traps(sh, NULL));
+		TRY_SHV(clear_traps(sh, nullptr));
 	if (!ap[1] || decode_signum(sh, *ap) >= 0)
 		action = nullptr;
 	else

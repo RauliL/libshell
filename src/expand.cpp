@@ -157,7 +157,7 @@ preglob(ShellContext &sh, const char *pattern, int flag, ExpandBuf *eb = nullptr
 		flag |= RMESCAPE_ALLOC;
 	}
 	flag |= RMESCAPE_GLOB;
-	return _rmescapes(sh, (char *)pattern, flag, eb);
+	return _rmescapes(sh, const_cast<char *>(pattern), flag, eb);
 }
 
 
@@ -219,7 +219,7 @@ getpwhome(ShellContext &sh, const char *name)
 /*
  * Perform variable substitution and command substitution on an argument,
  * placing the resulting list of arguments in ArgList.  If EXP_FULL is true,
- * perform splitting and file name expansion.  When ArgList is NULL, perform
+ * perform splitting and file name expansion.  When ArgList is nullptr, perform
  * here document expansion.
  */
 
@@ -442,7 +442,7 @@ done:
 		goto out;
 	*p = '\0';
 	if (*name == '\0') {
-		home = lookupvar(sh, "HOME");
+		home = sh.get_var("HOME");
 	} else {
 		home = getpwhome(sh, name);
 	}
@@ -460,11 +460,11 @@ lose:
 shell::Result<void>
 removerecordregions(ShellContext &sh, int endoff)
 {
-	if (sh.expand.ifslastp == NULL)
+	if (sh.expand.ifslastp == nullptr)
 		return {};
 
 	if (sh.expand.ifsfirst.endoff > endoff) {
-		while (sh.expand.ifsfirst.next != NULL) {
+		while (sh.expand.ifsfirst.next != nullptr) {
 			struct ifsregion *ifsp;
 			INTOFF(sh);
 			ifsp = sh.expand.ifsfirst.next->next;
@@ -473,7 +473,7 @@ removerecordregions(ShellContext &sh, int endoff)
 			INTON(sh);
 		}
 		if (sh.expand.ifsfirst.begoff > endoff)
-			sh.expand.ifslastp = NULL;
+			sh.expand.ifslastp = nullptr;
 		else {
 			sh.expand.ifslastp = &sh.expand.ifsfirst;
 			sh.expand.ifsfirst.endoff = endoff;
@@ -484,7 +484,7 @@ removerecordregions(ShellContext &sh, int endoff)
 	sh.expand.ifslastp = &sh.expand.ifsfirst;
 	while (sh.expand.ifslastp->next && sh.expand.ifslastp->next->begoff < endoff)
 		sh.expand.ifslastp=sh.expand.ifslastp->next;
-	while (sh.expand.ifslastp->next != NULL) {
+	while (sh.expand.ifslastp->next != nullptr) {
 		struct ifsregion *ifsp;
 		INTOFF(sh);
 		ifsp = sh.expand.ifslastp->next->next;
@@ -564,7 +564,7 @@ expbackq(ShellContext &sh, ExpandBuf &eb, Node *cmd, int flag)
 	{
 		std::size_t su = eb.used;
 		eb.commit(startloc);
-		TRY_SHV(evalbackcmd(sh, cmd, (struct backcmd *) &in));
+		TRY_SHV(evalbackcmd(sh, cmd, &in));
 		eb.rewind(su);
 	}
 
@@ -893,7 +893,7 @@ again:
 	}
 
 	patloc = eb.dest - eb.base();
-	p = TRY_SH(subevalvar(sh, eb, p, NULL, patloc, startloc, varflags, flag));
+	p = TRY_SH(subevalvar(sh, eb, p, nullptr, patloc, startloc, varflags, flag));
 
 record:
 	if ((flag | discard) & EXP_DISCARD)
@@ -1151,7 +1151,7 @@ param:
 					   : sh.arg0.c_str());
 		goto value;
 	default:
-		p = lookupvar(sh, name);
+		p = sh.get_var(name);
 value:
 		if (!p)
 			return -1;
@@ -1178,12 +1178,12 @@ recordregion(ShellContext &sh, int start, int end, int nulonly)
 {
 	struct ifsregion *ifsp;
 
-	if (sh.expand.ifslastp == NULL) {
+	if (sh.expand.ifslastp == nullptr) {
 		ifsp = &sh.expand.ifsfirst;
 	} else {
 		INTOFF(sh);
-		ifsp = (struct ifsregion *)ckmalloc(sizeof (struct ifsregion));
-		ifsp->next = NULL;
+		ifsp = static_cast<ifsregion *>(ckmalloc(sizeof(ifsregion)));
+		ifsp->next = nullptr;
 		sh.expand.ifslastp->next = ifsp;
 		INTON_DEFER(sh);
 	}
@@ -1265,7 +1265,7 @@ ifsbreakup_slow(ShellContext &sh, struct ifs_state *ifst, ArgList *alist,
 	 * IFS whitespace.
 	 *
 	 * In any case, r indicates the start
-	 * of the characters to remove, or NULL
+	 * of the characters to remove, or nullptr
 	 * if no characters should be removed.
 	 */
 	if (!ifst->maxargs) {
@@ -1276,7 +1276,7 @@ ifsbreakup_slow(ShellContext &sh, struct ifs_state *ifst, ArgList *alist,
 		}
 
 		if (!(isifs && ifst->ifsspc))
-			ifst->r = NULL;
+			ifst->r = nullptr;
 	} else if (ifst->ifsspc) {
 		if (isifs)
 			q = p;
@@ -1329,10 +1329,10 @@ ifsbreakup(ShellContext &sh, char *string, int maxargs, ArgList *alist)
 	int nulonly;
 	char *p;
 
-	ifst.r = NULL;
+	ifst.r = nullptr;
 	ifst.start = string;
 	ifst.maxargs = maxargs;
-	if (sh.expand.ifslastp != NULL) {
+	if (sh.expand.ifslastp != nullptr) {
 		ifst.ifsspc = 0;
 		nulonly = 0;
 		realifs = sh.expand.ncifs;
@@ -1372,7 +1372,7 @@ ifsbreakup(ShellContext &sh, char *string, int maxargs, ArgList *alist)
 
 				if (p != p0) {
 					if (!ifst.maxargs)
-						ifst.r = NULL;
+						ifst.r = nullptr;
 					else if (ifst.ifsspc)
 						ifst.start = p0;
 					ifst.ifsspc = 0;
@@ -1384,7 +1384,7 @@ ifsbreakup(ShellContext &sh, char *string, int maxargs, ArgList *alist)
 				p = ifsbreakup_slow(sh, &ifst, alist,
 						    afternul | nulonly, p);
 			}
-		} while ((ifsp = ifsp->next) != NULL);
+		} while ((ifsp = ifsp->next) != nullptr);
 		if (nulonly)
 			goto add;
 		if (ifst.r)
@@ -1413,11 +1413,11 @@ ifsfree(ShellContext &sh)
 		ckfree(p);
 		p = ifsp;
 	} while (p);
-	sh.expand.ifsfirst.next = NULL;
+	sh.expand.ifsfirst.next = nullptr;
 	INTON_DEFER(sh);
 
 out:
-	sh.expand.ifslastp = NULL;
+	sh.expand.ifslastp = nullptr;
 }
 
 void
@@ -1668,7 +1668,7 @@ memrchr(ShellContext &sh, const void *s, int c, size_t n)
 	for (cp = str + n - 1; cp >= str; cp--)
 		if (*cp == c)
 			return cp;
-	return NULL;
+	return nullptr;
 }
 #endif
 

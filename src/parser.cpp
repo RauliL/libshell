@@ -804,8 +804,8 @@ parsefname(ShellContext &sh)
 		TRACE(("Here document %d\n", n->type));
 		rmescapes(sh.parse.wordtext.data());
 		here->eofmark = sh.parse.wordtext;
-		here->next = NULL;
-		if (sh.parse.heredoclist == NULL)
+		here->next = nullptr;
+		if (sh.parse.heredoclist == nullptr)
 			sh.parse.heredoclist = here;
 		else {
 			for (p = sh.parse.heredoclist ; p->next ; p = p->next);
@@ -1134,8 +1134,8 @@ dollarsq_escape(ShellContext &sh, char *out)
 }
 
 /*
- * If eofmark is NULL, read a word or a redirection symbol.  If eofmark
- * is not NULL, read a here document.  In the latter case, eofmark is the
+ * If eofmark is nullptr, read a word or a redirection symbol.  If eofmark
+ * is not nullptr, read a here document.  In the latter case, eofmark is the
  * word which marks the end of the document and striptabs is true if
  * leading tabs should be stripped from the document.  The argument firstc
  * is the first character of the input token or document.
@@ -1233,7 +1233,7 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 					c != '\\' && c != '`' &&
 					c != '$' && (
 						c != '"' ||
-						(eofmark != NULL &&
+						(eofmark != nullptr &&
 						 !synstack->varnest)
 					) && (
 						c != '}' ||
@@ -1257,7 +1257,7 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 csquote:
 				synstack->syntax = SQSYNTAX;
 quotemark:
-				if (eofmark == NULL) {
+				if (eofmark == nullptr) {
 					(*(out)++ = (CTLQUOTEMARK));
 				}
 				break;
@@ -1353,7 +1353,7 @@ end_backq:
 endword:
 	if (synstack->syntax == ARISYNTAX)
 		synerror(sh, "Missing '))'");
-	if ((synstack->syntax != BASESYNTAX && eofmark == NULL) ||
+	if ((synstack->syntax != BASESYNTAX && eofmark == nullptr) ||
 	    synstack->backq)
 		synerror(sh, "Unterminated quoted string");
 	if (synstack->varnest != 0) {
@@ -1363,7 +1363,7 @@ endword:
 	(*(out)++ = ('\0'));
 	len = out - eb.base();
 	out = eb.base();
-	if (eofmark == NULL) {
+	if (eofmark == nullptr) {
 		if ((c == '>' || c == '<')
 		 && quotef == 0
 		 && len <= 2
@@ -1426,7 +1426,7 @@ more_heredoc:
 					char *str;
 
 					str = static_cast<char *>(alloca(len + 1));
-					*(char *)mempcpy(str, p, len) = 0;
+					*static_cast<char *>(mempcpy(str, p, len)) = 0;
 
 					pushstring(sh, str, nullptr);
 				}
@@ -1608,7 +1608,7 @@ varname:
 				/*FALLTHROUGH*/
 			default:
 				p = std::strchr(types, c);
-				if (p == NULL)
+				if (p == nullptr)
 					break;
 				subtype |= p - types + VSNORMAL;
 				break;
@@ -1743,7 +1743,7 @@ parsebackq: {
 		setinputstring(sh, pstr);
         }
 	saveheredoclist = sh.parse.heredoclist;
-	sh.parse.heredoclist = NULL;
+	sh.parse.heredoclist = nullptr;
 
 	if (oldstyle) {
 		saveprompt = sh.parse.doprompt;
@@ -1912,11 +1912,10 @@ expandstr(ShellContext &sh, const char *ps)
 
 	file_stop = sh.input.current;
 
-	/* XXX Fix (char *) cast. */
-	setinputstring(sh, (char *)ps);
+	setinputstring(sh, result.data());
 
 	saveheredoclist = sh.parse.heredoclist;
-	sh.parse.heredoclist = NULL;
+	sh.parse.heredoclist = nullptr;
 	saveprompt = sh.parse.doprompt;
 	sh.parse.doprompt = 0;
 	sh.parse.needprompt = 0;

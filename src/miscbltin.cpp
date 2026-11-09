@@ -126,7 +126,7 @@ readcmd(ShellContext &sh, int argc, char **argv)
 	int i;
 
 	rflag = 0;
-	prompt = NULL;
+	prompt = nullptr;
 	while ((i = TRY_SH(nextopt(sh, "p:r"))) != '\0') {
 		if (i == 'p')
 			prompt = sh.bopt.optionarg;
@@ -139,7 +139,7 @@ readcmd(ShellContext &sh, int argc, char **argv)
 		flushall(sh);
 #endif
 	}
-	if (*(ap = sh.bopt.argptr) == NULL)
+	if (*(ap = sh.bopt.argptr) == nullptr)
 		return sh_error(sh, "arg count");
 
 	status = 0;
@@ -173,7 +173,7 @@ readcmd(ShellContext &sh, int argc, char **argv)
 			goto put;
 		}
 		if (!rflag && c == '\\') {
-			newloc = p - (char *)eb.base();
+			newloc = p - eb.base();
 			continue;
 		}
 		if (c == '\n')
@@ -187,12 +187,12 @@ record:
 		if (newloc >= startloc) {
 			recordregion(sh, startloc, newloc, 0);
 start:
-			startloc = p - (char *)eb.base();
+			startloc = p - eb.base();
 			newloc = startloc - 1;
 		}
 	}
 	popfile(sh);
-	recordregion(sh, startloc, p - (char *)eb.base(), 0);
+	recordregion(sh, startloc, p - eb.base(), 0);
 	eb.putc_nul(p);
 	TRY_SHV(readcmd_handle_line(sh, eb, p + 1, argc - (ap - argv), ap));
 	return status;
@@ -226,7 +226,7 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 	umask(mask);
 	INTON(sh);
 
-	if ((ap = *sh.bopt.argptr) == NULL) {
+	if ((ap = *sh.bopt.argptr) == nullptr) {
 		if (symbolic_mode) {
 			char buf[18];
 			int j;
@@ -382,7 +382,7 @@ static const struct limits limits[] = {
 #ifdef RLIMIT_RTPRIO
 	{ "rtprio",			RLIMIT_RTPRIO,	   1, 'r' },
 #endif
-	{ (char *) 0,			0,		   0,  '\0' }
+	{ nullptr,			0,		   0,  '\0' }
 };
 
 enum limtype : int { SOFT = 0x1, HARD = 0x2 };
@@ -401,7 +401,7 @@ printlim(ShellContext &sh, enum limtype how, const struct rlimit *limit,
 		out1str("unlimited\n");
 	else {
 		val /= l->factor;
-		out1fmt(sh, "%" PRIdMAX "\n", (intmax_t) val);
+		out1fmt(sh, "%" PRIdMAX "\n", static_cast<intmax_t>(val));
 	}
 }
 
@@ -485,7 +485,7 @@ ulimitcmd(ShellContext &sh, int argc, char **argv)
 
 			while ((c = *p++) >= '0' && c <= '9')
 			{
-				val = (val * 10) + (long)(c - '0');
+				val = (val * 10) + static_cast<long>(c - '0');
 				if (val < (rlim_t) 0)
 					break;
 			}

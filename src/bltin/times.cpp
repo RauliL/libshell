@@ -18,19 +18,19 @@ timescmd(ShellContext &sh, int argc, char *argv[])
 
 	times(&buf);
 
-	utime = (double)buf.tms_utime / clk_tck;
+	utime = static_cast<double>(buf.tms_utime) / clk_tck;
 	mutime = utime / 60;
 	utime -= mutime * 60.0;
 
-	stime = (double)buf.tms_stime / clk_tck;
+	stime = static_cast<double>(buf.tms_stime) / clk_tck;
 	mstime = stime / 60;
 	stime -= mstime * 60.0;
 
-	cutime = (double)buf.tms_cutime / clk_tck;
+	cutime = static_cast<double>(buf.tms_cutime) / clk_tck;
 	mcutime = cutime / 60;
 	cutime -= mcutime * 60.0;
 
-	cstime = (double)buf.tms_cstime / clk_tck;
+	cstime = static_cast<double>(buf.tms_cstime) / clk_tck;
 	mcstime = cstime / 60;
 	cstime -= mcstime * 60.0;
 

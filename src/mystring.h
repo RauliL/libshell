@@ -37,7 +37,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <string_view>
 
@@ -70,13 +69,3 @@ bool is_number(std::string_view);
 std::string single_quote(std::string_view);
 int pstrcmp(const void *, const void *);
 std::string ascii_upper(std::string_view);
-
-inline bool equal(const char *s1, const char *s2)
-{
-	return std::string_view(s1) == s2;
-}
-
-inline void scopy(const char *from, char *to)
-{
-	std::strcpy(to, from);
-}

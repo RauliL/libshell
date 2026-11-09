@@ -92,7 +92,7 @@ changelocale(ShellContext &, std::string_view val)
 }
 
 static int vpcmp(const void *, const void *);
-static var *findvar(ShellContext &sh, std::string_view name);
+static var *findvar(const ShellContext &sh, std::string_view name);
 
 /* Name part of "name" or "name=value". */
 static std::string_view
@@ -132,7 +132,7 @@ INIT {
 
 	setvareq(sh, std::format("PPID={}", getppid()));
 
-	p = lookupvar(sh, "PWD");
+	p = sh.get_var("PWD");
 	if (p)
 		if (*p != '/' || stat64(p, &st1) || stat64(".", &st2) ||
 		    st1.st_dev != st2.st_dev || st1.st_ino != st2.st_ino)
@@ -173,8 +173,11 @@ varfunc(ShellContext &sh, struct var *vp)
 void
 initvar(ShellContext &sh)
 {
-	auto add = [&](VarFlags flags, const char *text,
-		       void (*func)(ShellContext &, std::string_view)) {
+	auto add = [&](
+		VarFlags flags,
+		const char *text,
+		void (*func)(ShellContext &, std::string_view)
+	) {
 		std::string nameeq(text);
 		std::string name(varname(nameeq));
 		var v;
@@ -212,51 +215,55 @@ initvar(ShellContext &sh)
 		sh.variables.at("PS1").text = "PS1=# ";
 }
 
-/*
- * Set the value of a variable.  The flags argument is ored with the
- * flags of the variable.  If val is nullopt, the variable is unset.
- */
-
-shell::Result<struct var *>
-setvar(ShellContext &sh, const std::string &name, std::optional<std::string> val,
-       VarFlags flags)
+shell::Result<var *>
+ShellContext::set_var(
+	std::string_view name,
+	const std::optional<std::string>& value,
+	VarFlags flags
+)
 {
-	size_t namelen = endofname(name);
-	if (!namelen || (namelen < name.size() && name[namelen] != '='))
-		return sh_error(sh, "{}: bad variable name",
-				std::string_view(name.c_str(), namelen ? namelen : name.size()));
+	const auto namelen = endofname(name);
+	var* variable;
 
-	if (!val)
+	if (!namelen || (namelen < name.size() && name[namelen] != '='))
+		return sh_error(
+			*this,
+			"{}: bad variable name",
+			std::string_view(name.data(), namelen ? namelen : name.size())
+		);
+
+	if (!value)
 		flags |= VarFlag::unset;
 
 	/* Always store name=value (empty value when unset). */
 	std::string nameeq;
-	nameeq.reserve(namelen + 1 + (val ? val->size() : 0));
+	nameeq.reserve(namelen + 1 + (value ? value->size() : 0));
 	nameeq.assign(name, 0, namelen);
 	nameeq.push_back('=');
-	if (val)
-		nameeq += *val;
+	if (value)
+		nameeq += *value;
 
-	INTOFF(sh);
-	struct var *vp = TRY_SH(setvareq(sh, std::move(nameeq), flags));
-	INTON(sh);
+	INTOFF(*this);
+	variable = TRY_SH(setvareq(*this, std::move(nameeq), flags));
+	INTON(*this);
 
-	return vp;
+	return variable;
 }
 
-/*
- * Set the given integer as the value of a variable.  The flags argument is
- * ored with the flags of the variable.
- */
-
-shell::Result<intmax_t>
-setvarint(ShellContext &sh, const std::string &name, intmax_t val, VarFlags flags)
+shell::Result<var *>
+setvar(ShellContext &sh, const std::string &name, std::optional<std::string> val,
+       VarFlags flags)
 {
-	TRY_SHV(setvar(sh, name, std::format("{}", val), flags));
-	return val;
+	return sh.set_var(name, val, flags);
 }
 
+shell::Result<std::intmax_t>
+ShellContext::set_int_var(std::string_view name, std::intmax_t value, VarFlags flags)
+{
+	TRY_SHV(set_var(name, std::format("{}", value), flags));
 
+	return value;
+}
 
 /*
  * Same as setvar except that the variable and value are passed in
@@ -317,34 +324,30 @@ setvareq(ShellContext &sh, std::string s, VarFlags flags)
 	return vp;
 }
 
-/*
- * Find the value of a variable.  Returns NULL if not set.
- */
-
 char *
-lookupvar(ShellContext &sh, std::string_view name)
+ShellContext::get_var(std::string_view name) const
 {
-	auto v = findvar(sh, name);
+	const auto variable = findvar(*this, name);
 
-	if (v && !v->flags.test(VarFlag::unset)) {
+	if (variable && !variable->flags.test(VarFlag::unset)) {
 #ifdef WITH_LINENO
 		if (name == "LINENO")
-			v->text = std::format("LINENO={}", sh.lineno);
+			variable->text = std::format("LINENO={}", lineno);
 #endif
-		return const_cast<char *>(strchrnul(v->text.c_str(), '=')) + 1;
+
+		return const_cast<char *>(strchrnul(variable->text.c_str(), '=')) + 1;
 	}
-	return NULL;
+
+	return nullptr;
 }
 
-shell::Result<intmax_t>
-lookupvarint(ShellContext &sh, std::string_view name)
+shell::Result<std::intmax_t>
+ShellContext::get_int_var(std::string_view name) const
 {
-	const auto var = lookupvar(sh, name);
+	const auto value = get_var(name);
 
-	return atomax(sh, var ? var : "", 0);
+	return atomax(const_cast<ShellContext &>(*this), value ? value : "", 0);
 }
-
-
 
 /*
  * Generate a list of variables satisfying the given conditions.
@@ -401,7 +404,7 @@ showvars(ShellContext &sh, std::string_view prefix, VarFlags on, VarFlags off)
 		}
 
 		out1fmt(sh, "%s%s%.*s%s\n", prefix_str.c_str(), sep,
-			(int)(p - *ep), *ep, q);
+			static_cast<int>(p - *ep), *ep, q);
 	}
 
 	return 0;
@@ -425,7 +428,7 @@ exportcmd(ShellContext &sh, int argc, char **argv)
 	notp = TRY_SH(nextopt(sh, "p")) - 'p';
 	if (notp && ((name = *(aptr = sh.bopt.argptr)))) {
 		do {
-			if ((p = strchr(name, '=')) != NULL) {
+			if ((p = strchr(name, '=')) != nullptr) {
 				p++;
 			} else {
 				if (auto vp = findvar(sh, name)) {
@@ -433,11 +436,8 @@ exportcmd(ShellContext &sh, int argc, char **argv)
 					continue;
 				}
 			}
-			TRY_SHV(setvar(sh, name,
-				       p ? std::optional<std::string>(p)
-					 : std::nullopt,
-				       flag));
-		} while ((name = *++aptr) != NULL);
+			TRY_SHV(sh.set_var(name, p ? std::optional<std::string>(p) : std::nullopt, flag));
+		} while ((name = *++aptr) != nullptr);
 	} else {
 		TRY_SHV(showvars(sh, argv[0], flag, {}));
 	}
@@ -458,7 +458,7 @@ localcmd(ShellContext &sh, int argc, char **argv)
 		return sh_error(sh, "not in a function");
 
 	argv = sh.bopt.argptr;
-	while ((name = *argv++) != NULL) {
+	while ((name = *argv++) != nullptr) {
 		TRY_SHV(mklocal(sh, name));
 	}
 	return 0;
@@ -657,9 +657,10 @@ vpcmp(const void *a, const void *b)
 }
 
 static var *
-findvar(ShellContext &sh, std::string_view name)
+findvar(const ShellContext &sh, std::string_view name)
 {
 	auto it = sh.variables.find(std::string(varname(name)));
 
-	return it != std::end(sh.variables) ? &it->second : nullptr;
+	return it != std::end(sh.variables) ? const_cast<var *>(&it->second)
+					   : nullptr;
 }

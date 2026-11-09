@@ -218,7 +218,7 @@ pgetc(ShellContext &sh, InputStack &in)
 
 again:
 	if (in.current->unget) {
-		long unget = -(long)(unsigned)in.current->unget--;
+		long unget = -static_cast<long>(static_cast<unsigned>(in.current->unget--));
 
 		return (signed char)in.current->nextc[unget];
 	}

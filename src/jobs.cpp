@@ -476,7 +476,7 @@ makejob(ShellContext &sh, int nprocs)
 /*
  * Fork off a subshell.  Jp is a job structure that the job is to be added to.
  * N is the command that will be evaluated by the child.  Both jp and n may
- * be NULL.  The mode parameter can be one of the following:
+ * be nullptr.  The mode parameter can be one of the following:
  *	FORK_FG - Fork off a foreground process.
  *	FORK_BG - Fork off a background process.
  *	FORK_NOJOB - Like FORK_FG, but keep the command node across fork reset
@@ -501,7 +501,7 @@ forkchild(ShellContext &sh, Job *jp, const Node *n, int mode)
 		sh.mypid = 0;
 		sh.shlvl++;
 
-		forkreset(sh, mode == FORK_NOJOB ? n : NULL);
+		forkreset(sh, mode == FORK_NOJOB ? n : nullptr);
 	}
 
 	if (mode == FORK_BG) {
@@ -729,9 +729,9 @@ waitproc(ShellContext &sh, int block, int *status)
 		sh.gotsigchld = 0;
 		do
 #ifdef HAVE_WAIT3
-			err = wait3(status, flags, NULL);
+			err = wait3(status, flags, nullptr);
 #else
-			err = waitpid((pid_t)-1, status, flags, NULL);
+			err = waitpid(static_cast<pid_t>(-1), status, flags, nullptr);
 #endif
 		while (err < 0 && errno == EINTR);
 

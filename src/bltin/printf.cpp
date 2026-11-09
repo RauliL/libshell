@@ -39,6 +39,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string_view>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -66,7 +67,7 @@ static void check_conversion(ShellContext &sh, PrintfState &, const char *,
 #include "system.h"
 
 #define PF(f, func) { \
-	switch ((char *)param - (char *)array) { \
+	switch (reinterpret_cast<char *>(param) - reinterpret_cast<char *>(array)) { \
 	default: \
 		printf(f, array[0], array[1], func); \
 		break; \
@@ -81,7 +82,7 @@ static void check_conversion(ShellContext &sh, PrintfState &, const char *,
 
 #define ASPF(out, f, func) ({ \
 	shell::Result<int> ret; \
-	switch ((char *)param - (char *)array) { \
+	switch (reinterpret_cast<char *>(param) - reinterpret_cast<char *>(array)) { \
 	default: \
 		ret = xasprintf(sh, out, f, array[0], array[1], func); \
 		break; \
@@ -513,7 +514,7 @@ getuintmax(ShellContext &sh, PrintfState &st, int sign)
 	char *cp, *ep;
 
 	cp = *st.gargv;
-	if (cp == NULL)
+	if (cp == nullptr)
 		goto out;
 	st.gargv++;
 
@@ -535,7 +536,7 @@ getdouble(ShellContext &sh, PrintfState &st)
 	char *cp, *ep;
 
 	cp = *st.gargv;
-	if (cp == NULL)
+	if (cp == nullptr)
 		return 0;
 	st.gargv++;
 
@@ -570,7 +571,7 @@ echocmd(ShellContext &sh, int argc, char **argv)
 	const char *lastfmt = "%s\n";
 	int nonl;
 
-	if (*++argv && equal(*argv, "-n")) {
+	if (*++argv && std::string_view(*argv) == "-n") {
 		argv++;
 		lastfmt = "%s";
 	}
@@ -582,7 +583,7 @@ echocmd(ShellContext &sh, int argc, char **argv)
 		if (!s || !*++argv)
 			fmt = lastfmt;
 
-		nonl = TRY_SH(print_escape_str(sh, fmt, NULL, NULL, s ? s : ""));
+		nonl = TRY_SH(print_escape_str(sh, fmt, nullptr, nullptr, s ? s : ""));
 	} while (!nonl && *argv);
 	return 0;
 }

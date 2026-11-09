@@ -64,7 +64,7 @@ struct synclass synclass[] = {
 	{ "CEOF",	"end of file" },
 	{ "CCTL",	"like CWORD, except it must be escaped" },
 	{ "CSPCL",	"these terminate a word" },
-	{ NULL,		NULL }
+	{ nullptr,		nullptr }
 };
 
 
@@ -78,7 +78,7 @@ struct synclass is_entry[] = {
 	{ "ISLOWER",	"a lower case letter" },
 	{ "ISUNDER",	"an underscore" },
 	{ "ISSPECL",	"the name of a special parameter" },
-	{ NULL, 	NULL }
+	{ nullptr, 	nullptr }
 };
 
 static char writer[] = "\
@@ -107,11 +107,11 @@ main(int argc, char **argv)
 	int pos;
 
 	/* Create output files */
-	if ((cfile = fopen("syntax.cpp", "w")) == NULL) {
+	if ((cfile = fopen("syntax.cpp", "w")) == nullptr) {
 		perror("syntax.cpp");
 		exit(2);
 	}
-	if ((hfile = fopen("syntax.h", "w")) == NULL) {
+	if ((hfile = fopen("syntax.h", "w")) == nullptr) {
 		perror("syntax.h");
 		exit(2);
 	}
@@ -295,7 +295,7 @@ static const char *macro[] = {
 	"#define is_name(c)\t((c) == '_' || isalpha((unsigned char)(c)))\n",
 	"#define is_in_name(c)\t((c) == '_' || isalnum((unsigned char)(c)))\n",
 	"#define is_special(c)\t((is_type+SYNBASE)[(signed char)(c)] & (ISSPECL|ISDIGIT))\n",
-	NULL
+	nullptr
 };
 
 static void

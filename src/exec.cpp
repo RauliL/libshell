@@ -98,14 +98,14 @@ shellexec(ShellContext &sh, char **argv, const char *path, int idx)
 	char **envp = env.data();
 	int exerrno;
 
-	if (strchr(argv[0], '/') != NULL) {
+	if (strchr(argv[0], '/') != nullptr) {
 		tryexec(sh, argv[0], argv, envp);
 		e = errno;
 	} else {
 		e = ENOENT;
 		std::string candidate;
 		while (padvance(sh, &path, argv[0], candidate) >= 0) {
-			if (--idx < 0 && sh.pathopt == NULL) {
+			if (--idx < 0 && sh.pathopt == nullptr) {
 				tryexec(sh, candidate.data(), argv, envp);
 				if (errno != ENOENT && errno != ENOTDIR)
 					e = errno;
@@ -158,7 +158,7 @@ legal_pathopt(ShellContext &sh, const char *opt, const char *term, int magic)
 {
 	switch (magic) {
 	case 0:
-		opt = NULL;
+		opt = nullptr;
 		break;
 
 	case 1:
@@ -183,7 +183,7 @@ legal_pathopt(ShellContext &sh, const char *opt, const char *term, int magic)
  * the possible path expansions in sequence.  If an option (indicated by
  * a percent sign) appears in the path entry then the global variable
  * sh.pathopt will be set to point to it; otherwise sh.pathopt will be set to
- * NULL.
+ * nullptr.
  *
  * If magic is 0 then sh.pathopt recognition will be disabled.  If magic is
  * 1 we shall recognise %builtin/%func.  Otherwise we shall accept any
@@ -202,10 +202,10 @@ padvance_magic(ShellContext &sh, const char **path, const char *name, int magic,
 	const char *start;
 	size_t len;
 
-	if (*path == NULL)
+	if (*path == nullptr)
 		return -1;
 
-	lpathopt = NULL;
+	lpathopt = nullptr;
 	start = *path;
 
 	if (*start == '%' && (p = legal_pathopt(sh, start + 1, term, magic))) {
@@ -229,7 +229,7 @@ padvance_magic(ShellContext &sh, const char **path, const char *name, int magic,
 	}
 
 	sh.pathopt = lpathopt;
-	*path = *p == ':' ? p + 1 : NULL;
+	*path = *p == ':' ? p + 1 : nullptr;
 
 	out.clear();
 	if (likely(len)) {
@@ -275,7 +275,7 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 		return 0;
 	}
 
-	if (*sh.bopt.argptr == NULL) {
+	if (*sh.bopt.argptr == nullptr) {
 		for (const auto &cmd : sh.cmdtable) {
 			if (cmd.second.cmdtype == CMDNORMAL)
 				printentry(sh, cmd.first, cmd.second);
@@ -283,7 +283,7 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 		return 0;
 	}
 	c = 0;
-	while ((name = *sh.bopt.argptr) != NULL) {
+	while ((name = *sh.bopt.argptr) != nullptr) {
 		tblentry *cmdp = cmdlookup(sh, name, 0);
 		if (cmdp && hash_affected(*cmdp, sh.builtinloc))
 			delete_cmd_entry(sh, name);
@@ -347,7 +347,7 @@ find_command(ShellContext &sh, char *name, struct cmdentry *entry, int act, cons
 	const builtincmd *bcmd;
 
 	/* If name contains a slash, don't use PATH or hash table */
-	if (strchr(name, '/') != NULL) {
+	if (strchr(name, '/') != nullptr) {
 		entry->u.index = -1;
 		if (act & DO_ABS) {
 			while (stat64(name, &statb) < 0) {
@@ -371,7 +371,7 @@ absfail:
 		act |= DO_ALTPATH;
 
 	/* If name is in the table, check answer will be ok */
-	if ((cmdp = cmdlookup(sh, name, 0)) != NULL) {
+	if ((cmdp = cmdlookup(sh, name, 0)) != nullptr) {
 		int bit;
 
 		switch (cmdp->cmdtype) {
@@ -395,7 +395,7 @@ absfail:
 				goto fail;
 
 			updatetbl = 0;
-			cmdp = NULL;
+			cmdp = nullptr;
 		} else if (!cmdp->rehash)
 			/* if not invalidated by cd, we're done */
 			goto success;
@@ -457,7 +457,7 @@ loop:
 		if (lpathopt) {		/* this is a %func directory */
 			std::string pathcopy(fullname);
 			TRY_SHV(readcmdfile(sh, pathcopy.data()));
-			if ((cmdp = cmdlookup(sh, name, 0)) == NULL ||
+			if ((cmdp = cmdlookup(sh, name, 0)) == nullptr ||
 			    cmdp->cmdtype != CMDFUNCTION)
 				return sh_error(sh, "{} not defined in {}", name,
 					 pathcopy);
@@ -681,7 +681,7 @@ typecmd(ShellContext &sh, int argc, char **argv)
 
 	TRY_SHV(nextopt(sh, ""));
 	while (*sh.bopt.argptr) {
-		err |= TRY_SH(describe_command(sh, sh.out1, *sh.bopt.argptr++, NULL, 1));
+		err |= TRY_SH(describe_command(sh, sh.out1, *sh.bopt.argptr++, nullptr, 1));
 	}
 	return err;
 }
@@ -717,14 +717,14 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 	/* Then if the standard search path is used, check if it is
 	 * a tracked alias.
 	 */
-	if (path == NULL) {
+	if (path == nullptr) {
 		path = pathval(sh);
 		cmdp = cmdlookup(sh, command, 0);
 	} else {
-		cmdp = NULL;
+		cmdp = nullptr;
 	}
 
-	if (cmdp != NULL) {
+	if (cmdp != nullptr) {
 		entry.cmdtype = cmdp->cmdtype;
 		entry.u = cmdp->param;
 	} else {
@@ -804,7 +804,7 @@ commandcmd(ShellContext &sh, int argc, char **argv)
 		VERIFY_VERBOSE = 2,
 	};
 	int verify = 0;
-	const char *path = NULL;
+	const char *path = nullptr;
 
 	while ((c = TRY_SH(nextopt(sh, "pvV"))) != '\0')
 		if (c == 'V')
