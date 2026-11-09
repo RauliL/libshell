@@ -5,14 +5,21 @@ on:
 
 jobs:
   build-and-test:
-    name: ${{ matrix.os }}
+    name: ${{ matrix.os }} (${{ matrix.cxx }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+          - os: ubuntu-latest
+            cc: clang
+            cxx: clang++
+          - os: macos-latest
+            cc: clang
+            cxx: clang++
 
     steps:
       - name: Checkout
@@ -21,15 +28,19 @@ jobs:
       - name: Cache FetchContent dependencies
         uses: actions/cache@v4
         with:
+          # .deps holds FetchContent *-src and compiler-specific *-build
+          # trees, so the key must include the toolchain.
           path: .deps
-          key: fetchcontent-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt') }}
+          key: fetchcontent-${{ runner.os }}-${{ matrix.cxx }}-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt') }}
           restore-keys: |
-            fetchcontent-${{ runner.os }}-
+            fetchcontent-${{ runner.os }}-${{ matrix.cxx }}-
 
       - name: Configure
         run: >
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=${{ matrix.cc }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
           -DBUILD_TESTING=ON
           -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/.deps
 
