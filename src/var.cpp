@@ -48,6 +48,9 @@
 #ifdef HAVE_PATHS_H
 #endif
 
+/* macOS does not declare environ in a public header. */
+extern char **environ;
+
 /*
  * Shell variables.
  */

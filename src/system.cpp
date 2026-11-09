@@ -37,7 +37,7 @@
 #ifndef HAVE_MEMPCPY
 void *mempcpy(void *dest, const void *src, size_t n)
 {
-	return memcpy(dest, src, n) + n;
+	return static_cast<char *>(std::memcpy(dest, src, n)) + n;
 }
 #endif
 

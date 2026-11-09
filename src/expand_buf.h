@@ -102,7 +102,8 @@ struct ExpandBuf {
 	char *nputs(const char *s, std::size_t n, char *p)
 	{
 		p = makespace(n, p);
-		return static_cast<char *>(mempcpy(p, s, n));
+		std::memcpy(p, s, n);
+		return p + n;
 	}
 
 	char *puts(const char *s, char *p)

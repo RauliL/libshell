@@ -1456,6 +1456,7 @@ opendir_interruptible(Context &sh, const char *pathname)
 } // namespace
 
 #else
+#undef GLOB_ALTDIRFUNC
 #define GLOB_ALTDIRFUNC 0
 #endif
 
@@ -1629,14 +1630,14 @@ expmeta_rmescapes(Context &sh, char *enddir, const char *name)
 #ifndef HAVE_MEMRCHR
 namespace {
 void *
-memrchr(Context &sh, const void *s, int c, size_t n)
+memrchr(const void *s, int c, size_t n)
 {
-	const unsigned char *str = s;
-	const unsigned char *cp;
+	const auto *str = static_cast<const unsigned char *>(s);
+	const unsigned char *cp = str + n;
 
-	for (cp = str + n - 1; cp >= str; cp--)
-		if (*cp == c)
-			return cp;
+	while (cp > str)
+		if (*--cp == static_cast<unsigned char>(c))
+			return const_cast<unsigned char *>(cp);
 	return nullptr;
 }
 } // namespace
