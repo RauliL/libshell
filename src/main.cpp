@@ -40,7 +40,9 @@
 #include "shell.h"
 
 #ifdef __GLIBC__
-int *dash_errno;
+/* Set by ShellContext before library code runs; default avoids a null deref
+ * if something touches errno during static init. */
+int *dash_errno = __errno_location();
 #endif
 #include "shell_context.h"
 #include "main.h"

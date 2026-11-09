@@ -5,11 +5,9 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <unistd.h>
 #include <utility>
 #include <vector>
 
-#include "init.h"
 #include "input.h"
 #include "nodes.h"
 #include "parse_error.h"
@@ -21,9 +19,7 @@ namespace parse_test {
 
 inline void init_shell(ShellContext &sh)
 {
-	sh.mypid = sh.rootpid = getpid();
-	sh.arg0 = const_cast<char *>("parse_tests");
-	init(sh);
+	sh.arg0 = "parse_tests";
 }
 
 inline bool parses_ok(std::string_view script)

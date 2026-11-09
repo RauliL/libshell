@@ -122,16 +122,20 @@ struct ShellContext {
 
 	inline static ShellContext *signaled = nullptr;
 
-	ShellContext()
-	{
-		signaled = this;
-	}
+	/**
+	 * Constructs a ready-to-use shell: variables, traps, signal names,
+	 * and process ids are initialized. Call eval() directly afterward.
+	 */
+	ShellContext();
 
 	~ShellContext()
 	{
 		if (signaled == this)
 			signaled = nullptr;
 	}
+
+	ShellContext(const ShellContext &) = delete;
+	ShellContext &operator=(const ShellContext &) = delete;
 
 	/*
 	 * Parse and execute a shell script from a string. One-shot entry

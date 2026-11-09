@@ -20,16 +20,9 @@ main(int argc, char** argv)
 	ShellContext sh;
 	int state = 0;
 
-#ifdef __GLIBC__
-	dash_errno = __errno_location();
-#endif
-
 #if PROFILE
 	monitor(4, etext, profile_buf, sizeof profile_buf, 50);
 #endif
-
-	sh.mypid = sh.rootpid = getpid();
-	init(sh);
 
 resume:
 	shell::Error err{};

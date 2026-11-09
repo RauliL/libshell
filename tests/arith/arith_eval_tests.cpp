@@ -1,12 +1,10 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <unistd.h>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
-#include "init.h"
 #include "shell_context.h"
 #include "var.h"
 
@@ -17,9 +15,7 @@ struct EvalFixture {
 
 	EvalFixture()
 	{
-		sh.mypid = sh.rootpid = getpid();
 		sh.arg0 = "arith_tests";
-		init(sh);
 	}
 
 	std::intmax_t eval(std::string_view expr)
