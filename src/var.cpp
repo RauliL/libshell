@@ -114,7 +114,6 @@ INCLUDE "var.h"
 
 INIT {
 	char **envp;
-	const char *p;
 	struct stat64 st1, st2;
 
 	initvar(sh);
@@ -131,12 +130,14 @@ INIT {
 
 	setvareq(sh, std::format("PPID={}", getppid()));
 
-	p = sh.get_var("PWD");
-	if (p)
-		if (*p != '/' || stat64(p, &st1) || stat64(".", &st2) ||
+	auto pwd = sh.get_var("PWD");
+	if (pwd) {
+		if (pwd->empty() || (*pwd)[0] != '/' ||
+		    stat64(pwd->data(), &st1) || stat64(".", &st2) ||
 		    st1.st_dev != st2.st_dev || st1.st_ino != st2.st_ino)
-			p = 0;
-	setpwd(sh, p ? std::optional<std::string_view>(p) : std::nullopt, 0);
+			pwd = std::nullopt;
+	}
+	setpwd(sh, pwd, 0);
 }
 
 RESET {
@@ -215,45 +216,46 @@ initvar(ShellContext &sh)
 }
 
 shell::Result<var *>
-ShellContext::set_var(
-	std::string_view name,
-	const std::optional<std::string>& value,
-	VarFlags flags
-)
+setvar(ShellContext &sh, const std::string &name, std::optional<std::string> val,
+       VarFlags flags)
 {
 	const auto namelen = endofname(name);
-	var* variable;
+	var *variable;
 
 	if (!namelen || (namelen < name.size() && name[namelen] != '='))
 		return sh_error(
-			*this,
+			sh,
 			"{}: bad variable name",
 			std::string_view(name.data(), namelen ? namelen : name.size())
 		);
 
-	if (!value)
+	if (!val)
 		flags |= VarFlag::unset;
 
 	/* Always store name=value (empty value when unset). */
 	std::string nameeq;
-	nameeq.reserve(namelen + 1 + (value ? value->size() : 0));
+	nameeq.reserve(namelen + 1 + (val ? val->size() : 0));
 	nameeq.assign(name, 0, namelen);
 	nameeq.push_back('=');
-	if (value)
-		nameeq += *value;
+	if (val)
+		nameeq += *val;
 
-	INTOFF(*this);
-	variable = TRY_SH(setvareq(*this, std::move(nameeq), flags));
-	INTON(*this);
+	INTOFF(sh);
+	variable = TRY_SH(setvareq(sh, std::move(nameeq), flags));
+	INTON(sh);
 
 	return variable;
 }
 
-shell::Result<var *>
-setvar(ShellContext &sh, const std::string &name, std::optional<std::string> val,
-       VarFlags flags)
+shell::Result<void>
+ShellContext::set_var(
+	std::string_view name,
+	const std::optional<std::string> &value,
+	VarFlags flags
+)
 {
-	return sh.set_var(name, val, flags);
+	TRY_SHV(setvar(*this, std::string(name), value, flags));
+	return {};
 }
 
 shell::Result<std::intmax_t>
@@ -323,7 +325,7 @@ setvareq(ShellContext &sh, std::string s, VarFlags flags)
 	return vp;
 }
 
-char *
+std::optional<std::string_view>
 ShellContext::get_var(std::string_view name) const
 {
 	const auto variable = findvar(*this, name);
@@ -333,11 +335,11 @@ ShellContext::get_var(std::string_view name) const
 		if (name == "LINENO")
 			variable->text = std::format("LINENO={}", lineno);
 #endif
-
-		return const_cast<char *>(strchrnul(variable->text.c_str(), '=')) + 1;
+		return std::string_view(
+			strchrnul(variable->text.c_str(), '=') + 1);
 	}
 
-	return nullptr;
+	return std::nullopt;
 }
 
 shell::Result<std::intmax_t>
@@ -345,7 +347,8 @@ ShellContext::get_int_var(std::string_view name) const
 {
 	const auto value = get_var(name);
 
-	return atomax(const_cast<ShellContext &>(*this), value ? value : "", 0);
+	return atomax(const_cast<ShellContext &>(*this),
+		      value.value_or(std::string_view{}), 0);
 }
 
 /*

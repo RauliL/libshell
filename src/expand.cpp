@@ -441,7 +441,10 @@ done:
 		goto out;
 	*p = '\0';
 	if (*name == '\0') {
-		home = sh.get_var("HOME");
+		if (auto h = sh.get_var("HOME"))
+			home = h->data();
+		else
+			home = nullptr;
 	} else {
 		home = getpwhome(sh, name);
 	}
@@ -1118,8 +1121,13 @@ param:
 		p = const_cast<char *>(num ? sh.shellparam.p[num - 1].c_str()
 					   : sh.arg0.c_str());
 		goto value;
-	default:
-		p = sh.get_var(name);
+	default: {
+		auto v = sh.get_var(name);
+		if (!v)
+			return -1;
+		p = const_cast<char *>(v->data());
+		goto value;
+	}
 value:
 		if (!p)
 			return -1;

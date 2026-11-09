@@ -35,6 +35,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -271,6 +272,54 @@ setoption(ShellContext &sh, int flag, int val)
 			return {};
 		}
 	return sh_error(sh, "Illegal option -{}", flag);
+}
+
+void
+ShellContext::set_arg0(std::string name)
+{
+	arg0 = std::move(name);
+}
+
+void
+ShellContext::set_args(std::span<const std::string_view> args)
+{
+	shellparam.p.clear();
+	shellparam.p.reserve(args.size());
+	for (auto arg : args)
+		shellparam.p.emplace_back(arg);
+	shellparam.optind = 1;
+	shellparam.optoff = -1;
+}
+
+shell::Result<void>
+ShellContext::set_option(std::string_view name, bool enabled)
+{
+	for (int i = 0; i < NOPTS; i++) {
+		if (name == optnames[i]) {
+			opts.list[i] = enabled ? 1 : 0;
+			optschanged(*this);
+			return {};
+		}
+	}
+	return sh_error(*this, "Illegal option -o {}", name);
+}
+
+shell::Result<void>
+ShellContext::set_option(char letter, bool enabled)
+{
+	TRY_SHV(setoption(*this, letter, enabled ? 1 : 0));
+	optschanged(*this);
+	return {};
+}
+
+std::optional<bool>
+ShellContext::get_option(std::string_view name) const
+{
+	for (int i = 0; i < NOPTS; i++) {
+		if (name == optnames[i])
+			return opts.list[i] != 0;
+	}
+	return std::nullopt;
 }
 
 

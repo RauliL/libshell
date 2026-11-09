@@ -150,14 +150,10 @@ parser_eof(const ShellContext &sh)
  * Execute a command or commands contained in a string.
  */
 
-shell::Result<int>
-ShellContext::eval(const std::string &script, EvalFlags flags)
+static shell::Result<int>
+eval_input(ShellContext &sh, EvalFlags flags)
 {
-	ShellContext &sh = *this;
 	int status = 0;
-	std::string copy = script;
-
-	setinputstring(sh, copy.data());
 
 	try {
 		for (;;) {
@@ -165,7 +161,6 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
 			if (cmd.eof)
 				break;
 			Node *n = cmd.tree.get();
-			int i;
 
 			EvalFlags child = flags;
 			if (!parser_eof(sh))
@@ -178,9 +173,8 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
 					return sh.exitstatus;
 				return r;
 			}
-			i = *r;
 			if (n)
-				status = i;
+				status = *r;
 
 			if (sh.evalskip)
 				break;
@@ -192,6 +186,22 @@ ShellContext::eval(const std::string &script, EvalFlags flags)
 		popfile(sh);
 		return sh.exitstatus;
 	}
+}
+
+shell::Result<int>
+ShellContext::eval(const std::string &script, EvalFlags flags)
+{
+	std::string copy = script;
+
+	setinputstring(*this, copy.data());
+	return eval_input(*this, flags);
+}
+
+shell::Result<int>
+ShellContext::eval_file(std::string_view path, EvalFlags flags)
+{
+	TRY_SHV(setinputfile(*this, path, INPUT_PUSH_FILE));
+	return eval_input(*this, flags);
 }
 
 

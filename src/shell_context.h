@@ -9,7 +9,6 @@
 
 #include <cinttypes>
 #include <climits>
-#include <climits>
 #include <csignal>
 #include <cstdarg>
 #include <cstddef>
@@ -19,7 +18,9 @@
 #include <cwchar>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -133,11 +134,16 @@ struct ShellContext {
 	ShellContext(const ShellContext &) = delete;
 	ShellContext &operator=(const ShellContext &) = delete;
 
-	/*
+	/**
 	 * Parse and execute a shell script from a string. One-shot entry
 	 * point for embedding and for -c / eval / traps.
 	 */
 	shell::Result<int> eval(const std::string &script, EvalFlags flags = {});
+
+	/**
+	 * Parse and execute a shell script from a file path.
+	 */
+	shell::Result<int> eval_file(std::string_view path, EvalFlags flags = {});
 
 	/**
 	 * Parses and evaluates an arithmetic expression. Meant for `$((...))`
@@ -146,24 +152,25 @@ struct ShellContext {
 	shell::Result<std::intmax_t> arith(std::string_view expr);
 
 	/**
-	 * Returns value of a variable. Returns `nullptr` if not set.
+	 * Returns the value of a variable, or `std::nullopt` if unset.
+	 * The view is valid until the variable is modified or destroyed.
 	 */
-	char* get_var(std::string_view name) const;
+	std::optional<std::string_view> get_var(std::string_view name) const;
 
 	/**
 	 * Set the value of a variable. The flags argument is ORed with the flags
 	 * of the variable. If value is `std::nullopt`, the variable is unset.
 	 */
-	shell::Result<var *> set_var(
+	shell::Result<void> set_var(
 		std::string_view name,
-		const std::optional<std::string>& value = std::nullopt,
+		const std::optional<std::string> &value = std::nullopt,
 		VarFlags flags = {}
 	);
 
 	shell::Result<std::intmax_t> get_int_var(std::string_view name) const;
 
 	/**
-	 * Set the given integer as the value of a variable. The flags arugment is
+	 * Set the given integer as the value of a variable. The flags argument is
 	 * ORed with the flags of the variable.
 	 */
 	shell::Result<std::intmax_t> set_int_var(
@@ -172,12 +179,30 @@ struct ShellContext {
 		VarFlags flags = {}
 	);
 
+	/** Set `$0` (shell/script name). */
+	void set_arg0(std::string name);
+
+	/** Replace positional parameters (`$1`, `$2`, …). */
+	void set_args(std::span<const std::string_view> args);
+
+	/**
+	 * Enable or disable a `set -o` option by long name (`errexit`, …)
+	 * or single-letter flag (`e`, `x`, …).
+	 */
+	shell::Result<void> set_option(std::string_view name, bool enabled);
+	shell::Result<void> set_option(char letter, bool enabled);
+
+	/** Current value of a `set -o` option, or nullopt if the name is unknown. */
+	std::optional<bool> get_option(std::string_view name) const;
+
 	std::optional<std::string_view> find_signal_name(int signal) const;
 
 	std::optional<int> find_signal_number(std::string_view name, int minsig) const;
 };
 
-inline char *bltinlookup(ShellContext &sh, std::string_view name)
+inline const char *bltinlookup(ShellContext &sh, std::string_view name)
 {
-	return sh.get_var(name);
+	if (auto value = sh.get_var(name))
+		return value->data();
+	return nullptr;
 }
