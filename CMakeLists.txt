@@ -200,6 +200,7 @@ set(
   src/redir.cpp
   src/shell_context.cpp
   src/signames.cpp
+  src/syntax.cpp
   src/system.cpp
   src/trap.cpp
   src/var.cpp
@@ -208,41 +209,10 @@ set(
   src/bltin/times.cpp
 )
 
-add_executable(mksyntax src/mksyntax.cpp)
-dash_configure_tool(mksyntax)
-
-add_custom_command(
-  OUTPUT
-    "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
-    "${CMAKE_CURRENT_BINARY_DIR}/syntax.h"
-  COMMAND
-    mksyntax
-  WORKING_DIRECTORY
-    "${CMAKE_CURRENT_BINARY_DIR}"
-  DEPENDS
-    mksyntax
-  COMMENT
-    "Generating syntax tables"
-)
-
-set_source_files_properties(
-  ${DASH_SOURCES}
-  "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
-  PROPERTIES
-    OBJECT_DEPENDS
-      "${CMAKE_CURRENT_BINARY_DIR}/syntax.h"
-)
-
-set(
-  DASH_GENERATED_SOURCES
-  "${CMAKE_CURRENT_BINARY_DIR}/syntax.cpp"
-)
-
 add_library(
   dash_lib
   STATIC
     ${DASH_SOURCES}
-    ${DASH_GENERATED_SOURCES}
 )
 dash_configure_tool(dash_lib)
 target_link_libraries(dash_lib PUBLIC expected)

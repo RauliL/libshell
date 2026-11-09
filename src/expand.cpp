@@ -975,7 +975,7 @@ memtodest(ShellContext &sh, ExpandBuf &eb, const char *p, size_t len, ExpandFlag
 			p += count;
 
 			syntax = flags & (QUOTES_ESC | EXP_MBCHAR) ?
-				 BASESYNTAX : is_type;
+				 BASESYNTAX : is_type.data();
 		} else
 			syntax = SQSYNTAX;
 	}
