@@ -71,16 +71,30 @@ output::ensure_buf()
 		buf.resize(bufsize);
 }
 
+int
+output::emit(ShellContext &context, const char *p, std::size_t len)
+{
+	if (sink) {
+		sink(std::string_view(p, len));
+		return 0;
+	}
+	if (fd < 0)
+		return -1;
+	return xwrite(context, fd, p, len);
+}
+
 void
 output::flush(ShellContext &context)
 {
 	const std::size_t len = pos;
 
-	if (!len || fd < 0)
+	if (!len)
+		return;
+	if (!sink && fd < 0)
 		return;
 
 	pos = 0;
-	if (xwrite(context, fd, buf.data(), len))
+	if (emit(context, buf.data(), len))
 		flags |= OUTPUT_ERR;
 }
 
@@ -108,7 +122,7 @@ buffered:
 	if (nleft >= len)
 		goto buffered;
 
-	if (xwrite(sh, fd, p, len))
+	if (emit(sh, p, len))
 		flags |= OUTPUT_ERR;
 }
 

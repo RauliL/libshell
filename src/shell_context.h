@@ -3,8 +3,10 @@
 /*
  * One shell. Mutable shell state lives here so the program can be used as a
  * library: the caller owns a ShellContext and runs commands on that object.
- * signaled is the process-wide target for asynchronous signals, because a
- * POSIX handler is only passed the signal number.
+ *
+ * Signal delivery is process-wide (POSIX handlers only receive the signo), so
+ * at most one ShellContext is the async signal target at a time — see
+ * claim_signals() / release_signals().
  */
 
 #include <cinttypes>
@@ -16,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cwchar>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -117,22 +120,39 @@ struct ShellContext {
 
 	signal_map_type signal_map;
 
+	/**
+	 * Process-wide shell that receives async signals (SIGINT, SIGCHLD, …).
+	 * Only one context should claim this at a time.
+	 */
 	inline static ShellContext *signaled = nullptr;
+
+	/** Whether the constructor should become the process signal target. */
+	enum class SignalOwnership {
+		Claim,
+		Leave,
+	};
 
 	/**
 	 * Constructs a ready-to-use shell: variables, traps, signal names,
 	 * and process ids are initialized. Call eval() directly afterward.
 	 */
-	ShellContext();
+	explicit ShellContext(SignalOwnership signals = SignalOwnership::Claim);
 
 	~ShellContext()
 	{
-		if (signaled == this)
-			signaled = nullptr;
+		release_signals();
 	}
 
 	ShellContext(const ShellContext &) = delete;
 	ShellContext &operator=(const ShellContext &) = delete;
+
+	/** Make this context the process-wide async signal target. */
+	void claim_signals();
+
+	/** Drop signal ownership if this context currently holds it. */
+	void release_signals();
+
+	bool owns_signals() const { return signaled == this; }
 
 	/**
 	 * Parse and execute a shell script from a string. One-shot entry
@@ -194,6 +214,22 @@ struct ShellContext {
 
 	/** Current value of a `set -o` option, or nullopt if the name is unknown. */
 	std::optional<bool> get_option(std::string_view name) const;
+
+	/**
+	 * Redirect shell stdout/stderr to a host callback instead of fds 1/2.
+	 * Pass an empty function to restore fd-based output.
+	 */
+	void set_stdout(std::function<void(std::string_view)> sink);
+	void set_stderr(std::function<void(std::string_view)> sink);
+
+	/** Logical working directory tracked by the shell (`PWD` / `cd`). */
+	std::string_view get_cwd() const;
+
+	/**
+	 * Update the shell's logical cwd and `PWD` without changing the
+	 * process working directory (which is process-global).
+	 */
+	shell::Result<void> set_cwd(std::string_view path);
 
 	std::optional<std::string_view> find_signal_name(int signal) const;
 

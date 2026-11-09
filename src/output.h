@@ -38,6 +38,7 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -50,13 +51,16 @@ struct ShellContext;
  * Buffered writer for a file descriptor. Owns its buffer via std::vector;
  * allocation does not go through ShellContext / ckmalloc.
  *
- * bufsize == 0 means unbuffered (writes go straight to the fd).
+ * bufsize == 0 means unbuffered (writes go straight to the fd / sink).
  * Otherwise the buffer is allocated lazily on first write.
+ *
+ * If `sink` is set, bytes are delivered there instead of `write(fd, …)`.
  */
 struct output {
 	using value_type = char;
 	using container_type = std::vector<value_type>;
 	using size_type = container_type::size_type;
+	using sink_type = std::function<void(std::string_view)>;
 
 	container_type buf;
 	/** Bytes pending in buffer. */
@@ -65,6 +69,8 @@ struct output {
 	size_type bufsize = 0;
 	int fd = -1;
 	int flags = 0;
+	/** Optional host capture; when set, overrides the fd. */
+	sink_type sink;
 
 	output() = default;
 
@@ -97,6 +103,7 @@ struct output {
 
 private:
 	void ensure_buf();
+	int emit(ShellContext &, const char *, std::size_t);
 };
 
 void outcslow(ShellContext &sh, int, output *);

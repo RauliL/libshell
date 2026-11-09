@@ -1,23 +1,54 @@
 #include "shell_context.h"
 
+#include <utility>
 #include <unistd.h>
 
+#include "cd.h"
 #include "init.h"
-#include "main.h"
 
-ShellContext::ShellContext()
+ShellContext::ShellContext(SignalOwnership signals)
 {
-	signaled = this;
 	mypid = rootpid = getpid();
 
-#ifdef __GLIBC__
-	/*
-	 * Several translation units redirect errno through dash_errno
-	 * (see main.h). Point it at this thread's errno before any
-	 * library code runs.
-	 */
-	dash_errno = __errno_location();
-#endif
+	if (signals == SignalOwnership::Claim)
+		claim_signals();
 
 	init(*this);
+}
+
+void
+ShellContext::claim_signals()
+{
+	signaled = this;
+}
+
+void
+ShellContext::release_signals()
+{
+	if (signaled == this)
+		signaled = nullptr;
+}
+
+void
+ShellContext::set_stdout(std::function<void(std::string_view)> sink)
+{
+	output.sink = std::move(sink);
+}
+
+void
+ShellContext::set_stderr(std::function<void(std::string_view)> sink)
+{
+	errout.sink = std::move(sink);
+}
+
+std::string_view
+ShellContext::get_cwd() const
+{
+	return cwd.curdir;
+}
+
+shell::Result<void>
+ShellContext::set_cwd(std::string_view path)
+{
+	return setpwd(*this, path, 0);
 }

@@ -169,6 +169,7 @@ eval_input(ShellContext &sh, EvalFlags flags)
 			if (!r) {
 				sh.exception = r.error();
 				popfile(sh);
+				flushall(sh);
 				if (r.error() == shell::Error::Generic)
 					return sh.exitstatus;
 				return r;
@@ -180,10 +181,12 @@ eval_input(ShellContext &sh, EvalFlags flags)
 				break;
 		}
 		popfile(sh);
+		flushall(sh);
 		return status;
 	} catch (const shell::ParseError &e) {
 		report_parse_error(sh, e);
 		popfile(sh);
+		flushall(sh);
 		return sh.exitstatus;
 	}
 }

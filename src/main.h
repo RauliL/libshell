@@ -42,13 +42,6 @@ struct ShellContext;
 /* shell level: 0 for the main shell, 1 for its children, and so on */
 #define rootshell (!sh.shlvl)
 
-#ifdef __GLIBC__
-/* glibc sucks — redirect errno through a process-wide pointer set by the driver. */
-extern int *dash_errno;
-#undef errno
-#define errno (*dash_errno)
-#endif
-
 shell::Result<int> cmdloop(ShellContext &sh);
 shell::Result<void> readcmdfile(ShellContext &sh, std::string_view);
 shell::Result<int> dotcmd(ShellContext &sh, int, char **);
