@@ -123,7 +123,7 @@ redirect(ShellContext &sh, Node *redir, int flags)
 		if (newfd < -1)
 			continue;
 
-		fd = as<Node::RedirList>(n)->fd;
+		fd = as<RedirList>(n)->fd;
 		if (fd == 0)
 			reset_input(sh);
 
@@ -150,7 +150,7 @@ redirect(ShellContext &sh, Node *redir, int flags)
 			continue;
 
 		TRY_SHV(dupredirect(sh, n, newfd));
-	} while ((n = as<Node::RedirList>(n)->next.get()));
+	} while ((n = as<RedirList>(n)->next.get()));
 	INTON(sh);
 	if (flags & REDIR_SAVEFD2 && sv->renamed[2] >= 0)
 		sh.preverrout.fd = sv->renamed[2];
@@ -205,7 +205,7 @@ openredirect(ShellContext &sh, Node *redir)
 	case Node::Type::From:
 		flags = O_RDONLY;
 do_open:
-		f = TRY_SH(sh_open(sh, as<Node::File>(redir)->expfname, flags, 0));
+		f = TRY_SH(sh_open(sh, as<FileNode>(redir)->expfname, flags, 0));
 		break;
 	case Node::Type::FromTo:
 		flags = O_RDWR|O_CREAT;
@@ -213,7 +213,7 @@ do_open:
 	case Node::Type::To:
 		/* Take care of noclobber mode. */
 		if (sh.opts.noclobber()) {
-			fname = as<Node::File>(redir)->expfname.c_str();
+			fname = as<FileNode>(redir)->expfname.c_str();
 			if (stat64(fname, &sb) < 0) {
 				flags = O_WRONLY|O_CREAT|O_EXCL;
 				goto do_open;
@@ -238,8 +238,8 @@ do_open:
 		goto do_open;
 	case Node::Type::ToFd:
 	case Node::Type::FromFd:
-		f = as<Node::Dup>(redir)->dupfd;
-		if (f == as<Node::RedirList>(redir)->fd)
+		f = as<DupNode>(redir)->dupfd;
+		if (f == as<RedirList>(redir)->fd)
 			f = -2;
 		break;
 	default:
@@ -274,7 +274,7 @@ sh_dup2(ShellContext &sh, int ofd, int nfd, int cfd)
 
 static shell::Result<void> dupredirect(ShellContext &sh, Node *redir, int f)
 {
-	int fd = as<Node::RedirList>(redir)->fd;
+	int fd = as<RedirList>(redir)->fd;
 
 	if (redir->type == Node::Type::ToFd || redir->type == Node::Type::FromFd) {
 		/* if not ">&-" */
@@ -319,9 +319,9 @@ openhere(ShellContext &sh, Node *redir)
 	int memfd;
 
 	std::string expanded;
-	const char *text = as<Node::Arg>(as<Node::Here>(redir)->doc)->text.data();
+	const char *text = as<ArgNode>(as<HereNode>(redir)->doc)->text.data();
 	if (redir->type == Node::Type::XHere) {
-		expanded = TRY_SH(expandarg_to_string(sh, as<Node::Here>(redir)->doc.get(), EXP_QUOTED));
+		expanded = TRY_SH(expandarg_to_string(sh, as<HereNode>(redir)->doc.get(), EXP_QUOTED));
 		text = expanded.c_str();
 	}
 

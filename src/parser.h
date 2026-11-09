@@ -41,10 +41,15 @@
 
 #include <tl/expected.hpp>
 
+#include <libshell.hpp>
+
 #include "nodes.h"
 #include "token.h"
 
 namespace shell { class ParseError; }
+
+using heredoc = shell::HereDoc;
+using ParseSession = shell::ParseSession;
 
 /* control characters in argument strings */
 #define CTL_FIRST -127		/* first 'special' character */
@@ -84,34 +89,6 @@ namespace shell { class ParseError; }
 
 
 struct ShellContext;
-
-/** Pending here-document awaiting its body after the next newline. */
-struct heredoc {
-	Node *here = nullptr;		/* redirection node */
-	std::string eofmark;		/* string indicating end of input */
-	/** If set, strip leading tabs. */
-	bool striptabs = false;
-};
-
-/**
- * Ephemeral parser state for one parse pass (and nested expandstr /
- * here-doc reads). Not part of the durable script environment.
- */
-struct ParseSession {
-	std::vector<heredoc> heredoclist;
-	/** Here-doc currently being attached to a redirection node. */
-	std::optional<heredoc> pending_here;
-	int doprompt = 0;
-	int needprompt = 0;
-	int whichprompt = 0;
-	Token lasttoken = Token::Eof;
-	int tokpushback = 0;
-	std::string wordtext;
-	int checkkwd = 0;
-	std::vector<Node::ptr> backquotelist;
-	Node::ptr redirnode;
-	int quoteflag = 0;
-};
 
 /**
  * Result of `parsecmd()`: EOF vs blank line vs parse tree.

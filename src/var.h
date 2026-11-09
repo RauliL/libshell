@@ -52,146 +52,6 @@ struct ShellContext;
  * Shell variables.
  */
 
-enum class VarFlag : std::size_t {
-	exported,	/* variable is exported */
-	readonly,	/* variable cannot be modified */
-	str_fixed,	/* permanent map entry; do not erase on unset */
-	unset,		/* the variable is not set */
-	nofunc,		/* don't call the callback function */
-	full,		/* pass value suitable for putenv */
-};
-
-class VarFlags {
-	static constexpr std::size_t nbits =
-		static_cast<std::size_t>(VarFlag::full) + 1;
-	std::bitset<nbits> bits{};
-
-	static constexpr std::size_t index(VarFlag flag)
-	{
-		return static_cast<std::size_t>(flag);
-	}
-
-	explicit VarFlags(std::bitset<nbits> b) : bits(b) {}
-
-public:
-	VarFlags() = default;
-	VarFlags(VarFlag flag) { bits.set(index(flag)); }
-
-	bool test(VarFlag flag) const { return bits.test(index(flag)); }
-	bool any() const { return bits.any(); }
-	bool none() const { return bits.none(); }
-
-	VarFlags &set(VarFlag flag)
-	{
-		bits.set(index(flag));
-		return *this;
-	}
-
-	VarFlags &reset(VarFlag flag)
-	{
-		bits.reset(index(flag));
-		return *this;
-	}
-
-	VarFlags &operator|=(VarFlag flag) { return set(flag); }
-
-	VarFlags &operator|=(VarFlags other)
-	{
-		bits |= other.bits;
-		return *this;
-	}
-
-	VarFlags &operator&=(VarFlags other)
-	{
-		bits &= other.bits;
-		return *this;
-	}
-
-	VarFlags operator|(VarFlag flag) const
-	{
-		VarFlags out = *this;
-		out.set(flag);
-		return out;
-	}
-
-	VarFlags operator|(VarFlags other) const
-	{
-		VarFlags out = *this;
-		out |= other;
-		return out;
-	}
-
-	VarFlags operator&(VarFlag flag) const
-	{
-		return *this & VarFlags(flag);
-	}
-
-	VarFlags operator&(VarFlags other) const
-	{
-		VarFlags out = *this;
-		out &= other;
-		return out;
-	}
-
-	VarFlags operator~() const { return VarFlags(~bits); }
-
-	friend bool operator==(VarFlags a, VarFlags b)
-	{
-		return a.bits == b.bits;
-	}
-
-	friend bool operator!=(VarFlags a, VarFlags b) { return !(a == b); }
-
-	friend bool operator==(VarFlags a, VarFlag b)
-	{
-		return a == VarFlags(b);
-	}
-
-	friend bool operator!=(VarFlags a, VarFlag b) { return !(a == b); }
-};
-
-inline VarFlags operator|(VarFlag a, VarFlag b)
-{
-	VarFlags flags(a);
-	flags.set(b);
-	return flags;
-}
-
-inline VarFlags operator|(VarFlag a, VarFlags b)
-{
-	return b | a;
-}
-
-inline VarFlags operator~(VarFlag flag)
-{
-	return ~VarFlags(flag);
-}
-
-static_assert(std::is_trivially_copyable_v<VarFlags>);
-static_assert(std::is_trivially_destructible_v<VarFlags>);
-
-
-struct var {
-	VarFlags flags;
-	std::string text;		/* name=value (owned; empty value when unset) */
-	void (*func)(ShellContext &, std::string_view) = nullptr;
-					/* function to be called when  */
-					/* the variable gets set/unset */
-};
-
-
-struct localvar {
-	struct var *vp = nullptr;	/* the variable that was made local */
-	VarFlags flags{};		/* saved flags */
-	std::string text;		/* saved text or $- optlist bytes */
-};
-
-/* One function/scope frame: ordered restore records (undo log), not a map. */
-struct LocalVarFrame {
-	std::vector<localvar> vars;
-};
-
-
 /* Value helpers use ShellContext &sh from the enclosing scope. */
 
 extern const char defpathvar[];
@@ -203,7 +63,7 @@ inline constexpr char defifs[] = " \t\n";
  * the name= prefix.  Builtins are always present in sh.variables after initvar.
  */
 
-#define ifsset(sh)	(!(sh).variables.at("IFS").flags.test(VarFlag::unset))
+#define ifsset(sh)	(!(sh).variables.at("IFS").flags.test(shell::Variable::Flag::Unset))
 #define pathval(sh)	((sh).variables.at("PATH").text.c_str() + 5)
 #define ps1val(sh)	((sh).variables.at("PS1").text.c_str() + 4)
 #define ps2val(sh)	((sh).variables.at("PS2").text.c_str() + 4)
@@ -213,22 +73,21 @@ struct ShellContext;
 void initvar(ShellContext &sh);
 /** Seed builtins, import environ, and set IFS/OPTIND/PPID/PWD. */
 void init_shell_vars(ShellContext &sh);
-shell::Result<struct var *> setvar(ShellContext &sh, const std::string &name,
-				       std::optional<std::string> val,
-				       VarFlags flags = {});
-shell::Result<struct var *> setvareq(ShellContext &sh, std::string s,
-					 VarFlags flags = {});
+shell::Result<shell::Variable *> setvar(ShellContext &sh, const std::string &name,
+				       const std::optional<std::string> &val,
+				       shell::Variable::Flags flags = {});
+shell::Result<shell::Variable *> setvareq(ShellContext &sh, std::string s, shell::Variable::Flags flags = {});
 /** Name=value strings for variables matching on/off flags (no sentinel). */
-std::vector<std::string_view> listvars(ShellContext &sh, VarFlags on,
-				       VarFlags off);
+std::vector<std::string_view> listvars(ShellContext &sh, const shell::Variable::Flags &on,
+				       const shell::Variable::Flags &off);
 /** Environ block for execve: pointers into the variable map + trailing nullptr. */
 std::vector<char *> environment(ShellContext &sh);
 shell::Result<int> showvars(ShellContext &sh, std::string_view prefix,
-				VarFlags on, VarFlags off);
+				const shell::Variable::Flags &on, const shell::Variable::Flags &off);
 shell::Result<int> exportcmd(ShellContext &sh, int, char **);
 shell::Result<int> localcmd(ShellContext &sh, int, char **);
 shell::Result<void> mklocal(ShellContext &sh, std::string_view name,
-				VarFlags flags = {});
+				const shell::Variable::Flags &flags = {});
 shell::Result<std::size_t> pushlocalvars(ShellContext &sh, int push);
 shell::Result<void> unwindlocalvars(ShellContext &sh, std::size_t stop);
 shell::Result<int> unsetcmd(ShellContext &sh, int, char **);

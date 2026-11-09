@@ -35,12 +35,7 @@
  */
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
-#include <string>
-#include <vector>
-
-#include <sys/types.h>
+#include <libshell.hpp>
 
 #ifndef JOBS
 #define JOBS 1
@@ -52,39 +47,13 @@
 #define FORK_NOJOB 2
 
 struct ShellContext;
-struct Node;
 
-/*
- * A job is either a single process or a pipeline.  Process status lives in
- * procs; job numbers (%N) are slot + 1 in ShellContext::jobs.
- */
-struct ProcStat {
-	pid_t pid = -1;
-	int status = -1;	/* last wait() status; -1 = still running */
-	std::string cmd;
-};
-
-struct Job {
-	enum class State : std::uint8_t {
-		Running = 0,	/* at least one proc running */
-		Done = 1,	/* all procs are completed */
-	};
-
-	std::size_t slot = 0;		/* index in ShellContext::jobs */
-	std::vector<ProcStat> procs;
-	State state = State::Running;
-	bool waited = false;		/* true if this entry has been waited for */
-
-	int number() const { return static_cast<int>(slot + 1); }
-	pid_t pgid() const { return procs.empty() ? -1 : procs.front().pid; }
-
-	ProcStat &add_process(pid_t pid, std::string cmd = {});
-	int calc_status(bool pipefail_on);
-};
+using Node = shell::Node;
 
 shell::Result<int> killcmd(ShellContext &, int, char **);
 shell::Result<int> waitcmd(ShellContext &, int, char **);
-Job *makejob(ShellContext &, int);
-shell::Result<int> forkshell(ShellContext &, Job *, Node *, int);
-shell::Result<Job *> vforkexec(ShellContext &, const Node *, char **, const char *, int);
-shell::Result<int> waitforjob(ShellContext &, Job *);
+shell::Job *makejob(ShellContext &, int);
+shell::Result<int> forkshell(ShellContext &, shell::Job *, Node *, int);
+shell::Result<shell::Job *> vforkexec(ShellContext &, const Node *, char **,
+				      const char *, int);
+shell::Result<int> waitforjob(ShellContext &, shell::Job *);

@@ -379,7 +379,12 @@ pungetc(ShellContext &sh, InputStack &in)
  * We handle aliases this way.
  */
 void
-pushstring(ShellContext &sh, InputStack &in, char *s, std::shared_ptr<alias> ap)
+pushstring(
+	ShellContext &sh,
+	InputStack &in,
+	char *s,
+	const std::shared_ptr<shell::Alias> &ap
+)
 {
 	const auto len = std::strlen(s);
 
@@ -536,7 +541,7 @@ out:
 
 
 void __attribute__((noinline))
-unwindfiles(ShellContext &sh, InputStack &in, struct parsefile *stop)
+unwindfiles(ShellContext &sh, InputStack &in, parsefile *stop)
 {
 	while (in.base.prev || in.current != stop)
 		popfile(sh, in);
@@ -610,7 +615,7 @@ pungetn(ShellContext &sh, int n)
 }
 
 void
-pushstring(ShellContext &sh, char *s, std::shared_ptr<alias> ap)
+pushstring(ShellContext &sh, char *s, const std::shared_ptr<shell::Alias> &ap)
 {
 	pushstring(sh, sh.input, s, std::move(ap));
 }
@@ -640,7 +645,7 @@ popfile(ShellContext &sh)
 }
 
 void
-unwindfiles(ShellContext &sh, struct parsefile *stop)
+unwindfiles(ShellContext &sh, parsefile *stop)
 {
 	unwindfiles(sh, sh.input, stop);
 }

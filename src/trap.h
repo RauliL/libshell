@@ -45,8 +45,7 @@ extern char sigmode[];
 extern volatile sig_atomic_t pending_sig;
 extern volatile sig_atomic_t gotsigchld;
 
-struct Node;
-struct ShellContext;
+using Node = shell::Node;
 
 shell::Result<int> trapcmd(ShellContext &sh, int, char **);
 void init_traps(ShellContext &sh);

@@ -36,67 +36,20 @@
  *	@(#)options.h	8.2 (Berkeley) 5/4/95
  */
 
-#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <libshell.hpp>
+
 #include "error.h"
 
-struct shparam {
-	std::vector<std::string> p;	/* positional parameters (without $0) */
-	int optind = 1;		/* next parameter to be processed by getopts */
-	int optoff = -1;	/* used by getopts */
-};
+using shparam = shell::ShellParam;
+using ShellOptions = shell::ShellOptions;
+using NextOptState = shell::NextOptState;
 
-#define NOPTS	15
-
-/** Shell `set` / startup option bits (`$-`, `set -e`, …). */
-struct ShellOptions {
-	std::array<char, NOPTS> list{};
-	/** True when the host started the shell with `-c`. */
-	bool c_mode = false;
-
-	char &errexit() { return list[0]; }
-	char errexit() const { return list[0]; }
-	char &noglob() { return list[1]; }
-	char noglob() const { return list[1]; }
-	char &ignoreeof() { return list[2]; }
-	char ignoreeof() const { return list[2]; }
-	char &interactive() { return list[3]; }
-	char interactive() const { return list[3]; }
-	char &monitor() { return list[4]; }
-	char monitor() const { return list[4]; }
-	char &noexec() { return list[5]; }
-	char noexec() const { return list[5]; }
-	char &stdin_opt() { return list[6]; }
-	char stdin_opt() const { return list[6]; }
-	char &xtrace() { return list[7]; }
-	char xtrace() const { return list[7]; }
-	char &verbose() { return list[8]; }
-	char verbose() const { return list[8]; }
-	char &noclobber() { return list[9]; }
-	char noclobber() const { return list[9]; }
-	char &allexport() { return list[10]; }
-	char allexport() const { return list[10]; }
-	char &notify() { return list[11]; }
-	char notify() const { return list[11]; }
-	char &nounset() { return list[12]; }
-	char nounset() const { return list[12]; }
-	char &pipefail() { return list[13]; }
-	char pipefail() const { return list[13]; }
-	char &debug() { return list[14]; }
-	char debug() const { return list[14]; }
-};
-
-/**
- * Scratch for builtin `nextopt` / argv walking. Not durable shell state.
- */
-struct NextOptState {
-	char **argptr = nullptr;
-	char *optionarg = nullptr;
-	char *optptr = nullptr;
-};
+#define NOPTS shell::option_count
 
 /**
  * Host-facing result of parsing process argv (`-c`, login shell, …).
@@ -113,7 +66,7 @@ struct ShellContext;
 shell::Result<ProcArgsResult> procargs(ShellContext &sh, char **);
 void optschanged(ShellContext &sh);
 void setparam(ShellContext &sh, char **);
-void freeparam(ShellContext &sh, struct shparam *);
+void freeparam(ShellContext &sh, shparam *);
 shell::Result<int> shiftcmd(ShellContext &sh, int, char **);
 shell::Result<int> setcmd(ShellContext &sh, int, char **);
 shell::Result<int> getoptscmd(ShellContext &sh, int, char **);

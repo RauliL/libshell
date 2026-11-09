@@ -35,9 +35,10 @@
  */
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <filesystem>
+
+#include <libshell.hpp>
 
 #include "error.h"
 
@@ -45,13 +46,11 @@
 #define REDIR_PUSH 01		/* save previous values of file descriptors */
 #define REDIR_SAVEFD2 03	/* set preverrout */
 
-/* One redirection save/restore frame (fd 0..9). */
-struct RedirFrame {
-	std::array<int, 10> renamed{};
-};
+using Node = shell::Node;
+using RedirFrame = shell::RedirFrame;
 
-struct Node;
 struct ShellContext;
+
 shell::Result<void> redirect(ShellContext &sh, Node *, int);
 shell::Result<void> popredir(ShellContext &sh, int);
 shell::Result<int> savefd(ShellContext &sh, int, int);

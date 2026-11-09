@@ -81,7 +81,7 @@ static void clearcmdentry(ShellContext &sh);
 static tblentry *cmdlookup(ShellContext &sh, const char *, int);
 static void delete_cmd_entry(ShellContext &sh, const char *);
 static void addcmdentry(ShellContext &sh, const char *, const struct cmdentry *);
-static shell::Result<int> describe_command(ShellContext &sh, struct output *, char *, const char *, int);
+static shell::Result<int> describe_command(ShellContext &sh, shell::Output *, char *, const char *, int);
 
 
 /*
@@ -246,13 +246,14 @@ padvance_magic(ShellContext &sh, const char **path, const char *name, int magic,
 /*
  * True for entries that a cd or a PATH change must invalidate.
  */
-static bool
+static inline bool
 hash_affected(const tblentry &cmdp, int builtinloc)
 {
-	return cmdp.cmdtype == CMDNORMAL ||
-		(cmdp.cmdtype == CMDBUILTIN &&
-		 !(cmdp.param.cmd->flags & BUILTIN_REGULAR) &&
-		 builtinloc > 0);
+	return cmdp.type == shell::TableEntry::Type::Normal || (
+		cmdp.type == shell::TableEntry::Type::Builtin &&
+		!(cmdp.param.cmd->flags & shell::BuiltinCommand::Flag::Regular) &&
+		builtinloc > 0
+	);
 }
 
 
@@ -274,7 +275,7 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 
 	if (!*sh.bopt.argptr) {
 		for (const auto &cmd : sh.cmdtable) {
-			if (cmd.second.cmdtype == CMDNORMAL)
+			if (cmd.second.type == shell::TableEntry::Type::Normal)
 				printentry(sh, cmd.first, cmd.second);
 		}
 		return 0;
@@ -285,7 +286,7 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 		if (cmdp && hash_affected(*cmdp, sh.builtinloc))
 			delete_cmd_entry(sh, name);
 		TRY_SHV(find_command(sh, name, &entry, DO_ERR, pathval(sh)));
-		if (entry.cmdtype == CMDUNKNOWN)
+		if (entry.type == shell::TableEntry::Type::Unknown)
 			c = 1;
 		sh.bopt.argptr++;
 	}
@@ -334,14 +335,14 @@ test_exec(ShellContext &sh, const char *fullname, struct stat64 *statb)
 shell::Result<void>
 find_command(ShellContext &sh, char *name, struct cmdentry *entry, int act, const char *path)
 {
-	struct tblentry *cmdp;
+	tblentry *cmdp;
 	int idx;
 	int prev;
 	std::string fullname;
 	struct stat64 statb;
 	int e;
 	int updatetbl;
-	const builtincmd *bcmd;
+	const shell::BuiltinCommand *bcmd;
 
 	// If name contains a slash, don't use PATH or hash table
 	if (std::strchr(name, '/')) {
@@ -353,13 +354,13 @@ find_command(ShellContext &sh, char *name, struct cmdentry *entry, int act, cons
 					continue;
 #endif
 absfail:
-				entry->cmdtype = CMDUNKNOWN;
+				entry->type = shell::TableEntry::Type::Unknown;
 				return {};
 			}
 			if (!test_exec(sh, name, &statb))
 				goto absfail;
 		}
-		entry->cmdtype = CMDNORMAL;
+		entry->type = shell::TableEntry::Type::Normal;
 		return {};
 	}
 
@@ -371,16 +372,16 @@ absfail:
 	if ((cmdp = cmdlookup(sh, name, 0))) {
 		int bit;
 
-		switch (cmdp->cmdtype) {
+		switch (cmdp->type) {
 		default:
-		case CMDNORMAL:
+		case shell::TableEntry::Type::Normal:
 			bit = DO_ALTPATH | DO_REGBLTIN;
 			break;
-		case CMDFUNCTION:
+		case shell::TableEntry::Type::Function:
 			bit = DO_NOFUNC;
 			break;
-		case CMDBUILTIN:
-			bit = cmdp->param.cmd->flags & BUILTIN_REGULAR ?
+		case shell::TableEntry::Type::Builtin:
+			bit = cmdp->param.cmd->flags & shell::BuiltinCommand::Flag::Regular ?
 			      0 : DO_REGBLTIN;
 			break;
 		}
@@ -397,7 +398,7 @@ absfail:
 
 	/* If %builtin not in path, check for builtin next */
 	bcmd = find_builtin(name);
-	if (bcmd && ((bcmd->flags & BUILTIN_REGULAR) | (act & DO_ALTPATH) |
+	if (bcmd && ((bcmd->flags & shell::BuiltinCommand::Flag::Regular) | (act & DO_ALTPATH) |
 		     (sh.builtinloc <= 0)))
 		goto builtin_success;
 
@@ -407,7 +408,7 @@ absfail:
 	/* We have to search path. */
 	prev = -1;		/* where to start */
 	if (cmdp && cmdp->rehash) {	/* doing a rehash */
-		if (cmdp->cmdtype == CMDBUILTIN)
+		if (cmdp->type == shell::TableEntry::Type::Builtin)
 			prev = sh.builtinloc;
 		else
 			prev = cmdp->param.index;
@@ -451,7 +452,7 @@ loop:
 			std::string pathcopy(fullname);
 			TRY_SHV(readcmdfile(sh, pathcopy.data()));
 			if (!(cmdp = cmdlookup(sh, name, 0)) ||
-			    cmdp->cmdtype != CMDFUNCTION)
+			    cmdp->type != shell::TableEntry::Type::Function)
 				return sh_error(sh, "{} not defined in {}", name,
 					 pathcopy);
 			goto success;
@@ -460,13 +461,13 @@ loop:
 		if (!test_exec(sh, fullname.c_str(), &statb))
 			continue;
 		if (!updatetbl) {
-			entry->cmdtype = CMDNORMAL;
+			entry->type = shell::TableEntry::Type::Normal;
 			entry->u.index = idx;
 			return {};
 		}
 		INTOFF(sh);
 		cmdp = cmdlookup(sh, name, 1);
-		cmdp->cmdtype = CMDNORMAL;
+		cmdp->type = shell::TableEntry::Type::Normal;
 		cmdp->param.index = idx;
 		INTON(sh);
 		goto success;
@@ -478,23 +479,23 @@ loop:
 	if (act & DO_ERR)
 		sh_warnx(sh, "{}: {}", name, errmsg(e, E_EXEC));
 fail:
-	entry->cmdtype = CMDUNKNOWN;
+	entry->type = shell::TableEntry::Type::Unknown;
 	return {};
 
 builtin_success:
 	if (!updatetbl) {
-		entry->cmdtype = CMDBUILTIN;
+		entry->type = shell::TableEntry::Type::Builtin;
 		entry->u.cmd = bcmd;
 		return {};
 	}
 	INTOFF(sh);
 	cmdp = cmdlookup(sh, name, 1);
-	cmdp->cmdtype = CMDBUILTIN;
+	cmdp->type = shell::TableEntry::Type::Builtin;
 	cmdp->param.cmd = bcmd;
 	INTON(sh);
 success:
 	cmdp->rehash = false;
-	entry->cmdtype = cmdp->cmdtype;
+	entry->type = cmdp->type;
 	entry->u = cmdp->param;
 	return {};
 }
@@ -625,7 +626,7 @@ addcmdentry(ShellContext &sh, const char *name, const struct cmdentry *entry)
 	tblentry *cmdp;
 
 	cmdp = cmdlookup(sh, name, 1);
-	cmdp->cmdtype = entry->cmdtype;
+	cmdp->type = entry->type;
 	cmdp->param = entry->u;
 	cmdp->rehash = false;
 }
@@ -636,12 +637,12 @@ addcmdentry(ShellContext &sh, const char *name, const struct cmdentry *entry)
  */
 
 void
-defun(ShellContext &sh, const Node::Defun *func)
+defun(ShellContext &sh, const DefunNode *func)
 {
 	struct cmdentry entry;
 
 	INTOFF(sh);
-	entry.cmdtype = CMDFUNCTION;
+	entry.type = shell::TableEntry::Type::Function;
 	entry.u.func = std::shared_ptr<Node>(func->clone());
 	addcmdentry(sh, func->text.c_str(), &entry);
 	INTON_DEFER(sh);
@@ -658,7 +659,7 @@ unsetfunc(ShellContext &sh, std::string_view name)
 	std::string key(name);
 	tblentry *cmdp = cmdlookup(sh, key.c_str(), 0);
 
-	if (cmdp && cmdp->cmdtype == CMDFUNCTION)
+	if (cmdp && cmdp->type == shell::TableEntry::Type::Function)
 		delete_cmd_entry(sh, key.c_str());
 }
 
@@ -679,11 +680,16 @@ typecmd(ShellContext &sh, int argc, char **argv)
 }
 
 static shell::Result<int>
-describe_command(ShellContext &sh, struct output *out, char *command,
-                            const char *path, int verbose)
+describe_command(
+	ShellContext &sh,
+	shell::Output *out,
+	char *command,
+    const char *path,
+	int verbose
+)
 {
 	struct cmdentry entry;
-	struct tblentry *cmdp;
+	tblentry *cmdp;
 	if (verbose) {
 		out->write(sh, command);
 	}
@@ -694,13 +700,14 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 		goto out;
 	}
 
-	/* Then look at the aliases */
-	if (auto ap = lookupalias(sh, command, false)) {
+	// Then look at the aliases
+	if (const auto ap = lookupalias(sh, command, false)) {
 		if (verbose) {
-			out->write(sh, std::format(" is an alias for {}", ap->val));
+			out->write(sh, std::format(" is an alias for {}", ap->value));
 		} else {
 			out->write(sh, "alias ");
 			printalias(sh, *ap);
+
 			return 0;
 		}
 		goto out;
@@ -717,15 +724,15 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 	}
 
 	if (cmdp) {
-		entry.cmdtype = cmdp->cmdtype;
+		entry.type = cmdp->type;
 		entry.u = cmdp->param;
 	} else {
 		/* Finally use brute force */
 		TRY_SHV(find_command(sh, command, &entry, DO_ABS, path));
 	}
 
-	switch (entry.cmdtype) {
-	case CMDNORMAL: {
+	switch (entry.type) {
+	case shell::TableEntry::Type::Normal: {
 		int j = entry.u.index;
 		std::string pathbuf;
 		const char *p;
@@ -752,7 +759,7 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 		break;
 	}
 
-	case CMDFUNCTION:
+	case shell::TableEntry::Type::Function:
 		if (verbose) {
 			out->write(sh, " is a shell function");
 		} else {
@@ -760,13 +767,13 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 		}
 		break;
 
-	case CMDBUILTIN:
+	case shell::TableEntry::Type::Builtin:
 		if (verbose) {
 			out->write(
 				sh,
 				std::format(
 					" is a {}shell builtin",
-					entry.u.cmd->flags & BUILTIN_SPECIAL ? "special " : ""
+					entry.u.cmd->flags & shell::BuiltinCommand::Flag::Special ? "special " : ""
 				)
 			);
 		} else {

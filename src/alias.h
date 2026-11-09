@@ -41,23 +41,10 @@
 
 #include "error.h"
 
-/*
- * Alias expansion pushes val onto the input stack, so the alias object must
- * outlive that push. ShellContext::aliases owns shared_ptrs; the input stack
- * holds additional shared_ptrs for the duration of expansion. Unalias only
- * erases the map entry — in-flight expansions keep the object alive.
- *
- * in_use blocks recursive expansion of the same alias (POSIX).
- */
-struct alias {
-	std::string name;
-	std::string val;
-	bool in_use = false;
-};
-
 struct ShellContext;
-std::shared_ptr<alias> lookupalias(ShellContext &sh, std::string_view, bool check);
+
+std::shared_ptr<shell::Alias> lookupalias(ShellContext &sh, std::string_view, bool check);
 shell::Result<int> aliascmd(ShellContext &sh, int, char **);
 shell::Result<int> unaliascmd(ShellContext &sh, int, char **);
 shell::Result<int> unalias(ShellContext &sh, std::string_view);
-void printalias(ShellContext &sh, const alias &);
+void printalias(ShellContext &sh, const shell::Alias &);

@@ -1,3 +1,5 @@
+#include <cinttypes>
+
 #include "shell.h"
 #include "shell_context.h"
 /*

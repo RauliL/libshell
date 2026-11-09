@@ -16,11 +16,12 @@ static std::vector<Node::ptr> clonelist(const std::vector<Node::ptr> &src)
 	return out;
 }
 
-Node::Command::~Command() = default;
+CommandNode::~CommandNode() = default;
 
-Node::ptr Node::Command::clone() const
+Node::ptr
+CommandNode::clone() const
 {
-	auto c = std::make_unique<Command>(type);
+	auto c = std::make_unique<CommandNode>(type);
 
 	c->linno = linno;
 	c->assign = assign ? assign->clone() : nullptr;
@@ -30,11 +31,12 @@ Node::ptr Node::Command::clone() const
 	return c;
 }
 
-Node::Pipe::~Pipe() = default;
+PipeNode::~PipeNode() = default;
 
-Node::ptr Node::Pipe::clone() const
+Node::ptr
+PipeNode::clone() const
 {
-	auto c = std::make_unique<Pipe>(type);
+	auto c = std::make_unique<PipeNode>(type);
 
 	c->backgnd = backgnd;
 	c->cmdlist = clonelist(cmdlist);
@@ -42,11 +44,12 @@ Node::ptr Node::Pipe::clone() const
 	return c;
 }
 
-Node::Redir::~Redir() = default;
+RedirNode::~RedirNode() = default;
 
-Node::ptr Node::Redir::clone() const
+Node::ptr
+RedirNode::clone() const
 {
-	auto c = std::make_unique<Redir>(type);
+	auto c = std::make_unique<RedirNode>(type);
 
 	c->linno = linno;
 	c->n = n ? n->clone() : nullptr;
@@ -55,11 +58,12 @@ Node::ptr Node::Redir::clone() const
 	return c;
 }
 
-Node::Binary::~Binary() = default;
+BinaryNode::~BinaryNode() = default;
 
-Node::ptr Node::Binary::clone() const
+Node::ptr
+BinaryNode::clone() const
 {
-	auto c = std::make_unique<Binary>(type);
+	auto c = std::make_unique<BinaryNode>(type);
 
 	c->ch1 = ch1 ? ch1->clone() : nullptr;
 	c->ch2 = ch2 ? ch2->clone() : nullptr;
@@ -67,11 +71,12 @@ Node::ptr Node::Binary::clone() const
 	return c;
 }
 
-Node::If::~If() = default;
+IfNode::~IfNode() = default;
 
-Node::ptr Node::If::clone() const
+Node::ptr
+IfNode::clone() const
 {
-	auto c = std::make_unique<If>(type);
+	auto c = std::make_unique<IfNode>(type);
 
 	c->test = test ? test->clone() : nullptr;
 	c->ifpart = ifpart ? ifpart->clone() : nullptr;
@@ -80,11 +85,12 @@ Node::ptr Node::If::clone() const
 	return c;
 }
 
-Node::For::~For() = default;
+ForNode::~ForNode() = default;
 
-Node::ptr Node::For::clone() const
+Node::ptr
+ForNode::clone() const
 {
-	auto c = std::make_unique<For>(type);
+	auto c = std::make_unique<ForNode>(type);
 
 	c->linno = linno;
 	c->args = args ? args->clone() : nullptr;
@@ -94,11 +100,12 @@ Node::ptr Node::For::clone() const
 	return c;
 }
 
-Node::Case::~Case() = default;
+CaseNode::~CaseNode() = default;
 
-Node::ptr Node::Case::clone() const
+Node::ptr
+CaseNode::clone() const
 {
-	auto c = std::make_unique<Case>(type);
+	auto c = std::make_unique<CaseNode>(type);
 
 	c->linno = linno;
 	c->expr = expr ? expr->clone() : nullptr;
@@ -107,11 +114,12 @@ Node::ptr Node::Case::clone() const
 	return c;
 }
 
-Node::CaseList::~CaseList() = default;
+CaseListNode::~CaseListNode() = default;
 
-Node::ptr Node::CaseList::clone() const
+Node::ptr
+CaseListNode::clone() const
 {
-	auto c = std::make_unique<CaseList>(type);
+	auto c = std::make_unique<CaseListNode>(type);
 
 	c->next = next ? next->clone() : nullptr;
 	c->pattern = pattern ? pattern->clone() : nullptr;
@@ -120,11 +128,12 @@ Node::ptr Node::CaseList::clone() const
 	return c;
 }
 
-Node::Defun::~Defun() = default;
+DefunNode::~DefunNode() = default;
 
-Node::ptr Node::Defun::clone() const
+Node::ptr
+DefunNode::clone() const
 {
-	auto c = std::make_unique<Defun>(type);
+	auto c = std::make_unique<DefunNode>(type);
 
 	c->linno = linno;
 	c->text = text;
@@ -133,11 +142,12 @@ Node::ptr Node::Defun::clone() const
 	return c;
 }
 
-Node::Arg::~Arg() = default;
+ArgNode::~ArgNode() = default;
 
-Node::ptr Node::Arg::clone() const
+Node::ptr
+ArgNode::clone() const
 {
-	auto c = std::make_unique<Arg>(type);
+	auto c = std::make_unique<ArgNode>(type);
 
 	c->next = next ? next->clone() : nullptr;
 	c->text = text;
@@ -146,11 +156,12 @@ Node::ptr Node::Arg::clone() const
 	return c;
 }
 
-Node::File::~File() = default;
+FileNode::~FileNode() = default;
 
-Node::ptr Node::File::clone() const
+Node::ptr
+FileNode::clone() const
 {
-	auto c = std::make_unique<File>(type);
+	auto c = std::make_unique<FileNode>(type);
 
 	c->next = next ? next->clone() : nullptr;
 	c->fd = fd;
@@ -160,11 +171,12 @@ Node::ptr Node::File::clone() const
 	return c;
 }
 
-Node::Dup::~Dup() = default;
+DupNode::~DupNode() = default;
 
-Node::ptr Node::Dup::clone() const
+Node::ptr
+DupNode::clone() const
 {
-	auto c = std::make_unique<Dup>(type);
+	auto c = std::make_unique<DupNode>(type);
 
 	c->next = next ? next->clone() : nullptr;
 	c->fd = fd;
@@ -174,11 +186,12 @@ Node::ptr Node::Dup::clone() const
 	return c;
 }
 
-Node::Here::~Here() = default;
+HereNode::~HereNode() = default;
 
-Node::ptr Node::Here::clone() const
+Node::ptr
+HereNode::clone() const
 {
-	auto c = std::make_unique<Here>(type);
+	auto c = std::make_unique<HereNode>(type);
 
 	c->next = next ? next->clone() : nullptr;
 	c->fd = fd;
@@ -187,11 +200,12 @@ Node::ptr Node::Here::clone() const
 	return c;
 }
 
-Node::Not::~Not() = default;
+NotNode::~NotNode() = default;
 
-Node::ptr Node::Not::clone() const
+Node::ptr
+NotNode::clone() const
 {
-	auto c = std::make_unique<Not>(type);
+	auto c = std::make_unique<NotNode>(type);
 
 	c->com = com ? com->clone() : nullptr;
 

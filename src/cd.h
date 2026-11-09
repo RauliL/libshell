@@ -35,15 +35,13 @@
 #include <string>
 #include <string_view>
 
+#include <libshell.hpp>
+
 #include "error.h"
 
 struct ShellContext;
 
-/** Cached logical/physical working directory for `cd` / `pwd` / PWD. */
-struct CdState {
-	std::string curdir;	/* empty when unknown */
-	std::string physdir;	/* empty when unknown */
-};
+using CdState = shell::CdState;
 
 shell::Result<int> cdcmd(ShellContext &sh, int, char **);
 shell::Result<int> pwdcmd(ShellContext &sh, int, char **);

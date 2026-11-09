@@ -1,5 +1,7 @@
 #pragma once
 
+#include <libshell.hpp>
+
 /*
  * One shell. Mutable shell state lives here so the program can be used as a
  * library: the caller owns a ShellContext and runs commands on that object.
@@ -9,26 +11,7 @@
  * claim_signals() / release_signals().
  */
 
-#include <cinttypes>
-#include <climits>
-#include <csignal>
-#include <cstdarg>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cwchar>
-#include <functional>
-#include <memory>
-#include <optional>
-#include <span>
-#include <string>
-#include <string_view>
-#include <unordered_map>
-#include <vector>
-
 #include <sys/resource.h>
-#include <sys/types.h>
 
 #include "alias.h"
 #include "cd.h"
@@ -46,25 +29,25 @@
 #include "system.h"
 #include "var.h"
 
-struct backcmd;
-struct synstack;
-struct builtincmd;
-struct cmdentry;
-enum limtype : int;
-
 struct ShellContext {
-	using alias_map_type = std::unordered_map<std::string, std::shared_ptr<alias>>;
-	using variable_map_type = std::unordered_map<std::string, var>;
+	using alias_map_type = std::unordered_map<
+		std::string,
+		std::shared_ptr<shell::Alias>
+	>;
+	using variable_map_type = std::unordered_map<
+		std::string,
+		shell::Variable
+	>;
 	using signal_map_type = std::unordered_map<int, std::string_view>;
 
-	struct output output{BUFSIZ, 1};
-	struct output errout{0, 2};
-	struct output preverrout;
-	struct output *out1 = &output;
-	struct output *out2 = &errout;
+	shell::Output output{BUFSIZ, 1};
+	shell::Output errout{0, 2};
+	shell::Output preverrout;
+	shell::Output *out1 = &output;
+	shell::Output *out2 = &errout;
 
-	InputStack input;
-	ParseSession parse;
+	shell::InputStack input;
+	shell::ParseSession parse;
 
 	std::optional<std::string> trap[NSIG] = {};
 	int ptrap = 0;
@@ -74,15 +57,15 @@ struct ShellContext {
 	volatile sig_atomic_t pending_sig = 0;
 	volatile sig_atomic_t gotsigchld = 0;
 
-	std::vector<std::unique_ptr<Job>> jobs;
-	std::vector<Job *> job_order;	/* current job first */
+	std::vector<std::unique_ptr<shell::Job>> jobs;
+	std::vector<shell::Job *> job_order;	/* current job first */
 	pid_t backgndpid = 0;
 	int vforked = 0;
 	int lineno = 0;
-	std::vector<LocalVarFrame> localvar_stack;
+	std::vector<shell::Frame> stack;
 	variable_map_type variables;
 
-	ExpandState expand;
+	shell::ExpandState expand;
 
 	int evalskip = 0;
 	int skipcount = 0;
@@ -96,9 +79,9 @@ struct ShellContext {
 	int tpip[2] = { -1, -1 };
 
 	std::string arg0;
-	struct shparam shellparam = {};
-	ShellOptions opts;
-	NextOptState bopt;
+	shell::ShellParam shellparam = {};
+	shell::ShellOptions opts;
+	shell::NextOptState bopt;
 
 	int rootpid = 0;
 	int mypid = 0;
@@ -110,13 +93,13 @@ struct ShellContext {
 	int errlinno = 0;
 
 	const char *pathopt = nullptr;
-	std::unordered_map<std::string, tblentry> cmdtable;
+	std::unordered_map<std::string, shell::TableEntry> cmdtable;
 	int builtinloc = -1;
 
 	alias_map_type aliases;
-	std::vector<RedirFrame> redirlist;
+	std::vector<shell::RedirFrame> redirlist;
 	unsigned closed_redirs = 0;
-	CdState cwd;
+	shell::CdState cwd;
 
 	signal_map_type signal_map;
 
@@ -184,7 +167,7 @@ struct ShellContext {
 	shell::Result<void> set_var(
 		std::string_view name,
 		const std::optional<std::string> &value = std::nullopt,
-		VarFlags flags = {}
+		const shell::Variable::Flags &flags = {}
 	);
 
 	shell::Result<std::intmax_t> get_int_var(std::string_view name) const;
@@ -196,7 +179,7 @@ struct ShellContext {
 	shell::Result<std::intmax_t> set_int_var(
 		std::string_view name,
 		std::intmax_t value,
-		VarFlags flags = {}
+		const shell::Variable::Flags &flags = {}
 	);
 
 	/** Set `$0` (shell/script name). */
@@ -219,8 +202,8 @@ struct ShellContext {
 	 * Redirect shell stdout/stderr to a host callback instead of fds 1/2.
 	 * Pass an empty function to restore fd-based output.
 	 */
-	void set_stdout(std::function<void(std::string_view)> sink);
-	void set_stderr(std::function<void(std::string_view)> sink);
+	void set_stdout(const shell::Output::sink_type &sink);
+	void set_stderr(const shell::Output::sink_type &sink);
 
 	/** Logical working directory tracked by the shell (`PWD` / `cd`). */
 	std::string_view get_cwd() const;

@@ -38,7 +38,7 @@ TEST_CASE("AST: assignment then command", "[parse][ast]")
 	auto *cmd = as_cmd(tree.get());
 	REQUIRE(cmd);
 
-	auto *asg = as<Node::Arg>(cmd->assign.get());
+	auto *asg = as<ArgNode>(cmd->assign.get());
 	REQUIRE(asg);
 	REQUIRE(asg->text == "FOO=bar");
 	REQUIRE_FALSE(asg->next);
@@ -52,7 +52,7 @@ TEST_CASE("AST: semicolon list is Semi binary", "[parse][ast]")
 	auto tree = parse_one("echo a; echo b\n");
 	REQUIRE(tree->type == Node::Type::Semi);
 
-	auto *bin = as<Node::Binary>(tree.get());
+	auto *bin = as<BinaryNode>(tree.get());
 	REQUIRE(as_cmd(bin->ch1.get()));
 	REQUIRE(as_cmd(bin->ch2.get()));
 	REQUIRE(nth_arg(as_cmd(bin->ch1.get())->args.get(), 1)->text == "a");
@@ -74,7 +74,7 @@ TEST_CASE("AST: pipeline", "[parse][ast]")
 	auto tree = parse_one("echo a | cat | cat\n");
 	REQUIRE(tree->type == Node::Type::Pipe);
 
-	auto *pipe = as<Node::Pipe>(tree.get());
+	auto *pipe = as<PipeNode>(tree.get());
 	REQUIRE(pipe->backgnd == 0);
 	REQUIRE(pipe->cmdlist.size() == 3);
 	REQUIRE(as_cmd(pipe->cmdlist[0].get()));
@@ -89,14 +89,14 @@ TEST_CASE("AST: bang wraps pipeline or command in Not", "[parse][ast]")
 	SECTION("bang command") {
 		auto tree = parse_one("! false\n");
 		REQUIRE(tree->type == Node::Type::Not);
-		auto *cmd = as_cmd(as<Node::Not>(tree.get())->com.get());
+		auto *cmd = as_cmd(as<NotNode>(tree.get())->com.get());
 		REQUIRE(cmd);
 		REQUIRE(nth_arg(cmd->args.get(), 0)->text == "false");
 	}
 	SECTION("bang pipeline") {
 		auto tree = parse_one("! true | false\n");
 		REQUIRE(tree->type == Node::Type::Not);
-		REQUIRE(as<Node::Not>(tree.get())->com->type == Node::Type::Pipe);
+		REQUIRE(as<NotNode>(tree.get())->com->type == Node::Type::Pipe);
 	}
 }
 
@@ -105,21 +105,21 @@ TEST_CASE("AST: and / or lists", "[parse][ast]")
 	SECTION("&&") {
 		auto tree = parse_one("true && echo ok\n");
 		REQUIRE(tree->type == Node::Type::And);
-		auto *bin = as<Node::Binary>(tree.get());
+		auto *bin = as<BinaryNode>(tree.get());
 		REQUIRE(as_cmd(bin->ch1.get()));
 		REQUIRE(as_cmd(bin->ch2.get()));
 	}
 	SECTION("||") {
 		auto tree = parse_one("false || echo ok\n");
 		REQUIRE(tree->type == Node::Type::Or);
-		auto *bin = as<Node::Binary>(tree.get());
+		auto *bin = as<BinaryNode>(tree.get());
 		REQUIRE(as_cmd(bin->ch1.get()));
 		REQUIRE(as_cmd(bin->ch2.get()));
 	}
 	SECTION("&& and || associate left-to-right") {
 		auto tree = parse_one("true && false || echo x\n");
 		REQUIRE(tree->type == Node::Type::Or);
-		auto *or_node = as<Node::Binary>(tree.get());
+		auto *or_node = as<BinaryNode>(tree.get());
 		REQUIRE(or_node->ch1->type == Node::Type::And);
 		REQUIRE(as_cmd(or_node->ch2.get()));
 	}
@@ -130,13 +130,13 @@ TEST_CASE("AST: subshell vs brace group", "[parse][ast]")
 	SECTION("subshell") {
 		auto tree = parse_one("(echo a; echo b)\n");
 		REQUIRE(tree->type == Node::Type::Subshell);
-		auto *redir = as<Node::Redir>(tree.get());
+		auto *redir = as<RedirNode>(tree.get());
 		REQUIRE(redir->n->type == Node::Type::Semi);
 	}
 	SECTION("brace group is bare Semi (no Brace node)") {
 		auto tree = parse_one("{ echo a; echo b; }\n");
 		REQUIRE(tree->type == Node::Type::Semi);
-		auto *bin = as<Node::Binary>(tree.get());
+		auto *bin = as<BinaryNode>(tree.get());
 		REQUIRE(as_cmd(bin->ch1.get()));
 		REQUIRE(as_cmd(bin->ch2.get()));
 	}
@@ -148,7 +148,7 @@ TEST_CASE("AST: if / elif / else", "[parse][ast]")
 		"if true; then echo yes; elif false; then echo maybe; else echo no; fi\n");
 	REQUIRE(tree->type == Node::Type::If);
 
-	auto *iff = as<Node::If>(tree.get());
+	auto *iff = as<IfNode>(tree.get());
 	REQUIRE(as_cmd(iff->test.get()));
 	REQUIRE(nth_arg(as_cmd(iff->test.get())->args.get(), 0)->text == "true");
 	REQUIRE(as_cmd(iff->ifpart.get()));
@@ -156,7 +156,7 @@ TEST_CASE("AST: if / elif / else", "[parse][ast]")
 
 	REQUIRE(iff->elsepart);
 	REQUIRE(iff->elsepart->type == Node::Type::If);
-	auto *elif = as<Node::If>(iff->elsepart.get());
+	auto *elif = as<IfNode>(iff->elsepart.get());
 	REQUIRE(nth_arg(as_cmd(elif->test.get())->args.get(), 0)->text == "false");
 	REQUIRE(nth_arg(as_cmd(elif->ifpart.get())->args.get(), 1)->text == "maybe");
 	REQUIRE(as_cmd(elif->elsepart.get()));
@@ -168,7 +168,7 @@ TEST_CASE("AST: while and until", "[parse][ast]")
 	SECTION("while") {
 		auto tree = parse_one("while false; do echo x; done\n");
 		REQUIRE(tree->type == Node::Type::While);
-		auto *bin = as<Node::Binary>(tree.get());
+		auto *bin = as<BinaryNode>(tree.get());
 		REQUIRE(as_cmd(bin->ch1.get()));
 		REQUIRE(as_cmd(bin->ch2.get()));
 		REQUIRE(nth_arg(as_cmd(bin->ch1.get())->args.get(), 0)->text == "false");
@@ -177,7 +177,7 @@ TEST_CASE("AST: while and until", "[parse][ast]")
 	SECTION("until") {
 		auto tree = parse_one("until true; do echo x; done\n");
 		REQUIRE(tree->type == Node::Type::Until);
-		auto *bin = as<Node::Binary>(tree.get());
+		auto *bin = as<BinaryNode>(tree.get());
 		REQUIRE(as_cmd(bin->ch1.get()));
 		REQUIRE(as_cmd(bin->ch2.get()));
 	}
@@ -188,7 +188,7 @@ TEST_CASE("AST: for loop", "[parse][ast]")
 	auto tree = parse_one("for i in a b c; do echo \"$i\"; done\n");
 	REQUIRE(tree->type == Node::Type::For);
 
-	auto *fr = as<Node::For>(tree.get());
+	auto *fr = as<ForNode>(tree.get());
 	REQUIRE(fr->var == "i");
 
 	REQUIRE(nth_arg(fr->args.get(), 0)->text == "a");
@@ -207,16 +207,16 @@ TEST_CASE("AST: case statement", "[parse][ast]")
 	auto tree = parse_one("case x in y|z) echo y ;; *) echo other ;; esac\n");
 	REQUIRE(tree->type == Node::Type::Case);
 
-	auto *cs = as<Node::Case>(tree.get());
-	REQUIRE(as<Node::Arg>(cs->expr.get())->text == "x");
+	auto *cs = as<CaseNode>(tree.get());
+	REQUIRE(as<ArgNode>(cs->expr.get())->text == "x");
 
-	auto *c0 = as<Node::CaseList>(cs->cases.get());
+	auto *c0 = as<CaseListNode>(cs->cases.get());
 	REQUIRE(c0);
 	REQUIRE(nth_arg(c0->pattern.get(), 0)->text == "y");
 	REQUIRE(nth_arg(c0->pattern.get(), 1)->text == "z");
 	REQUIRE(nth_arg(as_cmd(c0->body.get())->args.get(), 1)->text == "y");
 
-	auto *c1 = as<Node::CaseList>(c0->next.get());
+	auto *c1 = as<CaseListNode>(c0->next.get());
 	REQUIRE(c1);
 	REQUIRE(nth_arg(c1->pattern.get(), 0)->text == "*");
 	REQUIRE(nth_arg(as_cmd(c1->body.get())->args.get(), 1)->text == "other");
@@ -228,7 +228,7 @@ TEST_CASE("AST: function definition", "[parse][ast]")
 	auto tree = parse_one("f() { echo hi; }\n");
 	REQUIRE(tree->type == Node::Type::Defun);
 
-	auto *fn = as<Node::Defun>(tree.get());
+	auto *fn = as<DefunNode>(tree.get());
 	REQUIRE(fn->text == "f");
 	auto *body = as_cmd(fn->body.get());
 	REQUIRE(body);
@@ -245,9 +245,9 @@ TEST_CASE("AST: redirections", "[parse][ast]")
 		REQUIRE(cmd->redirect);
 		REQUIRE(cmd->redirect->type == Node::Type::To);
 
-		auto *file = as<Node::File>(cmd->redirect.get());
+		auto *file = as<FileNode>(cmd->redirect.get());
 		REQUIRE(file->fd == 1);
-		REQUIRE(as<Node::Arg>(file->fname.get())->text == "/dev/null");
+		REQUIRE(as<ArgNode>(file->fname.get())->text == "/dev/null");
 		REQUIRE_FALSE(file->next);
 	}
 	SECTION("fd dup and close") {
@@ -255,12 +255,12 @@ TEST_CASE("AST: redirections", "[parse][ast]")
 		auto *cmd = as_cmd(tree.get());
 		REQUIRE(cmd);
 
-		auto *to = as<Node::File>(cmd->redirect.get());
+		auto *to = as<FileNode>(cmd->redirect.get());
 		REQUIRE(to->type == Node::Type::To);
 		REQUIRE(to->next);
 		REQUIRE(to->next->type == Node::Type::ToFd);
 
-		auto *dup = as<Node::Dup>(to->next.get());
+		auto *dup = as<DupNode>(to->next.get());
 		REQUIRE(dup->fd == 2);
 		REQUIRE(dup->dupfd == 1);
 	}
@@ -268,7 +268,7 @@ TEST_CASE("AST: redirections", "[parse][ast]")
 		auto tree = parse_one("echo hi >> log\n");
 		auto *cmd = as_cmd(tree.get());
 		REQUIRE(cmd->redirect->type == Node::Type::Append);
-		REQUIRE(as<Node::File>(cmd->redirect.get())->fd == 1);
+		REQUIRE(as<FileNode>(cmd->redirect.get())->fd == 1);
 	}
 }
 
@@ -281,15 +281,15 @@ TEST_CASE("AST: heredoc Here vs XHere", "[parse][ast]")
 		REQUIRE(cmd->redirect);
 		REQUIRE(cmd->redirect->type == Node::Type::XHere);
 
-		auto *here = as<Node::Here>(cmd->redirect.get());
+		auto *here = as<HereNode>(cmd->redirect.get());
 		REQUIRE(here->fd == 0);
-		REQUIRE(as<Node::Arg>(here->doc.get())->text == "hello\n");
+		REQUIRE(as<ArgNode>(here->doc.get())->text == "hello\n");
 	}
 	SECTION("quoted delimiter is literal (Here)") {
 		auto tree = parse_one("cat <<'END'\nhello\nEND\n");
 		auto *cmd = as_cmd(tree.get());
 		REQUIRE(cmd->redirect->type == Node::Type::Here);
-		REQUIRE(as<Node::Arg>(as<Node::Here>(cmd->redirect.get())->doc.get())->text
+		REQUIRE(as<ArgNode>(as<HereNode>(cmd->redirect.get())->doc.get())->text
 			== "hello\n");
 	}
 }
@@ -331,7 +331,99 @@ TEST_CASE("AST: background job", "[parse][ast]")
 {
 	auto tree = parse_one("sleep 1 &\n");
 	REQUIRE(tree->type == Node::Type::Backgnd);
-	auto *bg = as<Node::Redir>(tree.get());
+	auto *bg = as<RedirNode>(tree.get());
 	REQUIRE(as_cmd(bg->n.get()));
 	REQUIRE(nth_arg(as_cmd(bg->n.get())->args.get(), 0)->text == "sleep");
+}
+
+TEST_CASE("AST: alias expansion", "[parse][ast][alias]")
+{
+	SECTION("command word expands to multiple words") {
+		auto tree = parse_one("ll\n", {{"ll", "ls -l"}});
+		auto *cmd = as_cmd(tree.get());
+		REQUIRE(cmd);
+		REQUIRE(nth_arg(cmd->args.get(), 0)->text == "ls");
+		REQUIRE(nth_arg(cmd->args.get(), 1)->text == "-l");
+		REQUIRE_FALSE(nth_arg(cmd->args.get(), 2));
+	}
+
+	SECTION("arguments after the command are preserved") {
+		auto tree = parse_one("ll /tmp\n", {{"ll", "ls -l"}});
+		auto *cmd = as_cmd(tree.get());
+		REQUIRE(nth_arg(cmd->args.get(), 0)->text == "ls");
+		REQUIRE(nth_arg(cmd->args.get(), 1)->text == "-l");
+		REQUIRE(nth_arg(cmd->args.get(), 2)->text == "/tmp");
+	}
+
+	SECTION("alias is not expanded in argument position") {
+		auto tree = parse_one("echo ll\n", {{"ll", "ls -l"}});
+		auto *cmd = as_cmd(tree.get());
+		REQUIRE(nth_arg(cmd->args.get(), 0)->text == "echo");
+		REQUIRE(nth_arg(cmd->args.get(), 1)->text == "ll");
+		REQUIRE_FALSE(nth_arg(cmd->args.get(), 2));
+	}
+
+	SECTION("quoted command word is not expanded") {
+		auto tree = parse_one("\"ll\"\n", {{"ll", "ls -l"}});
+		auto *cmd = as_cmd(tree.get());
+		REQUIRE(nth_arg(cmd->args.get(), 0)->text == ctl_quoted("ll"));
+		REQUIRE_FALSE(nth_arg(cmd->args.get(), 1));
+	}
+
+	SECTION("trailing blank re-enables alias on the next word") {
+		auto tree = parse_one("foo bar\n",
+				     {{"foo", "echo "}, {"bar", "hi"}});
+		auto *cmd = as_cmd(tree.get());
+		REQUIRE(nth_arg(cmd->args.get(), 0)->text == "echo");
+		REQUIRE(nth_arg(cmd->args.get(), 1)->text == "hi");
+		REQUIRE_FALSE(nth_arg(cmd->args.get(), 2));
+	}
+
+	SECTION("without trailing blank the next word is not aliased") {
+		auto tree = parse_one("foo bar\n",
+				     {{"foo", "echo"}, {"bar", "hi"}});
+		auto *cmd = as_cmd(tree.get());
+		REQUIRE(nth_arg(cmd->args.get(), 0)->text == "echo");
+		REQUIRE(nth_arg(cmd->args.get(), 1)->text == "bar");
+		REQUIRE_FALSE(nth_arg(cmd->args.get(), 2));
+	}
+
+	SECTION("alias expands after a pipe") {
+		auto tree = parse_one("true | ll\n", {{"ll", "cat"}});
+		REQUIRE(tree->type == Node::Type::Pipe);
+		auto *pipe = as<PipeNode>(tree.get());
+		REQUIRE(pipe->cmdlist.size() == 2);
+		REQUIRE(as_cmd(pipe->cmdlist[1].get()));
+		REQUIRE(nth_arg(as_cmd(pipe->cmdlist[1].get())->args.get(), 0)->text
+			== "cat");
+	}
+
+	SECTION("alias expands after assignments") {
+		auto tree = parse_one("FOO=bar ll\n", {{"ll", "echo ok"}});
+		auto *cmd = as_cmd(tree.get());
+		REQUIRE(as<ArgNode>(cmd->assign.get())->text == "FOO=bar");
+		REQUIRE(nth_arg(cmd->args.get(), 0)->text == "echo");
+		REQUIRE(nth_arg(cmd->args.get(), 1)->text == "ok");
+	}
+
+	SECTION("in-use alias is not expanded recursively") {
+		auto tree = parse_one("x\n", {{"x", "x y"}});
+		auto *cmd = as_cmd(tree.get());
+		REQUIRE(nth_arg(cmd->args.get(), 0)->text == "x");
+		REQUIRE(nth_arg(cmd->args.get(), 1)->text == "y");
+		REQUIRE_FALSE(nth_arg(cmd->args.get(), 2));
+	}
+
+	SECTION("alias may expand into a pipeline") {
+		auto tree = parse_one("p\n", {{"p", "echo a | cat"}});
+		REQUIRE(tree->type == Node::Type::Pipe);
+		auto *pipe = as<PipeNode>(tree.get());
+		REQUIRE(pipe->cmdlist.size() == 2);
+		REQUIRE(nth_arg(as_cmd(pipe->cmdlist[0].get())->args.get(), 0)->text
+			== "echo");
+		REQUIRE(nth_arg(as_cmd(pipe->cmdlist[0].get())->args.get(), 1)->text
+			== "a");
+		REQUIRE(nth_arg(as_cmd(pipe->cmdlist[1].get())->args.get(), 0)->text
+			== "cat");
+	}
 }

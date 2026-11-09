@@ -347,7 +347,7 @@ setparam(ShellContext &sh, char **argv)
  */
 
 void
-freeparam(ShellContext &sh, struct shparam *param)
+freeparam(ShellContext &sh, shparam *param)
 {
 	param->p.clear();
 }
@@ -387,7 +387,7 @@ shell::Result<int>
 setcmd(ShellContext &sh, int argc, char **argv)
 {
 	if (argc == 1)
-		return showvars(sh, "", {}, VarFlag::unset);
+		return showvars(sh, "", {}, shell::Variable::Flag::Unset);
 	INTOFF(sh);
 	TRY_SHV(options(sh, 0, nullptr));
 	optschanged(sh);
@@ -522,7 +522,7 @@ atend:
 
 out:
 	ind = optnext - optfirst + 1;
-	TRY_SHV(sh.set_int_var("OPTIND", ind, VarFlag::nofunc));
+	TRY_SHV(sh.set_int_var("OPTIND", ind, shell::Variable::Flag::NoFunc));
 	s[0] = c;
 	s[1] = '\0';
 	TRY_SHV(setvar(sh, optvar, s));

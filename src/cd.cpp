@@ -312,7 +312,7 @@ setpwd(
 )
 {
 	if (setold)
-		TRY_SHV(setvar(sh, "OLDPWD", sh.cwd.curdir, VarFlag::exported));
+		TRY_SHV(setvar(sh, "OLDPWD", sh.cwd.curdir, shell::Variable::Flag::Exported));
 
 	INTOFF(sh);
 	if (refresh_phys) {
@@ -327,7 +327,7 @@ setpwd(
 		}
 	}
 	INTON(sh);
-	TRY_SHV(setvar(sh, "PWD", sh.cwd.curdir, VarFlag::exported));
+	TRY_SHV(setvar(sh, "PWD", sh.cwd.curdir, shell::Variable::Flag::Exported));
 
 	return {};
 }

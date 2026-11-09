@@ -9,22 +9,10 @@
 
 #include "error.h"
 
-struct ShellContext;
-
-constexpr unsigned BUILTIN_SPECIAL = 0x1;
-constexpr unsigned BUILTIN_REGULAR = 0x2;
-constexpr unsigned BUILTIN_ASSIGN = 0x4;
-
-struct builtincmd {
-	const char *name;
-	shell::Result<int> (*builtin)(ShellContext &, int, char **);
-	unsigned flags;
-};
-
-const builtincmd *find_builtin(std::string_view name);
+const shell::BuiltinCommand *find_builtin(std::string_view name);
 
 /* Stable identities used by eval / trap. */
-extern const builtincmd builtin_command;
-extern const builtincmd builtin_eval;
-extern const builtincmd builtin_exec;
-extern const builtincmd builtin_trap;
+extern const shell::BuiltinCommand builtin_command;
+extern const shell::BuiltinCommand builtin_eval;
+extern const shell::BuiltinCommand builtin_exec;
+extern const shell::BuiltinCommand builtin_trap;

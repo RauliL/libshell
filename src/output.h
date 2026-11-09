@@ -47,76 +47,17 @@
 
 struct ShellContext;
 
-/*
- * Buffered writer for a file descriptor. Owns its buffer via std::vector;
- * allocation does not go through ShellContext / ckmalloc.
- *
- * bufsize == 0 means unbuffered (writes go straight to the fd / sink).
- * Otherwise the buffer is allocated lazily on first write.
- *
- * If `sink` is set, bytes are delivered there instead of `write(fd, …)`.
- */
-struct output {
-	using value_type = char;
-	using container_type = std::vector<value_type>;
-	using size_type = container_type::size_type;
-	using sink_type = std::function<void(std::string_view)>;
-
-	container_type buf;
-	/** Bytes pending in buffer. */
-	size_type pos = 0;
-	/** Capacity once allocated; 0 = unbuffered. */
-	size_type bufsize = 0;
-	int fd = -1;
-	int flags = 0;
-	/** Optional host capture; when set, overrides the fd. */
-	sink_type sink;
-
-	output() = default;
-
-	output(size_type size, int filedes)
-		: bufsize(size)
-		, fd(filedes) {}
-
-	inline size_type space() const
-	{
-		return buf.size() >= pos ? buf.size() - pos : 0;
-	}
-
-	/**
-	 * Drop pending data without writing (e.g. after an interrupted builtin).
-	 */
-	void discard()
-	{
-		pos = 0;
-		flags = 0;
-	}
-
-	void flush(ShellContext &);
-
-	void write(ShellContext &, const char *, std::size_t);
-
-	inline void write(ShellContext &context, std::string_view s)
-	{
-		write(context, s.data(), s.size());
-	}
-
-private:
-	void ensure_buf();
-	int emit(ShellContext &, const char *, std::size_t);
-};
-
-void outcslow(ShellContext &sh, int, output *);
+void outcslow(ShellContext &sh, int, shell::Output *);
 void flushall(ShellContext &sh);
-void outfmt(ShellContext &sh, output *, const char *, ...)
+void outfmt(ShellContext &sh, shell::Output *, const char *, ...)
     __attribute__((__format__(__printf__,3,4)));
 void out1fmt(ShellContext &sh, const char *, ...)
     __attribute__((__format__(__printf__,2,3)));
 shell::Result<int> xasprintf(ShellContext &, std::string &, const char *, ...);
-void doformat(ShellContext &sh, output *, const char *, va_list);
+void doformat(ShellContext &sh, shell::Output *, const char *, va_list);
 int xwrite(ShellContext &sh, int, const void *, std::size_t);
 
-inline void outc(ShellContext &sh, int ch, output *file)
+inline void outc(ShellContext &sh, int ch, shell::Output *file)
 {
 	if (file->space() == 0)
 		outcslow(sh, ch, file);

@@ -65,10 +65,12 @@ setalias(ShellContext &sh, const char *name, const char *val)
 
 	return with_interrupts_off(sh, [&]() -> shell::Result<void> {
 		auto &slot = sh.aliases[key];
+
 		if (!slot)
-			slot = std::make_shared<alias>();
+			slot = std::make_shared<shell::Alias>();
 		slot->name = std::move(key);
-		slot->val = val;
+		slot->value = val;
+
 		return {};
 	});
 }
@@ -78,7 +80,8 @@ unalias(ShellContext &sh, std::string_view name)
 {
 	return with_interrupts_off(sh, [&]() -> shell::Result<int> {
 		const bool found = sh.aliases.erase(std::string(name)) != 0;
-		return found ? 0 : 1;
+
+		return found ? EXIT_SUCCESS : EXIT_FAILURE;
 	});
 }
 
@@ -87,20 +90,20 @@ rmaliases(ShellContext &sh)
 {
 	return with_interrupts_off(sh, [&]() -> shell::Result<void> {
 		sh.aliases.clear();
+
 		return {};
 	});
 }
 
-std::shared_ptr<alias>
+std::shared_ptr<shell::Alias>
 lookupalias(ShellContext &sh, std::string_view name, bool check)
 {
 	auto it = sh.aliases.find(std::string(name));
-	if (it == sh.aliases.end())
+
+	if (it == sh.aliases.end() || (check && it->second->in_use))
 		return nullptr;
-	const auto &ap = it->second;
-	if (check && ap->in_use)
-		return nullptr;
-	return ap;
+
+	return it->second;
 }
 
 shell::Result<int>
@@ -159,7 +162,10 @@ unaliascmd(ShellContext &sh, int argc, char **argv)
 }
 
 void
-printalias(ShellContext &sh, const alias &ap)
+printalias(ShellContext &sh, const shell::Alias &ap)
 {
-	sh.out1->write(sh, std::format("{}={}\n", ap.name, single_quote(ap.val)));
+	sh.out1->write(
+		sh,
+		std::format("{}={}\n", ap.name, single_quote(ap.value))
+	);
 }

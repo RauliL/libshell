@@ -16,8 +16,6 @@
 #include "trap.h"
 #include "var.h"
 
-struct ShellContext;
-
 shell::Result<int> echocmd(ShellContext &sh, int, char **);
 shell::Result<int> printfcmd(ShellContext &sh, int, char **);
 shell::Result<int> testcmd(ShellContext &sh, int argc, char **argv);
@@ -38,46 +36,46 @@ shell::Result<int> ulimitcmd(ShellContext &sh, int argc, char **argv);
 
 namespace {
 
-constexpr unsigned S = BUILTIN_SPECIAL;
-constexpr unsigned R = BUILTIN_REGULAR;
-constexpr unsigned A = BUILTIN_ASSIGN;
+constexpr unsigned S = shell::BuiltinCommand::Flag::Special;
+constexpr unsigned R = shell::BuiltinCommand::Flag::Regular;
+constexpr unsigned A = shell::BuiltinCommand::Flag::Assign;
 
-const builtincmd builtin_dot{".", dotcmd, S | R};
-const builtincmd builtin_colon{":", truecmd, S | R};
-const builtincmd builtin_test_brack{"[", testcmd, 0};
-const builtincmd builtin_alias{"alias", aliascmd, A | R};
-const builtincmd builtin_break{"break", breakcmd, S | R};
-const builtincmd builtin_cd{"cd", cdcmd, R};
-const builtincmd builtin_chdir{"chdir", cdcmd, 0};
-const builtincmd builtin_continue{"continue", breakcmd, S | R};
-const builtincmd builtin_echo{"echo", echocmd, 0};
-const builtincmd builtin_exit{"exit", exitcmd, S | R};
-const builtincmd builtin_export{"export", exportcmd, S | R | A};
-const builtincmd builtin_false{"false", falsecmd, R};
-const builtincmd builtin_getopts{"getopts", getoptscmd, R};
-const builtincmd builtin_hash{"hash", hashcmd, R};
-const builtincmd builtin_kill{"kill", killcmd, R};
-const builtincmd builtin_local{"local", localcmd, S | R | A};
-const builtincmd builtin_printf{"printf", printfcmd, 0};
-const builtincmd builtin_pwd{"pwd", pwdcmd, R};
-const builtincmd builtin_read{"read", readcmd, R};
-const builtincmd builtin_readonly{"readonly", exportcmd, S | R | A};
-const builtincmd builtin_return{"return", returncmd, S | R};
-const builtincmd builtin_set{"set", setcmd, S | R};
-const builtincmd builtin_shift{"shift", shiftcmd, S | R};
-const builtincmd builtin_test{"test", testcmd, 0};
-const builtincmd builtin_times{"times", timescmd, S | R};
-const builtincmd builtin_true{"true", truecmd, R};
-const builtincmd builtin_type{"type", typecmd, R};
+const shell::BuiltinCommand builtin_dot{".", dotcmd, S | R};
+const shell::BuiltinCommand builtin_colon{":", truecmd, S | R};
+const shell::BuiltinCommand builtin_test_brack{"[", testcmd, 0};
+const shell::BuiltinCommand builtin_alias{"alias", aliascmd, A | R};
+const shell::BuiltinCommand builtin_break{"break", breakcmd, S | R};
+const shell::BuiltinCommand builtin_cd{"cd", cdcmd, R};
+const shell::BuiltinCommand builtin_chdir{"chdir", cdcmd, 0};
+const shell::BuiltinCommand builtin_continue{"continue", breakcmd, S | R};
+const shell::BuiltinCommand builtin_echo{"echo", echocmd, 0};
+const shell::BuiltinCommand builtin_exit{"exit", exitcmd, S | R};
+const shell::BuiltinCommand builtin_export{"export", exportcmd, S | R | A};
+const shell::BuiltinCommand builtin_false{"false", falsecmd, R};
+const shell::BuiltinCommand builtin_getopts{"getopts", getoptscmd, R};
+const shell::BuiltinCommand builtin_hash{"hash", hashcmd, R};
+const shell::BuiltinCommand builtin_kill{"kill", killcmd, R};
+const shell::BuiltinCommand builtin_local{"local", localcmd, S | R | A};
+const shell::BuiltinCommand builtin_printf{"printf", printfcmd, 0};
+const shell::BuiltinCommand builtin_pwd{"pwd", pwdcmd, R};
+const shell::BuiltinCommand builtin_read{"read", readcmd, R};
+const shell::BuiltinCommand builtin_readonly{"readonly", exportcmd, S | R | A};
+const shell::BuiltinCommand builtin_return{"return", returncmd, S | R};
+const shell::BuiltinCommand builtin_set{"set", setcmd, S | R};
+const shell::BuiltinCommand builtin_shift{"shift", shiftcmd, S | R};
+const shell::BuiltinCommand builtin_test{"test", testcmd, 0};
+const shell::BuiltinCommand builtin_times{"times", timescmd, S | R};
+const shell::BuiltinCommand builtin_true{"true", truecmd, R};
+const shell::BuiltinCommand builtin_type{"type", typecmd, R};
 #if HAVE_GETRLIMIT
-const builtincmd builtin_ulimit{"ulimit", ulimitcmd, R};
+const shell::BuiltinCommand builtin_ulimit{"ulimit", ulimitcmd, R};
 #endif
-const builtincmd builtin_umask{"umask", umaskcmd, R};
-const builtincmd builtin_unalias{"unalias", unaliascmd, R};
-const builtincmd builtin_unset{"unset", unsetcmd, S | R};
-const builtincmd builtin_wait{"wait", waitcmd, R};
+const shell::BuiltinCommand builtin_umask{"umask", umaskcmd, R};
+const shell::BuiltinCommand builtin_unalias{"unalias", unaliascmd, R};
+const shell::BuiltinCommand builtin_unset{"unset", unsetcmd, S | R};
+const shell::BuiltinCommand builtin_wait{"wait", waitcmd, R};
 
-static const std::unordered_map<std::string_view, const builtincmd *> map = {
+static const std::unordered_map<std::string_view, const shell::BuiltinCommand *> map = {
 	{builtin_dot.name, &builtin_dot},
 	{builtin_colon.name, &builtin_colon},
 	{builtin_test_brack.name, &builtin_test_brack},
@@ -120,12 +118,12 @@ static const std::unordered_map<std::string_view, const builtincmd *> map = {
 
 } // namespace
 
-const builtincmd builtin_command{"command", commandcmd, R};
-const builtincmd builtin_eval{"eval", nullptr, S | R};
-const builtincmd builtin_exec{"exec", execcmd, S | R};
-const builtincmd builtin_trap{"trap", trapcmd, S | R};
+const shell::BuiltinCommand builtin_command{"command", commandcmd, R};
+const shell::BuiltinCommand builtin_eval{"eval", nullptr, S | R};
+const shell::BuiltinCommand builtin_exec{"exec", execcmd, S | R};
+const shell::BuiltinCommand builtin_trap{"trap", trapcmd, S | R};
 
-const builtincmd *
+const shell::BuiltinCommand *
 find_builtin(std::string_view name)
 {
 	const auto it = map.find(name);

@@ -44,7 +44,20 @@ target_link_libraries(
 )
 dash_configure_tool(arith_tests)
 
+add_executable(
+  var_tests
+  ./var/var_tests.cpp
+)
+target_link_libraries(
+  var_tests
+  PRIVATE
+    dash_lib
+    Catch2::Catch2WithMain
+)
+dash_configure_tool(var_tests)
+
 list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")
 include(Catch)
 catch_discover_tests(parse_tests)
 catch_discover_tests(arith_tests)
+catch_discover_tests(var_tests)

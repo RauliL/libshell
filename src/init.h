@@ -35,11 +35,11 @@
  */
 #pragma once
 
-struct Node;
+#include <libshell.hpp>
 
 struct ShellContext;
 void init(ShellContext &sh);
 void exitreset(ShellContext &sh);
-void forkreset(ShellContext &sh, const Node *);
+void forkreset(ShellContext &sh, const shell::Node *);
 void postexitreset(ShellContext &sh);
 void reset(ShellContext &sh);

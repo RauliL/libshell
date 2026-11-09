@@ -66,6 +66,15 @@
 #include "system.h"
 #include "var.h"
 
+namespace shell {
+
+ParseSession::ParseSession() = default;
+ParseSession::~ParseSession() = default;
+ParseSession::ParseSession(ParseSession &&) noexcept = default;
+ParseSession &ParseSession::operator=(ParseSession &&) noexcept = default;
+
+} // namespace shell
+
 /*
  * Shell command parser.
  */
@@ -153,8 +162,8 @@ isassignment(std::string_view p)
 bool
 issimplecmd(const Node *n, std::string_view name)
 {
-	return n && n->type == Node::Type::Cmd && as<Node::Command>(n)->args &&
-	       as<Node::Arg>(as<Node::Command>(n)->args.get())->text == name;
+	return n && n->type == Node::Type::Cmd && as<CommandNode>(n)->args &&
+	       as<ArgNode>(as<CommandNode>(n)->args.get())->text == name;
 }
 
 
@@ -359,11 +368,11 @@ out_eof:
 		tok = readtoken(sh);
 		if (tok == Token::Backgnd) {
 			if (n2->type == Node::Type::Pipe) {
-				as<Node::Pipe>(n2)->backgnd = 1;
+				as<PipeNode>(n2)->backgnd = 1;
 			} else {
 				if (n2->type != Node::Type::Redir) {
-					n3 = make_node<Node::Redir>();
-					as<Node::Redir>(n3)->n = std::move(n2);
+					n3 = make_node<RedirNode>();
+					as<RedirNode>(n3)->n = std::move(n2);
 					n2 = std::move(n3);
 				}
 				n2->type = Node::Type::Backgnd;
@@ -373,10 +382,10 @@ out_eof:
 			n1 = std::move(n2);
 		}
 		else {
-			n3 = make_node<Node::Binary>();
+			n3 = make_node<BinaryNode>();
 			n3->type = Node::Type::Semi;
-			as<Node::Binary>(n3)->ch1 = std::move(n1);
-			as<Node::Binary>(n3)->ch2 = std::move(n2);
+			as<BinaryNode>(n3)->ch1 = std::move(n1);
+			as<BinaryNode>(n3)->ch2 = std::move(n2);
 			n1 = std::move(n3);
 		}
 		switch (tok) {
@@ -419,10 +428,10 @@ andor(ShellContext &sh)
 		}
 		sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		n2 = pipeline(sh);
-		n3 = make_node<Node::Binary>();
+		n3 = make_node<BinaryNode>();
 		n3->type = t;
-		as<Node::Binary>(n3)->ch1 = std::move(n1);
-		as<Node::Binary>(n3)->ch2 = std::move(n2);
+		as<BinaryNode>(n3)->ch1 = std::move(n1);
+		as<BinaryNode>(n3)->ch2 = std::move(n2);
 		n1 = std::move(n3);
 	}
 }
@@ -442,21 +451,21 @@ pipeline(ShellContext &sh)
 		sh.parse.tokpushback++;
 	n1 = command(sh);
 	if (readtoken(sh) == Token::Pipe) {
-		pipenode = make_node<Node::Pipe>();
+		pipenode = make_node<PipeNode>();
 		pipenode->type = Node::Type::Pipe;
-		as<Node::Pipe>(pipenode)->backgnd = 0;
-		as<Node::Pipe>(pipenode)->cmdlist.push_back(std::move(n1));
+		as<PipeNode>(pipenode)->backgnd = 0;
+		as<PipeNode>(pipenode)->cmdlist.push_back(std::move(n1));
 		do {
 			sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
-			as<Node::Pipe>(pipenode)->cmdlist.push_back(command(sh));
+			as<PipeNode>(pipenode)->cmdlist.push_back(command(sh));
 		} while (readtoken(sh) == Token::Pipe);
 		n1 = std::move(pipenode);
 	}
 	sh.parse.tokpushback++;
 	if (negate) {
-		n2 = make_node<Node::Not>();
+		n2 = make_node<NotNode>();
 		n2->type = Node::Type::Not;
-		as<Node::Not>(n2)->com = std::move(n1);
+		as<NotNode>(n2)->com = std::move(n1);
 		return n2;
 	} else
 		return n1;
@@ -486,24 +495,24 @@ command(ShellContext &sh)
 		synexpect(sh);
 		/* NOTREACHED */
 	case Token::If: {
-		n1 = make_node<Node::If>();
+		n1 = make_node<IfNode>();
 		n1->type = Node::Type::If;
-		as<Node::If>(n1)->test = list(sh, 0);
+		as<IfNode>(n1)->test = list(sh, 0);
 		if (readtoken(sh) != Token::Then)
 			synexpect(sh, Token::Then);
-		as<Node::If>(n1)->ifpart = list(sh, 0);
+		as<IfNode>(n1)->ifpart = list(sh, 0);
 		Node *nwalk = n1.get();
 		while (readtoken(sh) == Token::Elif) {
-			as<Node::If>(nwalk)->elsepart = make_node<Node::If>();
-			nwalk = as<Node::If>(nwalk)->elsepart.get();
+			as<IfNode>(nwalk)->elsepart = make_node<IfNode>();
+			nwalk = as<IfNode>(nwalk)->elsepart.get();
 			nwalk->type = Node::Type::If;
-			as<Node::If>(nwalk)->test = list(sh, 0);
+			as<IfNode>(nwalk)->test = list(sh, 0);
 			if (readtoken(sh) != Token::Then)
 				synexpect(sh, Token::Then);
-			as<Node::If>(nwalk)->ifpart = list(sh, 0);
+			as<IfNode>(nwalk)->ifpart = list(sh, 0);
 		}
 		if (sh.parse.lasttoken == Token::Else)
-			as<Node::If>(nwalk)->elsepart = list(sh, 0);
+			as<IfNode>(nwalk)->elsepart = list(sh, 0);
 		else {
 			sh.parse.tokpushback++;
 		}
@@ -513,13 +522,13 @@ command(ShellContext &sh)
 	case Token::While:
 	case Token::Until: {
 		Token got;
-		n1 = make_node<Node::Binary>();
+		n1 = make_node<BinaryNode>();
 		n1->type = (sh.parse.lasttoken == Token::While)? Node::Type::While : Node::Type::Until;
-		as<Node::Binary>(n1)->ch1 = list(sh, 0);
+		as<BinaryNode>(n1)->ch1 = list(sh, 0);
 		if ((got=readtoken(sh)) != Token::Do) {
 			synexpect(sh, Token::Do);
 		}
-		as<Node::Binary>(n1)->ch2 = list(sh, 0);
+		as<BinaryNode>(n1)->ch2 = list(sh, 0);
 		t = Token::Done;
 		break;
 	}
@@ -527,28 +536,28 @@ command(ShellContext &sh)
 		if (readtoken(sh) != Token::Word || sh.parse.quoteflag ||
 		    endofname(sh.parse.wordtext) != sh.parse.wordtext.size())
 			synerror(sh, "Bad for loop variable");
-		n1 = make_node<Node::For>();
+		n1 = make_node<ForNode>();
 		n1->type = Node::Type::For;
-		as<Node::For>(n1)->linno = savelinno;
-		as<Node::For>(n1)->var = sh.parse.wordtext;
+		as<ForNode>(n1)->linno = savelinno;
+		as<ForNode>(n1)->var = sh.parse.wordtext;
 		sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		if (readtoken(sh) == Token::In) {
 			app = &ap;
 			while (readtoken(sh) == Token::Word) {
-				*app = make_node<Node::Arg>();
+				*app = make_node<ArgNode>();
 				(*app)->type = Node::Type::Arg;
-				as<Node::Arg>(*app)->text = sh.parse.wordtext;
-				as<Node::Arg>(*app)->backquote = std::move(sh.parse.backquotelist);
-				app = &as<Node::Arg>(*app)->next;
+				as<ArgNode>(*app)->text = sh.parse.wordtext;
+				as<ArgNode>(*app)->backquote = std::move(sh.parse.backquotelist);
+				app = &as<ArgNode>(*app)->next;
 			}
-			as<Node::For>(n1)->args = std::move(ap);
+			as<ForNode>(n1)->args = std::move(ap);
 			if (sh.parse.lasttoken != Token::Nl && sh.parse.lasttoken != Token::Semi)
 				synexpect(sh);
 		} else {
-			n2 = make_node<Node::Arg>();
+			n2 = make_node<ArgNode>();
 			n2->type = Node::Type::Arg;
-			as<Node::Arg>(n2)->text = dolatstr;
-			as<Node::For>(n1)->args = std::move(n2);
+			as<ArgNode>(n2)->text = dolatstr;
+			as<ForNode>(n1)->args = std::move(n2);
 			/*
 			 * Newline or semicolon here is optional (but note
 			 * that the original Bourne shell only allowed NL).
@@ -559,51 +568,51 @@ command(ShellContext &sh)
 		sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		if (readtoken(sh) != Token::Do)
 			synexpect(sh, Token::Do);
-		as<Node::For>(n1)->body = list(sh, 0);
+		as<ForNode>(n1)->body = list(sh, 0);
 		t = Token::Done;
 		break;
 	case Token::Case:
-		n1 = make_node<Node::Case>();
+		n1 = make_node<CaseNode>();
 		n1->type = Node::Type::Case;
-		as<Node::Case>(n1)->linno = savelinno;
+		as<CaseNode>(n1)->linno = savelinno;
 		if (readtoken(sh) != Token::Word)
 			synexpect(sh, Token::Word);
-		n2 = make_node<Node::Arg>();
+		n2 = make_node<ArgNode>();
 		n2->type = Node::Type::Arg;
-		as<Node::Arg>(n2)->text = sh.parse.wordtext;
-		as<Node::Arg>(n2)->backquote = std::move(sh.parse.backquotelist);
-		as<Node::Case>(n1)->expr = std::move(n2);
+		as<ArgNode>(n2)->text = sh.parse.wordtext;
+		as<ArgNode>(n2)->backquote = std::move(sh.parse.backquotelist);
+		as<CaseNode>(n1)->expr = std::move(n2);
 		sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		if (readtoken(sh) != Token::In)
 			synexpect(sh, Token::In);
-		cpp = &as<Node::Case>(n1)->cases;
+		cpp = &as<CaseNode>(n1)->cases;
 next_case:
 		sh.parse.checkkwd = CHKNL | CHKKWD;
 		t = readtoken(sh);
 		while(t != Token::Esac) {
 			if (sh.parse.lasttoken == Token::Lp)
 				readtoken(sh);
-			*cpp = make_node<Node::CaseList>();
+			*cpp = make_node<CaseListNode>();
 			(*cpp)->type = Node::Type::CaseList;
 			Node *cp = cpp->get();
-			app = &as<Node::CaseList>(cp)->pattern;
+			app = &as<CaseListNode>(cp)->pattern;
 			for (;;) {
 				if (sh.parse.lasttoken < Token::Word)
 					synexpect(sh, Token::Word);
-				*app = make_node<Node::Arg>();
+				*app = make_node<ArgNode>();
 				(*app)->type = Node::Type::Arg;
-				as<Node::Arg>(*app)->text = sh.parse.wordtext;
-				as<Node::Arg>(*app)->backquote = std::move(sh.parse.backquotelist);
+				as<ArgNode>(*app)->text = sh.parse.wordtext;
+				as<ArgNode>(*app)->backquote = std::move(sh.parse.backquotelist);
 				if (readtoken(sh) != Token::Pipe)
 					break;
-				app = &as<Node::Arg>(*app)->next;
+				app = &as<ArgNode>(*app)->next;
 				readtoken(sh);
 			}
 			if (sh.parse.lasttoken != Token::Rp)
 				synexpect(sh, Token::Rp);
-			as<Node::CaseList>(cp)->body = list(sh, 2);
+			as<CaseListNode>(cp)->body = list(sh, 2);
 
-			cpp = &as<Node::CaseList>(cp)->next;
+			cpp = &as<CaseListNode>(cp)->next;
 
 			sh.parse.checkkwd = CHKNL | CHKKWD;
 			if ((t = readtoken(sh)) != Token::Esac) {
@@ -615,10 +624,10 @@ next_case:
 		}
 		goto redir;
 	case Token::Lp:
-		n1 = make_node<Node::Redir>();
+		n1 = make_node<RedirNode>();
 		n1->type = Node::Type::Subshell;
-		as<Node::Redir>(n1)->linno = savelinno;
-		as<Node::Redir>(n1)->n = list(sh, 0);
+		as<RedirNode>(n1)->linno = savelinno;
+		as<RedirNode>(n1)->n = list(sh, 0);
 		t = Token::Rp;
 		break;
 	case Token::Begin:
@@ -641,18 +650,18 @@ redir:
 	while (readtoken(sh) == Token::Redir) {
 		parsefname(sh);
 		*rpp = std::move(sh.parse.redirnode);
-		rpp = &as<Node::RedirList>(*rpp)->next;
+		rpp = &as<RedirList>(*rpp)->next;
 	}
 	sh.parse.tokpushback++;
 	if (redir) {
 		if (n1->type != Node::Type::Subshell) {
-			n2 = make_node<Node::Redir>();
+			n2 = make_node<RedirNode>();
 			n2->type = Node::Type::Redir;
-			as<Node::Redir>(n2)->linno = savelinno;
-			as<Node::Redir>(n2)->n = std::move(n1);
+			as<RedirNode>(n2)->linno = savelinno;
+			as<RedirNode>(n2)->n = std::move(n1);
 			n1 = std::move(n2);
 		}
-		as<Node::Redir>(n1)->redirect = std::move(redir);
+		as<RedirNode>(n1)->redirect = std::move(redir);
 	}
 
 	return n1;
@@ -678,31 +687,31 @@ simplecmd(ShellContext &sh)
 		sh.parse.checkkwd = savecheckkwd;
 		switch (readtoken(sh)) {
 		case Token::Word:
-			n = make_node<Node::Arg>();
+			n = make_node<ArgNode>();
 			n->type = Node::Type::Arg;
-			as<Node::Arg>(n)->text = sh.parse.wordtext;
-			as<Node::Arg>(n)->backquote = std::move(sh.parse.backquotelist);
+			as<ArgNode>(n)->text = sh.parse.wordtext;
+			as<ArgNode>(n)->backquote = std::move(sh.parse.backquotelist);
 			if (savecheckkwd && isassignment(sh.parse.wordtext)) {
 				*vpp = std::move(n);
-				vpp = &as<Node::Arg>(*vpp)->next;
+				vpp = &as<ArgNode>(*vpp)->next;
 			} else {
 				*app = std::move(n);
-				app = &as<Node::Arg>(*app)->next;
+				app = &as<ArgNode>(*app)->next;
 				savecheckkwd = 0;
 			}
 			break;
 		case Token::Redir:
 			parsefname(sh);	/* read name of redirection file */
 			*rpp = std::move(sh.parse.redirnode);
-			rpp = &as<Node::RedirList>(*rpp)->next;
+			rpp = &as<RedirList>(*rpp)->next;
 			break;
 		case Token::Lp:
 			if (
-				args && app == &as<Node::Arg>(args)->next &&
+				args && app == &as<ArgNode>(args)->next &&
 				!vars && !redir
 			) {
-				const builtincmd *bcmd;
-				std::string fname = std::move(as<Node::Arg>(args)->text);
+				const shell::BuiltinCommand *bcmd;
+				std::string fname = std::move(as<ArgNode>(args)->text);
 
 				/* We have a function */
 				if (readtoken(sh) != Token::Rp)
@@ -710,17 +719,17 @@ simplecmd(ShellContext &sh)
 				if (
 					endofname(fname) != fname.size() || (
 						(bcmd = find_builtin(fname)) &&
-						bcmd->flags & BUILTIN_SPECIAL
+						bcmd->flags & shell::BuiltinCommand::Flag::Special
 					)
 				)
 					synerror(sh, "Bad function name");
 				args.reset();
-				n = make_node<Node::Defun>();
+				n = make_node<DefunNode>();
 				n->type = Node::Type::Defun;
 				sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
-				as<Node::Defun>(n)->text = std::move(fname);
-				as<Node::Defun>(n)->linno = plinno;
-				as<Node::Defun>(n)->body = command(sh);
+				as<DefunNode>(n)->text = std::move(fname);
+				as<DefunNode>(n)->linno = plinno;
+				as<DefunNode>(n)->body = command(sh);
 				return n;
 			}
 			/* fall through */
@@ -730,23 +739,23 @@ simplecmd(ShellContext &sh)
 		}
 	}
 out:
-	n = make_node<Node::Command>();
+	n = make_node<CommandNode>();
 	n->type = Node::Type::Cmd;
-	as<Node::Command>(n)->linno = savelinno;
-	as<Node::Command>(n)->args = std::move(args);
-	as<Node::Command>(n)->assign = std::move(vars);
-	as<Node::Command>(n)->redirect = std::move(redir);
+	as<CommandNode>(n)->linno = savelinno;
+	as<CommandNode>(n)->args = std::move(args);
+	as<CommandNode>(n)->assign = std::move(vars);
+	as<CommandNode>(n)->redirect = std::move(redir);
 	return n;
 }
 
 static Node::ptr
 makename(ShellContext &sh)
 {
-	Node::ptr n = make_node<Node::Arg>();
+	Node::ptr n = make_node<ArgNode>();
 
 	n->type = Node::Type::Arg;
-	as<Node::Arg>(n)->text = sh.parse.wordtext;
-	as<Node::Arg>(n)->backquote = std::move(sh.parse.backquotelist);
+	as<ArgNode>(n)->text = sh.parse.wordtext;
+	as<ArgNode>(n)->backquote = std::move(sh.parse.backquotelist);
 
 	return n;
 }
@@ -755,17 +764,17 @@ void
 fixredir(ShellContext &sh, Node *n, const char *text, int err)
 {
 	if (!err)
-		as<Node::Dup>(n)->vname.reset();
+		as<DupNode>(n)->vname.reset();
 
 	if (is_digit(text[0]) && text[1] == '\0')
-		as<Node::Dup>(n)->dupfd = digit_val(text[0]);
+		as<DupNode>(n)->dupfd = digit_val(text[0]);
 	else if (text[0] == '-' && text[1] == '\0')
-		as<Node::Dup>(n)->dupfd = -1;
+		as<DupNode>(n)->dupfd = -1;
 	else {
 		if (err)
 			throw shell::ParseError(std::format("Bad fd number: {}", text), plinno);
 
-		as<Node::Dup>(n)->vname = makename(sh);
+		as<DupNode>(n)->vname = makename(sh);
 	}
 }
 
@@ -791,7 +800,7 @@ parsefname(ShellContext &sh)
 	} else if (n->type == Node::Type::ToFd || n->type == Node::Type::FromFd) {
 		fixredir(sh, n, sh.parse.wordtext.c_str(), 0);
 	} else {
-		as<Node::File>(n)->fname = makename(sh);
+		as<FileNode>(n)->fname = makename(sh);
 	}
 }
 
@@ -813,11 +822,11 @@ parseheredoc(ShellContext &sh)
 			readtoken1(sh, pgetc(sh), SQSYNTAX, &here.eofmark, here.striptabs);
 		else
 			readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, &here.eofmark, here.striptabs);
-		Node::ptr n = make_node<Node::Arg>();
+		Node::ptr n = make_node<ArgNode>();
 		n->type = Node::Type::Arg;
-		as<Node::Arg>(n)->text = sh.parse.wordtext;
-		as<Node::Arg>(n)->backquote = std::move(sh.parse.backquotelist);
-		as<Node::Here>(here.here)->doc = std::move(n);
+		as<ArgNode>(n)->text = sh.parse.wordtext;
+		as<ArgNode>(n)->backquote = std::move(sh.parse.backquotelist);
+		as<HereNode>(here.here)->doc = std::move(n);
 	}
 }
 
@@ -860,14 +869,16 @@ top:
 	}
 
 	if (kwd & CHKALIAS) {
-		if (auto ap = lookupalias(sh, sh.parse.wordtext, true)) {
-			if (!ap->val.empty()) {
-				char *text = ap->val.data();
+		if (const auto ap = lookupalias(sh, sh.parse.wordtext, true)) {
+			if (!ap->value.empty()) {
+				char *text = ap->value.data();
+
 				pushstring(sh, text, std::move(ap));
 			}
 			goto top;
 		}
 	}
+
 out:
 	return (t);
 }
@@ -1452,13 +1463,13 @@ parseredir: {
 		}
 	}
 	if (redir_type == Node::Type::Here)
-		np = make_node<Node::Here>();
+		np = make_node<HereNode>();
 	else if (redir_type == Node::Type::ToFd || redir_type == Node::Type::FromFd)
-		np = make_node<Node::Dup>();
+		np = make_node<DupNode>();
 	else
-		np = make_node<Node::File>();
+		np = make_node<FileNode>();
 	np->type = redir_type;
-	as<Node::RedirList>(np)->fd = fd != '\0' ? digit_val(fd) : default_fd;
+	as<RedirList>(np)->fd = fd != '\0' ? digit_val(fd) : default_fd;
 	if (redir_type == Node::Type::Here) {
 		heredoc pending{};
 		pending.here = np.get();
@@ -1857,11 +1868,11 @@ setprompt(ShellContext &sh, int which)
 std::string
 expandstr(ShellContext &sh, const char *ps)
 {
-	struct parsefile *file_stop;
+	parsefile *file_stop;
 	std::vector<heredoc> saveheredoclist;
 	std::string result = ps;
 	int saveprompt;
-	struct Node::Arg n{};
+	struct ArgNode n{};
 	int err = 0;
 
 	file_stop = sh.input.current;

@@ -51,7 +51,7 @@ resume:
 	if (!failed && state < 4) {
 		state = 4;
 		if (minusc)
-			take(sh.eval(*minusc, sh.opts.stdin_opt() ? EvalFlags{} : EvalFlag::exit));
+			take(sh.eval(*minusc, sh.opts.stdin_opt() ? EvalFlags{} : EvalFlag::Exit));
 	}
 	if (!failed) {
 		if (sh.opts.interactive())

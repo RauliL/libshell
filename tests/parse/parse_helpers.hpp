@@ -1,12 +1,16 @@
 #pragma once
 
 #include <cstdio>
+#include <initializer_list>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#include <libshell.hpp>
 
 #include "input.h"
 #include "nodes.h"
@@ -20,6 +24,14 @@ namespace parse_test {
 inline void init_shell(ShellContext &sh)
 {
 	sh.arg0 = "parse_tests";
+}
+
+inline void set_alias(ShellContext &sh, std::string name, std::string value)
+{
+	auto ap = std::make_shared<shell::Alias>();
+	ap->name = name;
+	ap->value = std::move(value);
+	sh.aliases.emplace(std::move(name), std::move(ap));
 }
 
 inline bool parses_ok(std::string_view script)
@@ -46,11 +58,16 @@ inline bool parses_file_ok(const std::string &path)
 	return parses_ok(contents);
 }
 
+using AliasInit = std::initializer_list<std::pair<std::string_view, std::string_view>>;
+
 /* Parse a script into one tree per top-level command (blank lines are nullptr). */
-inline std::vector<Node::ptr> parse_trees(std::string_view script)
+inline std::vector<Node::ptr> parse_trees(std::string_view script,
+					  AliasInit aliases = {})
 {
 	ShellContext sh;
 	init_shell(sh);
+	for (auto [name, value] : aliases)
+		set_alias(sh, std::string(name), std::string(value));
 
 	std::string copy(script);
 	setinputstring(sh, copy.data());
@@ -72,9 +89,9 @@ inline std::vector<Node::ptr> parse_trees(std::string_view script)
 }
 
 /* Parse a script that should yield exactly one non-null tree. */
-inline Node::ptr parse_one(std::string_view script)
+inline Node::ptr parse_one(std::string_view script, AliasInit aliases = {})
 {
-	auto trees = parse_trees(script);
+	auto trees = parse_trees(script, aliases);
 	if (trees.size() != 1 || !trees[0])
 		throw std::runtime_error("expected exactly one non-null parse tree");
 	return std::move(trees[0]);
@@ -127,17 +144,17 @@ inline std::string ctl_arith(std::string_view expr)
 
 /* --- AST accessors --- */
 
-inline Node::Arg *nth_arg(Node *args, int n)
+inline ArgNode *nth_arg(Node *args, int n)
 {
 	Node *cur = args;
 	for (int i = 0; cur && i < n; ++i)
-		cur = as<Node::Arg>(cur)->next.get();
-	return cur ? as<Node::Arg>(cur) : nullptr;
+		cur = as<ArgNode>(cur)->next.get();
+	return cur ? as<ArgNode>(cur) : nullptr;
 }
 
-inline Node::Command *as_cmd(Node *n)
+inline CommandNode *as_cmd(Node *n)
 {
-	return n && n->type == Node::Type::Cmd ? as<Node::Command>(n) : nullptr;
+	return n && n->type == Node::Type::Cmd ? as<CommandNode>(n) : nullptr;
 }
 
 } /* namespace parse_test */

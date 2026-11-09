@@ -37,31 +37,16 @@
 
 #include <string_view>
 
+#include <libshell.hpp>
+
 #include "nodes.h"
 
-/* values of cmdtype */
-#define CMDUNKNOWN	-1	/* no entry in table for command */
-#define CMDNORMAL	0	/* command is an executable program */
-#define CMDFUNCTION	1	/* command is a shell function */
-#define CMDBUILTIN	2	/* command is a shell builtin */
-
-
-struct cmdparam {
-	int index = 0;
-	const struct builtincmd *cmd = nullptr;
-    std::shared_ptr<Node> func;
-};
+using cmdparam = shell::CommandParam;
+using tblentry = shell::TableEntry;
 
 struct cmdentry {
-	int cmdtype = CMDUNKNOWN;
+	shell::TableEntry::Type type = shell::TableEntry::Type::Unknown;
 	cmdparam u;
-};
-
-/* One remembered command: a function, a builtin, or a hashed path. */
-struct tblentry {
-	cmdparam param{};
-	short cmdtype = CMDUNKNOWN;
-	bool rehash = false;
 };
 
 
@@ -73,7 +58,8 @@ struct tblentry {
 #define DO_REGBLTIN	0x10	/* regular built-ins and functions only */
 
 struct ShellContext;
-struct Node;
+
+using Node = shell::Node;
 
 extern const char *pathopt;	/* set by padvance */
 
@@ -85,7 +71,7 @@ int padvance_magic(ShellContext &sh, const char **path, const char *name,
 shell::Result<void> find_command(ShellContext &, char *, struct cmdentry *, int, const char *);
 void hashcd(ShellContext &);
 void changepath(ShellContext &, std::string_view);
-void defun(ShellContext &, const Node::Defun *);
+void defun(ShellContext &, const DefunNode *);
 void unsetfunc(ShellContext &, std::string_view);
 shell::Result<int> hashcmd(ShellContext &sh, int, char **);
 shell::Result<int> typecmd(ShellContext &sh, int, char **);

@@ -38,104 +38,26 @@
 
 #include <string>
 
-struct Job;
+#include <libshell.hpp>
 
 struct backcmd {		/* result of evalbackcmd */
 	int fd = -1;		/* file descriptor to read from */
 	std::string buf;	/* buffer */
-	Job *jp = nullptr;	/* job structure for command */
+	shell::Job *jp = nullptr;	/* job structure for command */
 };
 
 #include <bitset>
 #include <cstddef>
 #include <type_traits>
 
-/*
- * How to evaluate a command tree. Passed to execute(), evalstring(), and
- * evaltree().
- *
- * exit:   this tree is the last action of the shell. After it runs, exit
- *         instead of returning. Also lets a subshell or external command
- *         replace the current process.
- * tested: the caller inspects the status (if, while, &&, ||, !, a function
- *         body). A failing command does not trigger set -e.
- */
-enum class EvalFlag : std::size_t {
-	exit,
-	tested,
-};
-
-class EvalFlags {
-	static constexpr std::size_t nbits =
-		static_cast<std::size_t>(EvalFlag::tested) + 1;
-	std::bitset<nbits> bits{};
-
-	static constexpr std::size_t index(EvalFlag flag)
-	{
-		return static_cast<std::size_t>(flag);
-	}
-
-public:
-	EvalFlags() = default;
-	EvalFlags(EvalFlag flag) { bits.set(index(flag)); }
-
-	bool test(EvalFlag flag) const { return bits.test(index(flag)); }
-
-	EvalFlags &set(EvalFlag flag)
-	{
-		bits.set(index(flag));
-		return *this;
-	}
-
-	EvalFlags &reset(EvalFlag flag)
-	{
-		bits.reset(index(flag));
-		return *this;
-	}
-
-	/* Keep only this flag, and only when it was already set. */
-	EvalFlags &operator&=(EvalFlag flag)
-	{
-		bool on = test(flag);
-		bits.reset();
-		if (on)
-			bits.set(index(flag));
-		return *this;
-	}
-
-	EvalFlags operator&(EvalFlag flag) const
-	{
-		EvalFlags out = *this;
-		out &= flag;
-		return out;
-	}
-
-	EvalFlags &operator|=(EvalFlag flag) { return set(flag); }
-
-	EvalFlags operator|(EvalFlag flag) const
-	{
-		EvalFlags out = *this;
-		out.set(flag);
-		return out;
-	}
-
-	unsigned long to_ulong() const { return bits.to_ulong(); }
-};
-
-inline EvalFlags operator|(EvalFlag a, EvalFlag b)
-{
-	EvalFlags flags(a);
-	flags.set(b);
-	return flags;
-}
-
-static_assert(std::is_trivially_copyable_v<EvalFlags>);
-static_assert(std::is_trivially_destructible_v<EvalFlags>);
-
 #include "error.h"
 
 struct ShellContext;
-struct Node;
+
+using EvalFlag = shell::EvalFlag;
+using EvalFlags = shell::EvalFlags;
+using Node = shell::Node;
+
 shell::Result<int> evaltree(ShellContext &sh, Node *, EvalFlags);
 shell::Result<void> evalbackcmd(ShellContext &sh, Node *, struct backcmd *);
 /** Clear eval skip/loop state and close the temporary pipe on unwind. */

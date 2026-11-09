@@ -5,88 +5,11 @@
  * command table use shared_ptr.
  */
 
-#include <cstdint>
-#include <memory>
-#include <string>
-#include <type_traits>
-#include <vector>
+#include <libshell.hpp>
 
 #include "eval.h"
 
-struct ShellContext;
-
-struct Node {
-	using ptr = std::unique_ptr<Node>;
-
-	/*
-	 * Node kind tags — values must stay stable (eval uses And/Or/Semi
-	 * consecutive order).
-	 */
-	enum class Type : std::uint8_t {
-		Cmd = 0,
-		Pipe = 1,
-		Redir = 2,
-		Backgnd = 3,
-		Subshell = 4,
-		And = 5,
-		Or = 6,
-		Semi = 7,
-		If = 8,
-		While = 9,
-		Until = 10,
-		For = 11,
-		Case = 12,
-		CaseList = 13,
-		Defun = 14,
-		Arg = 15,
-		To = 16,
-		Clobber = 17,
-		From = 18,
-		FromTo = 19,
-		Append = 20,
-		ToFd = 21,
-		FromFd = 22,
-		Here = 23,
-		XHere = 24,
-		Not = 25,
-	};
-
-	struct Arg;
-	struct Binary;
-	struct Case;
-	struct CaseList;
-	struct Command;
-	struct Defun;
-	struct Dup;
-	struct File;
-	struct For;
-	struct Here;
-	struct If;
-	struct Not;
-	struct Pipe;
-	struct Redir;
-	struct RedirList;
-
-	Type type;
-
-	explicit Node(Type t) : type(t) {}
-	Node(const Node &) = delete;
-	Node &operator=(const Node &) = delete;
-	virtual ~Node() = default;
-
-	virtual ptr clone() const = 0;
-
-	/**
-	 * Evaluate this node.  Prologue/epilogue (traps, set -e, EvalFlag::exit)
-	 * live in the free evaltree(); overrides implement type-specific work.
-	 * Set checkexit when a failing status should trigger set -e.
-	 */
-	virtual shell::Result<int> eval(
-		ShellContext &sh,
-		EvalFlags flags,
-		bool &checkexit
-	) const;
-};
+using Node = shell::Node;
 
 template <
 	typename T,
@@ -125,21 +48,21 @@ constexpr T *as(const std::shared_ptr<Node> &n) noexcept
 }
 
 /* Common prefix for redirection list nodes (nfile / ndup / nhere). */
-struct Node::RedirList : Node {
+struct RedirList : Node {
 	ptr next;
 	int fd{};
 
 	explicit RedirList(Type t) : Node(t) {}
 };
 
-struct Node::Command : Node {
+struct CommandNode : Node {
 	int linno{};
 	ptr assign;
 	ptr args;
 	ptr redirect;
 
-	explicit Command(Type t = Type::Cmd) : Node(t) {}
-	~Command() override;
+	explicit CommandNode(Type t = Type::Cmd) : Node(t) {}
+	~CommandNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
 		ShellContext &sh,
@@ -148,12 +71,12 @@ struct Node::Command : Node {
 	) const override;
 };
 
-struct Node::Pipe : Node {
+struct PipeNode : Node {
 	int backgnd{};
 	std::vector<ptr> cmdlist;
 
-	explicit Pipe(Type t = Type::Pipe) : Node(t) {}
-	~Pipe() override;
+	explicit PipeNode(Type t = Type::Pipe) : Node(t) {}
+	~PipeNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
 		ShellContext &sh,
@@ -162,13 +85,13 @@ struct Node::Pipe : Node {
 	) const override;
 };
 
-struct Node::Redir : Node {
+struct RedirNode : Node {
 	int linno{};
 	ptr n;
 	ptr redirect;
 
-	explicit Redir(Type t = Type::Redir) : Node(t) {}
-	~Redir() override;
+	explicit RedirNode(Type t = Type::Redir) : Node(t) {}
+	~RedirNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
 		ShellContext &sh,
@@ -177,12 +100,12 @@ struct Node::Redir : Node {
 	) const override;
 };
 
-struct Node::Binary : Node {
+struct BinaryNode : Node {
 	ptr ch1;
 	ptr ch2;
 
-	explicit Binary(Type t = Type::Semi) : Node(t) {}
-	~Binary() override;
+	explicit BinaryNode(Type t = Type::Semi) : Node(t) {}
+	~BinaryNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
 		ShellContext &sh,
@@ -191,13 +114,13 @@ struct Node::Binary : Node {
 	) const override;
 };
 
-struct Node::If : Node {
+struct IfNode : Node {
 	ptr test;
 	ptr ifpart;
 	ptr elsepart;
 
-	explicit If(Type t = Type::If) : Node(t) {}
-	~If() override;
+	explicit IfNode(Type t = Type::If) : Node(t) {}
+	~IfNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
 		ShellContext &sh,
@@ -206,14 +129,14 @@ struct Node::If : Node {
 	) const override;
 };
 
-struct Node::For : Node {
+struct ForNode : Node {
 	int linno{};
 	ptr args;
 	ptr body;
 	std::string var;
 
-	explicit For(Type t = Type::For) : Node(t) {}
-	~For() override;
+	explicit ForNode(Type t = Type::For) : Node(t) {}
+	~ForNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
 		ShellContext &sh,
@@ -222,13 +145,13 @@ struct Node::For : Node {
 	) const override;
 };
 
-struct Node::Case : Node {
+struct CaseNode : Node {
 	int linno{};
 	ptr expr;
 	ptr cases;
 
-	explicit Case(Type t = Type::Case) : Node(t) {}
-	~Case() override;
+	explicit CaseNode(Type t = Type::Case) : Node(t) {}
+	~CaseNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
 		ShellContext &sh,
@@ -237,23 +160,23 @@ struct Node::Case : Node {
 	) const override;
 };
 
-struct Node::CaseList : Node {
+struct CaseListNode : Node {
 	ptr next;
 	ptr pattern;
 	ptr body;
 
-	explicit CaseList(Type t = Type::CaseList) : Node(t) {}
-	~CaseList() override;
+	explicit CaseListNode(Type t = Type::CaseList) : Node(t) {}
+	~CaseListNode() override;
 	ptr clone() const override;
 };
 
-struct Node::Defun : Node {
+struct DefunNode : Node {
 	int linno{};
 	std::string text;
 	ptr body;
 
-	explicit Defun(Type t = Type::Defun) : Node(t) {}
-	~Defun() override;
+	explicit DefunNode(Type t = Type::Defun) : Node(t) {}
+	~DefunNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
 		ShellContext &sh,
@@ -262,47 +185,47 @@ struct Node::Defun : Node {
 	) const override;
 };
 
-struct Node::Arg : Node {
+struct ArgNode : Node {
 	ptr next;
 	std::string text;
 	std::vector<ptr> backquote;
 
-	explicit Arg(Type t = Type::Arg) : Node(t) {}
-	~Arg() override;
+	explicit ArgNode(Type t = Type::Arg) : Node(t) {}
+	~ArgNode() override;
 	ptr clone() const override;
 };
 
-struct Node::File : Node::RedirList {
+struct FileNode : RedirList {
 	ptr fname;
 	std::string expfname;
 
-	explicit File(Type t = Type::To) : RedirList(t) {}
-	~File() override;
+	explicit FileNode(Type t = Type::To) : RedirList(t) {}
+	~FileNode() override;
 	ptr clone() const override;
 };
 
-struct Node::Dup : Node::RedirList {
+struct DupNode : RedirList {
 	int dupfd{};
 	ptr vname;
 
-	explicit Dup(Type t = Type::ToFd) : RedirList(t) {}
-	~Dup() override;
+	explicit DupNode(Type t = Type::ToFd) : RedirList(t) {}
+	~DupNode() override;
 	ptr clone() const override;
 };
 
-struct Node::Here : Node::RedirList {
+struct HereNode : RedirList {
 	ptr doc;
 
-	explicit Here(Type t = Type::Here) : RedirList(t) {}
-	~Here() override;
+	explicit HereNode(Type t = Type::Here) : RedirList(t) {}
+	~HereNode() override;
 	ptr clone() const override;
 };
 
-struct Node::Not : Node {
+struct NotNode : Node {
 	ptr com;
 
-	Not(Type t = Type::Not) : Node(t) {}
-	~Not() override;
+	NotNode(Type t = Type::Not) : Node(t) {}
+	~NotNode() override;
 	ptr clone() const override;
 	shell::Result<int> eval(
 		ShellContext &sh,

@@ -30,15 +30,15 @@ ShellContext::release_signals()
 }
 
 void
-ShellContext::set_stdout(std::function<void(std::string_view)> sink)
+ShellContext::set_stdout(const shell::Output::sink_type &sink)
 {
-	output.sink = std::move(sink);
+	output.sink = sink;
 }
 
 void
-ShellContext::set_stderr(std::function<void(std::string_view)> sink)
+ShellContext::set_stderr(const shell::Output::sink_type &sink)
 {
-	errout.sink = std::move(sink);
+	errout.sink = sink;
 }
 
 std::string_view

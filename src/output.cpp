@@ -64,15 +64,17 @@
 
 static int xvsnprintf(ShellContext &sh, char *, size_t, const char *, va_list);
 
+namespace shell {
+
 void
-output::ensure_buf()
+Output::ensure_buf()
 {
 	if (buf.empty() && bufsize)
 		buf.resize(bufsize);
 }
 
 int
-output::emit(ShellContext &context, const char *p, std::size_t len)
+Output::emit(ShellContext &context, const char *p, std::size_t len)
 {
 	if (sink) {
 		sink(std::string_view(p, len));
@@ -84,7 +86,7 @@ output::emit(ShellContext &context, const char *p, std::size_t len)
 }
 
 void
-output::flush(ShellContext &context)
+Output::flush(ShellContext &context)
 {
 	const std::size_t len = pos;
 
@@ -99,7 +101,7 @@ output::flush(ShellContext &context)
 }
 
 void
-output::write(ShellContext &sh, const char *p, std::size_t len)
+Output::write(ShellContext &sh, const char *p, std::size_t len)
 {
 	std::size_t nleft = space();
 
@@ -126,8 +128,10 @@ buffered:
 		flags |= OUTPUT_ERR;
 }
 
+}
+
 void
-outcslow(ShellContext &sh, int c, output *dest)
+outcslow(ShellContext &sh, int c, shell::Output *dest)
 {
 	char buf = c;
 
@@ -145,7 +149,7 @@ flushall(ShellContext &sh)
 }
 
 void
-outfmt(ShellContext &sh, struct output *file, const char *fmt, ...)
+outfmt(ShellContext &sh, shell::Output *file, const char *fmt, ...)
 {
 	va_list ap;
 
@@ -203,7 +207,7 @@ xasprintf(ShellContext &sh, std::string &out, const char *f, ...)
 
 
 void
-doformat(ShellContext &sh, struct output *dest, const char *f, va_list ap)
+doformat(ShellContext &sh, shell::Output *dest, const char *f, va_list ap)
 {
 	char *s;
 	int len;

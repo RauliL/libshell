@@ -73,6 +73,8 @@
 #include "mystring.h"
 #include "system.h"
 
+using Job = shell::Job;
+
 /* mode flags for set_curjob */
 #define CUR_DELETE 2
 #define CUR_RUNNING 1
@@ -99,23 +101,26 @@ static void cmdtxt(ShellContext &sh, const Node *, std::string &);
 static void cmdlist(ShellContext &sh, Node *, int, std::string &);
 static void cmdputs(std::string &, std::string_view);
 
-ProcStat &
-Job::add_process(pid_t pid, std::string cmd)
+namespace shell {
+
+shell::Job::Process &
+Job::add_process(pid_t pid, const std::string &command)
 {
-	procs.push_back(ProcStat{pid, -1, std::move(cmd)});
-	return procs.back();
+	processes.push_back(Process{pid, -1, std::move(command)});
+
+	return processes.back();
 }
 
 int
 Job::calc_status(bool pipefail_on)
 {
-	if (procs.empty())
+	if (processes.empty())
 		return 0;
 
-	auto it = procs.end() - 1;
+	auto it = processes.end() - 1;
 	int status = it->status;
 	if (pipefail_on) {
-		while (status == 0 && it != procs.begin()) {
+		while (status == 0 && it != processes.begin()) {
 			--it;
 			status = it->status;
 		}
@@ -128,6 +133,8 @@ Job::calc_status(bool pipefail_on)
 	}
 
 	return retval;
+}
+
 }
 
 static void
@@ -194,7 +201,7 @@ usage:
 	}
 
 	if (list) {
-		struct output *out;
+		shell::Output *out;
 
 		out = sh.out1;
 		if (!*argv) {
@@ -305,7 +312,7 @@ waitcmd(ShellContext &sh, int argc, char **argv)
 			pid_t pid = TRY_SH(number(sh, *argv));
 			job = nullptr;
 			for (Job *j : sh.job_order) {
-				if (!j->procs.empty() && j->procs.back().pid == pid) {
+				if (!j->processes.empty() && j->processes.back().pid == pid) {
 					job = j;
 					break;
 				}
@@ -401,9 +408,9 @@ check:
 
 	found = nullptr;
 	for (Job *j : sh.job_order) {
-		if (j->procs.empty())
+		if (j->processes.empty())
 			continue;
-		if (match(j->procs[0].cmd.c_str(), p)) {
+		if (match(j->processes[0].command.c_str(), p)) {
 			if (found) {
 				err_kind = JobErr::Ambiguous;
 				goto err;
@@ -457,7 +464,7 @@ makejob(ShellContext &sh, int nprocs)
 
 	auto owned = std::make_unique<Job>();
 	owned->slot = slot;
-	owned->procs.reserve(static_cast<std::size_t>(nprocs > 0 ? nprocs : 0));
+	owned->processes.reserve(static_cast<std::size_t>(nprocs > 0 ? nprocs : 0));
 	Job *jp = owned.get();
 	sh.jobs[slot] = std::move(owned);
 	sh.job_order.insert(sh.job_order.begin(), jp);
@@ -495,7 +502,7 @@ forkchild(ShellContext &sh, Job *jp, const Node *n, int mode)
 	if (mode == FORK_BG) {
 		ignoresig(sh, SIGINT);
 		ignoresig(sh, SIGQUIT);
-		if (jp && jp->procs.empty()) {
+		if (jp && jp->processes.empty()) {
 			close(0);
 			sh_open(sh, _PATH_DEVNULL, O_RDONLY, 0);
 			/* Should call reset_input here, but it's harmless
@@ -619,7 +626,7 @@ waitone(ShellContext &sh, int block, Job *job)
 		if (jp->state == Job::State::Done)
 			continue;
 		state = Job::State::Done;
-		for (auto &sp : jp->procs) {
+		for (auto &sp : jp->processes) {
 			if (sp.pid == pid) {
 				sp.status = status;
 				thisjob = jp;
@@ -751,10 +758,10 @@ cmdtxt(ShellContext &sh, const Node *n, std::string &out)
 	switch (n->type) {
 	default:
 	case Node::Type::Pipe:
-		for (std::size_t i = 0; i < as<Node::Pipe>(n)->cmdlist.size(); i++) {
+		for (std::size_t i = 0; i < as<PipeNode>(n)->cmdlist.size(); i++) {
 			if (i)
 				cmdputs(out, " | ");
-			cmdtxt(sh, as<Node::Pipe>(n)->cmdlist[i].get(), out);
+			cmdtxt(sh, as<PipeNode>(n)->cmdlist[i].get(), out);
 		}
 		break;
 	case Node::Type::Semi:
@@ -766,36 +773,36 @@ cmdtxt(ShellContext &sh, const Node *n, std::string &out)
 	case Node::Type::Or:
 		p = " || ";
 binop:
-		cmdtxt(sh, as<Node::Binary>(n)->ch1.get(), out);
+		cmdtxt(sh, as<BinaryNode>(n)->ch1.get(), out);
 		cmdputs(out, p);
-		n = as<Node::Binary>(n)->ch2.get();
+		n = as<BinaryNode>(n)->ch2.get();
 		goto donode;
 	case Node::Type::Redir:
 	case Node::Type::Backgnd:
-		n = as<Node::Redir>(n)->n.get();
+		n = as<RedirNode>(n)->n.get();
 		goto donode;
 	case Node::Type::Not:
 		cmdputs(out, "!");
-		n = as<Node::Not>(n)->com.get();
+		n = as<NotNode>(n)->com.get();
 donode:
 		cmdtxt(sh, n, out);
 		break;
 	case Node::Type::If:
 		cmdputs(out, "if ");
-		cmdtxt(sh, as<Node::If>(n)->test.get(), out);
+		cmdtxt(sh, as<IfNode>(n)->test.get(), out);
 		cmdputs(out, "; then ");
-		if (as<Node::If>(n)->elsepart) {
-			cmdtxt(sh, as<Node::If>(n)->ifpart.get(), out);
+		if (as<IfNode>(n)->elsepart) {
+			cmdtxt(sh, as<IfNode>(n)->ifpart.get(), out);
 			cmdputs(out, "; else ");
-			n = as<Node::If>(n)->elsepart.get();
+			n = as<IfNode>(n)->elsepart.get();
 		} else {
-			n = as<Node::If>(n)->ifpart.get();
+			n = as<IfNode>(n)->ifpart.get();
 		}
 		p = "; fi";
 		goto dotail;
 	case Node::Type::Subshell:
 		cmdputs(out, "(");
-		n = as<Node::Redir>(n)->n.get();
+		n = as<RedirNode>(n)->n.get();
 		p = ")";
 		goto dotail;
 	case Node::Type::While:
@@ -805,8 +812,8 @@ donode:
 		p = "until ";
 until:
 		cmdputs(out, p);
-		cmdtxt(sh, as<Node::Binary>(n)->ch1.get(), out);
-		n = as<Node::Binary>(n)->ch2.get();
+		cmdtxt(sh, as<BinaryNode>(n)->ch1.get(), out);
+		n = as<BinaryNode>(n)->ch2.get();
 		p = "; done";
 dodo:
 		cmdputs(out, "; do ");
@@ -815,22 +822,22 @@ dotail:
 		goto dotail2;
 	case Node::Type::For:
 		cmdputs(out, "for ");
-		cmdputs(out, as<Node::For>(n)->var);
+		cmdputs(out, as<ForNode>(n)->var);
 		cmdputs(out, " in ");
-		cmdlist(sh, as<Node::For>(n)->args.get(), 1, out);
-		n = as<Node::For>(n)->body.get();
+		cmdlist(sh, as<ForNode>(n)->args.get(), 1, out);
+		n = as<ForNode>(n)->body.get();
 		p = "; done";
 		goto dodo;
 	case Node::Type::Defun:
-		cmdputs(out, as<Node::Defun>(n)->text);
+		cmdputs(out, as<DefunNode>(n)->text);
 		p = "() { ... }";
 		goto dotail2;
 	case Node::Type::Cmd:
-		cmdlist(sh, as<Node::Command>(n)->args.get(), 1, out);
-		cmdlist(sh, as<Node::Command>(n)->redirect.get(), 0, out);
+		cmdlist(sh, as<CommandNode>(n)->args.get(), 1, out);
+		cmdlist(sh, as<CommandNode>(n)->redirect.get(), 0, out);
 		break;
 	case Node::Type::Arg:
-		cmdputs(out, as<Node::Arg>(n)->text);
+		cmdputs(out, as<ArgNode>(n)->text);
 		break;
 	case Node::Type::Here:
 	case Node::Type::XHere:
@@ -840,12 +847,12 @@ dotail2:
 		break;
 	case Node::Type::Case:
 		cmdputs(out, "case ");
-		cmdputs(out, as<Node::Arg>(as<Node::Case>(n)->expr)->text);
+		cmdputs(out, as<ArgNode>(as<CaseNode>(n)->expr)->text);
 		cmdputs(out, " in ");
-		for (np = as<Node::Case>(n)->cases.get(); np; np = as<Node::CaseList>(np)->next.get()) {
-			cmdtxt(sh, as<Node::CaseList>(np)->pattern.get(), out);
+		for (np = as<CaseNode>(n)->cases.get(); np; np = as<CaseListNode>(np)->next.get()) {
+			cmdtxt(sh, as<CaseListNode>(np)->pattern.get(), out);
 			cmdputs(out, ") ");
-			cmdtxt(sh, as<Node::CaseList>(np)->body.get(), out);
+			cmdtxt(sh, as<CaseListNode>(np)->body.get(), out);
 			cmdputs(out, ";; ");
 		}
 		p = "esac";
@@ -871,16 +878,16 @@ dotail2:
 	case Node::Type::FromTo:
 		p = "<>";
 redir:
-		s[0] = as<Node::RedirList>(n)->fd + '0';
+		s[0] = as<RedirList>(n)->fd + '0';
 		s[1] = '\0';
 		cmdputs(out, s);
 		cmdputs(out, p);
 		if (n->type == Node::Type::ToFd || n->type == Node::Type::FromFd) {
-			s[0] = as<Node::Dup>(n)->dupfd + '0';
+			s[0] = as<DupNode>(n)->dupfd + '0';
 			p = s;
 			goto dotail2;
 		} else {
-			n = as<Node::File>(n)->fname.get();
+			n = as<FileNode>(n)->fname.get();
 			goto donode;
 		}
 	}
@@ -889,11 +896,11 @@ redir:
 static void
 cmdlist(ShellContext &sh, Node *np, int sep, std::string &out)
 {
-	for (; np; np = as<Node::Arg>(np)->next.get()) {
+	for (; np; np = as<ArgNode>(np)->next.get()) {
 		if (!sep)
 			cmdputs(out, " ");
 		cmdtxt(sh, np, out);
-		if (sep && as<Node::Arg>(np)->next)
+		if (sep && as<ArgNode>(np)->next)
 			cmdputs(out, " ");
 	}
 }

@@ -229,10 +229,10 @@ expandarg(ShellContext &sh, Node *arg, ArgList *alist, ExpandFlags flag)
 	ExpandBuf eb;
 	char *p;
 
-	sh.expand.argbackq = &as<Node::Arg>(arg)->backquote;
+	sh.expand.argbackq = &as<ArgNode>(arg)->backquote;
 	sh.expand.argbackq_i = 0;
 	eb.start();
-	TRY_SHV(argstr(sh, eb, as<Node::Arg>(arg)->text.data(), flag));
+	TRY_SHV(argstr(sh, eb, as<ArgNode>(arg)->text.data(), flag));
 	p = (eb.commit_to(eb.dest));
 	{
 		ArgList words;
@@ -259,10 +259,10 @@ expandarg_to_string(ShellContext &sh, Node *arg, ExpandFlags flag)
 {
 	ExpandBuf eb;
 
-	sh.expand.argbackq = &as<Node::Arg>(arg)->backquote;
+	sh.expand.argbackq = &as<ArgNode>(arg)->backquote;
 	sh.expand.argbackq_i = 0;
 	eb.start();
-	TRY_SHV(argstr(sh, eb, as<Node::Arg>(arg)->text.data(), flag));
+	TRY_SHV(argstr(sh, eb, as<ArgNode>(arg)->text.data(), flag));
 	eb.putc_nul(eb.dest);
 	std::string result(eb.base());
 	ifsfree(sh);
@@ -2087,10 +2087,10 @@ casematch(ShellContext &sh, Node *pattern, char *val)
 	ExpandBuf eb;
 	int result;
 
-	sh.expand.argbackq = &as<Node::Arg>(pattern)->backquote;
+	sh.expand.argbackq = &as<ArgNode>(pattern)->backquote;
 	sh.expand.argbackq_i = 0;
 	eb.start();
-	TRY_SHV(argstr(sh, eb, as<Node::Arg>(pattern)->text.data(), EXP_TILDE | EXP_CASE));
+	TRY_SHV(argstr(sh, eb, as<ArgNode>(pattern)->text.data(), EXP_TILDE | EXP_CASE));
 	ifsfree(sh);
 	result = patmatch(sh, eb.base(), val, &eb);
 	return result;

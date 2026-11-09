@@ -123,7 +123,7 @@ InterruptSuppress::resume()
 static void
 exwarning_msg(ShellContext &sh, std::string_view msg)
 {
-	struct output *errs = sh.out2;
+	shell::Output *errs = sh.out2;
 	const char *name = sh.arg0.empty() ? "sh" : sh.arg0.c_str();
 
 	if (sh.commandname.empty())

@@ -43,11 +43,13 @@
 #include <sys/types.h>
 #include <termios.h>
 
+#include <libshell.hpp>
+
 #include "alias.h"
 #include "error.h"
 
-#define PUNGETC_MAX (MB_LEN_MAX > 16 ? MB_LEN_MAX : 16)
-#define IBUFSIZ (BUFSIZ + PUNGETC_MAX + 1)
+#define PUNGETC_MAX shell::pungetc_max
+#define IBUFSIZ shell::ibufsiz
 
 /* PEOF (the end of file marker) is defined in syntax.h */
 #define PEOA ((PEOF) - 1)
@@ -57,75 +59,10 @@ enum {
 	INPUT_NOFILE_OK = 2,
 };
 
-/*
- * One pushed string overlay on a parsefile (alias text or parser
- * re-injection).  Saved cursor state is restored when the string is
- * exhausted.  A non-null ap keeps the alias alive for the push and
- * sets alias::in_use.
- */
-struct StringPush {
-	char *prev_string = nullptr;
-	int prev_nleft = 0;
-	std::shared_ptr<alias> ap;	/* set if this push is an alias expansion */
-	char *string = nullptr;	/* start of the pushed text */
-	int unget = 0;
-};
-
-/*
- * One level of the input file stack (script, sourced file, or string).
- */
-struct parsefile {
-	parsefile *prev = nullptr;	/* preceding file on stack */
-	int linno = 0;			/* current line */
-	int fd = 0;			/* file descriptor (or -1 if string) */
-	int nleft = 0;			/* number of chars left in this line */
-	int eof = 0;			/* do not read again once we hit EOF */
-	char *nextc = nullptr;		/* next char in buffer */
-	char *buf = nullptr;		/* input buffer (owned_buf or shared basebuf) */
-	std::unique_ptr<char[]> owned_buf; /* heap buffer for pushed files */
-	std::vector<StringPush> string_stack;
-
-	/* Aliases whose in_use flag is cleared on the next pgetc. */
-	std::vector<std::shared_ptr<alias>> pending_alias_release;
-
-	/* Number of outstanding calls to pungetc. */
-	int unget = 0;
-};
-
-struct stdin_state {
-	off_t seekable = 0;
-	int pip[2] = {};
-	int pending = 0;
-	tcflag_t bufferable = 0;
-};
-
-/*
- * Nested input sources for one shell: base stdin, sourced files, eval
- * strings, and alias string pushes. Owned by ShellContext; parse and
- * input helpers take InputStack & rather than reaching through context
- * fields.
- */
-struct InputStack {
-	parsefile base{};
-	char basebuf[IBUFSIZ]{};
-	parsefile *top = &base;
-	parsefile *current = &base;
-	stdin_state stdin{};
-	int stdin_istty = -1;
-
-	InputStack()
-	{
-		base.nextc = base.buf = basebuf;
-		base.linno = 1;
-	}
-
-	InputStack(const InputStack &) = delete;
-	InputStack &operator=(const InputStack &) = delete;
-
-	parsefile &cur() { return *current; }
-	const parsefile &cur() const { return *current; }
-	int &linno() { return current->linno; }
-};
+using StringPush = shell::StringPush;
+using parsefile = shell::ParseFile;
+using stdin_state = shell::StdinState;
+using InputStack = shell::InputStack;
 
 /*
  * The input line number. Requires ShellContext &sh in scope.
@@ -142,8 +79,7 @@ int pgetc(ShellContext &sh, InputStack &in);
 int pgetc_eoa(ShellContext &sh, InputStack &in);
 void pungetc(ShellContext &sh, InputStack &in);
 void pungetn(InputStack &in, int);
-void pushstring(ShellContext &sh, InputStack &in, char *,
-		std::shared_ptr<alias> = nullptr);
+void pushstring(ShellContext &sh, InputStack &in, char *, const std::shared_ptr<shell::Alias> & = nullptr);
 shell::Result<int> setinputfile(ShellContext &sh, InputStack &in,
 				    std::string_view, int);
 void setinputstring(ShellContext &sh, InputStack &in, char *);
@@ -160,7 +96,7 @@ int pgetc(ShellContext &sh);
 int pgetc_eoa(ShellContext &sh);
 void pungetc(ShellContext &sh);
 void pungetn(ShellContext &sh, int);
-void pushstring(ShellContext &sh, char *, std::shared_ptr<alias> = nullptr);
+void pushstring(ShellContext &sh, char *, const std::shared_ptr<shell::Alias> & = nullptr);
 shell::Result<int> setinputfile(ShellContext &sh, std::string_view, int);
 void setinputstring(ShellContext &sh, char *);
 void pushstdin(ShellContext &sh);

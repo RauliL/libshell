@@ -43,32 +43,13 @@
 #include <vector>
 #include <cwchar>
 
+#include <libshell.hpp>
+
 #include "nodes.h"
 
 using ArgList = std::vector<std::string>;
-
-/** Byte range of an expanded word that must be scanned for IFS. */
-struct ifsregion {
-	int begoff = 0;
-	int endoff = 0;
-	int nulonly = 0;
-};
-
-/**
- * Word-expansion scratch and IFS lookup cache for one shell.
- * Region/argbackq/exparg state is reset around each expandarg;
- * ifsmap/ncifs/wcifs track the current IFS value.
- */
-struct ExpandState {
-	const std::vector<Node::ptr> *argbackq = nullptr;
-	std::size_t argbackq_i = 0;
-	std::vector<ifsregion> ifsregions;
-	ArgList exparg;
-	char ifsmap[128] = {};
-	const char *ncifs = nullptr;
-	std::size_t ifsmb0len = 0;
-	std::wstring wcifs;
-};
+using ifsregion = shell::IfsRegion;
+using ExpandState = shell::ExpandState;
 
 struct mbpair {
 	unsigned ml;
