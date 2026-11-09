@@ -36,6 +36,8 @@
 #pragma once
 
 #include <optional>
+#include <string>
+#include <vector>
 
 #include <tl/expected.hpp>
 
@@ -82,16 +84,23 @@ namespace shell { class ParseError; }
 
 
 struct ShellContext;
-struct heredoc;
+
+/** Pending here-document awaiting its body after the next newline. */
+struct heredoc {
+	Node *here = nullptr;		/* redirection node */
+	std::string eofmark;		/* string indicating end of input */
+	/** If set, strip leading tabs. */
+	bool striptabs = false;
+};
 
 /**
  * Ephemeral parser state for one parse pass (and nested expandstr /
  * here-doc reads). Not part of the durable script environment.
  */
 struct ParseSession {
-	struct heredoc *heredoclist = nullptr;
+	std::vector<heredoc> heredoclist;
 	/** Here-doc currently being attached to a redirection node. */
-	struct heredoc *pending_here = nullptr;
+	std::optional<heredoc> pending_here;
 	int doprompt = 0;
 	int needprompt = 0;
 	int whichprompt = 0;

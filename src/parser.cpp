@@ -76,16 +76,6 @@
 static const std::string fake_eofmark;
 #define FAKEEOFMARK (&fake_eofmark)
 
-
-
-struct heredoc {
-	struct heredoc *next = nullptr;	/* next here document in list */
-	Node *here = nullptr;	/* redirection Node */
-	std::string eofmark;		/* string indicating end of input */
-	/** If set, strip leading tabs. */
-	bool striptabs = false;
-};
-
 struct synstack {
 	const char *syntax;
 	struct synstack *prev;
@@ -323,7 +313,7 @@ parsecmd(ShellContext &sh, int interact)
 {
 	sh.parse.tokpushback = 0;
 	sh.parse.checkkwd = 0;
-	sh.parse.heredoclist = 0;
+	sh.parse.heredoclist.clear();
 	sh.parse.doprompt = interact;
 	if (sh.parse.doprompt)
 		setprompt(sh, sh.parse.doprompt);
@@ -796,21 +786,14 @@ parsefname(ShellContext &sh)
 		synexpect(sh);
 	sh.parse.checkkwd &= ~CHKEOFMARK;
 	if (n->type == Node::Type::Here) {
-		struct heredoc *here = sh.parse.pending_here;
-		struct heredoc *p;
-
 		if (sh.parse.quoteflag == 0)
 			n->type = Node::Type::XHere;
 		TRACE(("Here document %d\n", n->type));
 		rmescapes(sh.parse.wordtext.data());
-		here->eofmark = sh.parse.wordtext;
-		here->next = nullptr;
-		if (sh.parse.heredoclist == nullptr)
-			sh.parse.heredoclist = here;
-		else {
-			for (p = sh.parse.heredoclist ; p->next ; p = p->next);
-			p->next = here;
-		}
+		sh.parse.pending_here->eofmark = sh.parse.wordtext;
+		sh.parse.heredoclist.push_back(
+			std::move(*sh.parse.pending_here));
+		sh.parse.pending_here.reset();
 	} else if (n->type == Node::Type::ToFd || n->type == Node::Type::FromFd) {
 		fixredir(sh, n, sh.parse.wordtext.c_str(), 0);
 	} else {
@@ -826,27 +809,21 @@ parsefname(ShellContext &sh)
 static void
 parseheredoc(ShellContext &sh)
 {
-	struct heredoc *here;
+	auto docs = std::move(sh.parse.heredoclist);
 
-	here = sh.parse.heredoclist;
-	sh.parse.heredoclist = 0;
-
-	while (here) {
-		struct heredoc *next = here->next;
+	for (auto &here : docs) {
 		if (sh.parse.needprompt) {
 			setprompt(sh, 2);
 		}
-		if (here->here->type == Node::Type::Here)
-			readtoken1(sh, pgetc(sh), SQSYNTAX, &here->eofmark, here->striptabs);
+		if (here.here->type == Node::Type::Here)
+			readtoken1(sh, pgetc(sh), SQSYNTAX, &here.eofmark, here.striptabs);
 		else
-			readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, &here->eofmark, here->striptabs);
+			readtoken1(sh, pgetc_eatbnl(sh), DQSYNTAX, &here.eofmark, here.striptabs);
 		Node::ptr n = make_node<Node::Arg>();
 		n->type = Node::Type::Arg;
 		as<Node::Arg>(n)->text = sh.parse.wordtext;
 		as<Node::Arg>(n)->backquote = std::move(sh.parse.backquotelist);
-		as<Node::Here>(here->here)->doc = std::move(n);
-		delete here;
-		here = next;
+		as<Node::Here>(here.here)->doc = std::move(n);
 	}
 }
 
@@ -1500,9 +1477,10 @@ parseredir: {
 	np->type = redir_type;
 	as<Node::RedirList>(np)->fd = fd != '\0' ? digit_val(fd) : default_fd;
 	if (redir_type == Node::Type::Here) {
-		sh.parse.pending_here = new heredoc;
-		sh.parse.pending_here->here = np.get();
-		sh.parse.pending_here->striptabs = striptabs;
+		heredoc pending{};
+		pending.here = np.get();
+		pending.striptabs = striptabs;
+		sh.parse.pending_here = std::move(pending);
 	}
 	sh.parse.redirnode = std::move(np);
 	goto parseredir_return;
@@ -1676,7 +1654,7 @@ badsub:
 
 parsebackq: {
 	int uninitialized_var(saveprompt);
-	struct heredoc *saveheredoclist;
+	std::vector<heredoc> saveheredoclist;
 	size_t savelen;
 	Node::ptr n;
 	unsigned ml;
@@ -1742,8 +1720,7 @@ parsebackq: {
 		pstr = (eb.commit_to(pout));
 		setinputstring(sh, pstr);
         }
-	saveheredoclist = sh.parse.heredoclist;
-	sh.parse.heredoclist = nullptr;
+	saveheredoclist = std::move(sh.parse.heredoclist);
 
 	if (oldstyle) {
 		saveprompt = sh.parse.doprompt;
@@ -1761,7 +1738,7 @@ parsebackq: {
 	}
 
 	parseheredoc(sh);
-	sh.parse.heredoclist = saveheredoclist;
+	sh.parse.heredoclist = std::move(saveheredoclist);
 
 	bqlist.push_back(std::move(n));
 	/* Start reading from old file again. */
@@ -1904,7 +1881,7 @@ std::string
 expandstr(ShellContext &sh, const char *ps)
 {
 	struct parsefile *file_stop;
-	struct heredoc *saveheredoclist;
+	std::vector<heredoc> saveheredoclist;
 	std::string result = ps;
 	int saveprompt;
 	struct Node::Arg n{};
@@ -1914,8 +1891,7 @@ expandstr(ShellContext &sh, const char *ps)
 
 	setinputstring(sh, result.data());
 
-	saveheredoclist = sh.parse.heredoclist;
-	sh.parse.heredoclist = nullptr;
+	saveheredoclist = std::move(sh.parse.heredoclist);
 	saveprompt = sh.parse.doprompt;
 	sh.parse.doprompt = 0;
 	sh.parse.needprompt = 0;
@@ -1941,7 +1917,7 @@ expandstr(ShellContext &sh, const char *ps)
 
 	sh.parse.doprompt = saveprompt;
 	unwindfiles(sh, file_stop);
-	sh.parse.heredoclist = saveheredoclist;
+	sh.parse.heredoclist = std::move(saveheredoclist);
 
 	return result;
 }
