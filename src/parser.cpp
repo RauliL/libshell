@@ -31,6 +31,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include <libshell//config.hpp>
 
 #if HAVE_ALLOCA_H
 #include <alloca.h>

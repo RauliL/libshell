@@ -27,6 +27,8 @@
  */
 #pragma once
 
+#include <libshell/config.hpp>
+
 #include <climits>
 #include <csignal>
 #include <cstddef>

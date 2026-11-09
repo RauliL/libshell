@@ -31,19 +31,21 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include <libshell/config.hpp>
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <format>
 #include <locale.h>
 #include <string>
 #include <string_view>
 #include <vector>
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
 #ifdef HAVE_PATHS_H
 #include <paths.h>
 #endif

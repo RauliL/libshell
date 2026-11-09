@@ -1,3 +1,5 @@
+#include <libshell/config.hpp>
+
 #include "shell.h"
 #include "shell_context.h"
 /*

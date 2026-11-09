@@ -35,6 +35,8 @@
  */
 #pragma once
 
+#include <libshell/config.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
