@@ -220,6 +220,27 @@ add_library(
 dash_configure_tool(shell)
 target_link_libraries(shell PUBLIC expected)
 
+include(GNUInstallDirs)
+
+target_include_directories(
+  shell
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+install(
+  TARGETS shell
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(
+  FILES include/libshell.hpp
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
 if(BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
