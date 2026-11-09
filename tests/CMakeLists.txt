@@ -27,7 +27,7 @@ target_compile_definitions(
 target_link_libraries(
   parse_tests
   PRIVATE
-    dash_lib
+    shell
     Catch2::Catch2WithMain
 )
 dash_configure_tool(parse_tests)
@@ -39,7 +39,7 @@ add_executable(
 target_link_libraries(
   arith_tests
   PRIVATE
-    dash_lib
+    shell
     Catch2::Catch2WithMain
 )
 dash_configure_tool(arith_tests)
@@ -51,7 +51,7 @@ add_executable(
 target_link_libraries(
   var_tests
   PRIVATE
-    dash_lib
+    shell
     Catch2::Catch2WithMain
 )
 dash_configure_tool(var_tests)

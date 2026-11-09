@@ -1,12 +1,12 @@
 add_executable(
-  shell
+  shell-example
   ./shell.cpp
 )
 
-dash_configure_tool(shell)
+dash_configure_tool(shell-example)
 
 target_link_libraries(
-  shell
+  shell-example
   PRIVATE
-    dash_lib
+    shell
 )

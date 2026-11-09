@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(dash VERSION 0.5.13.5 LANGUAGES CXX)
+project(
+  libshell
+  VERSION 0.5.13.5
+  LANGUAGES CXX
+)
 
 # Statement expressions, the omitted-middle ?: operator, and alloca are part
 # of this shell. gnu++20 keeps those extensions with the C++20 library.
@@ -210,12 +214,12 @@ set(
 )
 
 add_library(
-  dash_lib
+  shell
   STATIC
     ${DASH_SOURCES}
 )
-dash_configure_tool(dash_lib)
-target_link_libraries(dash_lib PUBLIC expected)
+dash_configure_tool(shell)
+target_link_libraries(shell PUBLIC expected)
 
 if(BUILD_EXAMPLES)
   add_subdirectory(examples)
