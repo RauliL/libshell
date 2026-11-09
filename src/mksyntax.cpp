@@ -36,10 +36,12 @@
  * This program creates syntax.h and syntax.c.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
 #include <sys/types.h>
+
 #include "parser.h"
 
 
@@ -106,60 +108,60 @@ main(int argc, char **argv)
 	char buf[80];
 	int pos;
 
-	/* Create output files */
-	if ((cfile = fopen("syntax.cpp", "w")) == nullptr) {
+	// Create output files
+	if (!(cfile = std::fopen("syntax.cpp", "w"))) {
 		perror("syntax.cpp");
-		exit(2);
+		std::exit(2);
 	}
-	if ((hfile = fopen("syntax.h", "w")) == nullptr) {
+	if (!(hfile = std::fopen("syntax.h", "w"))) {
 		perror("syntax.h");
-		exit(2);
+		std::exit(2);
 	}
-	fputs(writer, hfile);
-	fputs(writer, cfile);
+	std::fputs(writer, hfile);
+	std::fputs(writer, cfile);
 
-	fputs("#include <ctype.h>\n", hfile);
-	fputs("\n", hfile);
-	fputs("#ifdef CEOF\n", hfile);
-	fputs("#undef CEOF\n", hfile);
-	fputs("#endif\n", hfile);
-	fputs("\n", hfile);
+	std::fputs("#include <ctype.h>\n", hfile);
+	std::fputs("\n", hfile);
+	std::fputs("#ifdef CEOF\n", hfile);
+	std::fputs("#undef CEOF\n", hfile);
+	std::fputs("#endif\n", hfile);
+	std::fputs("\n", hfile);
 
 	/* Generate the #define statements in the header file */
-	fputs("/* Syntax classes */\n", hfile);
+	std::fputs("/* Syntax classes */\n", hfile);
 	for (i = 0 ; synclass[i].name ; i++) {
-		sprintf(buf, "#define %s %d", synclass[i].name, i);
-		fputs(buf, hfile);
-		for (pos = strlen(buf) ; pos < 32 ; pos = (pos + 8) & ~07)
-			putc('\t', hfile);
-		fprintf(hfile, "/* %s */\n", synclass[i].comment);
+		std::sprintf(buf, "#define %s %d", synclass[i].name, i);
+		std::fputs(buf, hfile);
+		for (pos = std::strlen(buf) ; pos < 32 ; pos = (pos + 8) & ~07)
+			std::putc('\t', hfile);
+		std::fprintf(hfile, "/* %s */\n", synclass[i].comment);
 	}
-	putc('\n', hfile);
-	fputs("/* Syntax classes for is_ functions */\n", hfile);
+	std::putc('\n', hfile);
+	std::fputs("/* Syntax classes for is_ functions */\n", hfile);
 	for (i = 0 ; is_entry[i].name ; i++) {
-		sprintf(buf, "#define %s %#o", is_entry[i].name, 1 << i);
-		fputs(buf, hfile);
-		for (pos = strlen(buf) ; pos < 32 ; pos = (pos + 8) & ~07)
-			putc('\t', hfile);
-		fprintf(hfile, "/* %s */\n", is_entry[i].comment);
+		std::sprintf(buf, "#define %s %#o", is_entry[i].name, 1 << i);
+		std::fputs(buf, hfile);
+		for (pos = std::strlen(buf) ; pos < 32 ; pos = (pos + 8) & ~07)
+			std::putc('\t', hfile);
+		std::fprintf(hfile, "/* %s */\n", is_entry[i].comment);
 	}
-	putc('\n', hfile);
-	fprintf(hfile, "#define SYNBASE %d\n", 129);
-	fprintf(hfile, "#define PEOF %d\n\n", -129);
-	putc('\n', hfile);
-	fputs("#define BASESYNTAX (basesyntax + SYNBASE)\n", hfile);
-	fputs("#define DQSYNTAX (dqsyntax + SYNBASE)\n", hfile);
-	fputs("#define SQSYNTAX (sqsyntax + SYNBASE)\n", hfile);
-	fputs("#define ARISYNTAX (arisyntax + SYNBASE)\n", hfile);
-	putc('\n', hfile);
+	std::putc('\n', hfile);
+	std::fprintf(hfile, "#define SYNBASE %d\n", 129);
+	std::fprintf(hfile, "#define PEOF %d\n\n", -129);
+	std::putc('\n', hfile);
+	std::fputs("#define BASESYNTAX (basesyntax + SYNBASE)\n", hfile);
+	std::fputs("#define DQSYNTAX (dqsyntax + SYNBASE)\n", hfile);
+	std::fputs("#define SQSYNTAX (sqsyntax + SYNBASE)\n", hfile);
+	std::fputs("#define ARISYNTAX (arisyntax + SYNBASE)\n", hfile);
+	std::putc('\n', hfile);
 	output_type_macros();		/* is_digit, etc. */
-	putc('\n', hfile);
+	std::putc('\n', hfile);
 
 	/* Generate the syntax tables. */
-	fputs("#include \"shell.h\"\n", cfile);
-	fputs("#include \"syntax.h\"\n\n", cfile);
+	std::fputs("#include \"shell.h\"\n", cfile);
+	std::fputs("#include \"syntax.h\"\n\n", cfile);
 	init();
-	fputs("/* syntax table used when not in quotes */\n", cfile);
+	std::fputs("/* syntax table used when not in quotes */\n", cfile);
 	add("\n", "CNL");
 	add("\\", "CBACK");
 	add("'", "CSQUOTE");
@@ -170,7 +172,7 @@ main(int argc, char **argv)
 	add("<>();&| \t", "CSPCL");
 	print("basesyntax");
 	init();
-	fputs("\n/* syntax table used when in double quotes */\n", cfile);
+	std::fputs("\n/* syntax table used when in double quotes */\n", cfile);
 	add("\n", "CNL");
 	add("\\", "CBACK");
 	add("\"", "CENDQUOTE");
@@ -181,14 +183,14 @@ main(int argc, char **argv)
 	add("^!*?[=~:/-]", "CCTL");
 	print("dqsyntax");
 	init();
-	fputs("\n/* syntax table used when in single quotes */\n", cfile);
+	std::fputs("\n/* syntax table used when in single quotes */\n", cfile);
 	add("\n", "CNL");
 	add("'", "CENDQUOTE");
 	/* ':/' for tilde expansion, '-' for [a\-x] pattern ranges */
 	add("^!*?[=~:/-]\\", "CCTL");
 	print("sqsyntax");
 	init();
-	fputs("\n/* syntax table used when in arithmetic */\n", cfile);
+	std::fputs("\n/* syntax table used when in arithmetic */\n", cfile);
 	add("\n", "CNL");
 	add("\\", "CBACK");
 	add("`", "CBQUOTE");
@@ -198,14 +200,14 @@ main(int argc, char **argv)
 	add(")", "CRP");
 	print("arisyntax");
 	filltable("0");
-	fputs("\n/* character classification table */\n", cfile);
+	std::fputs("\n/* character classification table */\n", cfile);
 	add("0123456789", "ISDIGIT");
 	add("abcdefghijklmnopqrstucvwxyz", "ISLOWER");
 	add("ABCDEFGHIJKLMNOPQRSTUCVWXYZ", "ISUPPER");
 	add("_", "ISUNDER");
 	add("#?$!-*@", "ISSPECL");
 	print("is_type");
-	exit(0);
+	std::exit(0);
 	/* NOTREACHED */
 }
 

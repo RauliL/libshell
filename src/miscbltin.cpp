@@ -139,7 +139,7 @@ readcmd(ShellContext &sh, int argc, char **argv)
 		flushall(sh);
 #endif
 	}
-	if (*(ap = sh.bopt.argptr) == nullptr)
+	if (!*(ap = sh.bopt.argptr))
 		return sh_error(sh, "arg count");
 
 	status = 0;
@@ -226,7 +226,7 @@ umaskcmd(ShellContext &sh, int argc, char **argv)
 	umask(mask);
 	INTON(sh);
 
-	if ((ap = *sh.bopt.argptr) == nullptr) {
+	if (!(ap = *sh.bopt.argptr)) {
 		if (symbolic_mode) {
 			char buf[18];
 			int j;

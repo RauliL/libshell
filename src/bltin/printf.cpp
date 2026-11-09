@@ -514,7 +514,7 @@ getuintmax(ShellContext &sh, PrintfState &st, int sign)
 	char *cp, *ep;
 
 	cp = *st.gargv;
-	if (cp == nullptr)
+	if (!cp)
 		goto out;
 	st.gargv++;
 
@@ -536,7 +536,7 @@ getdouble(ShellContext &sh, PrintfState &st)
 	char *cp, *ep;
 
 	cp = *st.gargv;
-	if (cp == nullptr)
+	if (!cp)
 		return 0;
 	st.gargv++;
 

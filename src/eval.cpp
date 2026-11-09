@@ -209,7 +209,7 @@ evaltree(ShellContext &sh, Node *n, EvalFlags flags)
 	if (nflag)
 		goto out;
 
-	if (n == nullptr) {
+	if (!n) {
 		goto out;
 	}
 
@@ -638,8 +638,8 @@ evalbackcmd(ShellContext &sh, Node *n, struct backcmd *result)
 	int pid;
 
 	*result = backcmd{};
-	if (n == nullptr) {
-		goto out;
+	if (!n) {
+        return {};
 	}
 
 	TRY_SHV(sh_pipe(sh, pip, 0));
@@ -663,7 +663,6 @@ evalbackcmd(ShellContext &sh, Node *n, struct backcmd *result)
 	result->fd = pip[0];
 	result->jp = jp;
 
-out:
 	return {};
 }
 

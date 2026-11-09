@@ -196,7 +196,7 @@ readfile(char *fname)
 	curfile = fname;
 	linno = 0;
 	amiddecls = 0;
-	while (fgets(line, sizeof line, fp) != nullptr) {
+	while (std::fgets(line, sizeof line, fp)) {
 		linno++;
 		for (ep = event ; ep->name ; ep++) {
 			if (line[0] == ep->name[0] && match(ep->name, line)) {
@@ -274,12 +274,12 @@ doevent(struct event *ep, FILE *fp, char *fname)
 	int indent;
 	char *p;
 
-	sprintf(line, "\n      /* from %s: */\n", fname);
+	std::sprintf(line, "\n      /* from %s: */\n", fname);
 	addstr(line, &ep->code);
 	addstr("      {\n", &ep->code);
 	for (;;) {
 		linno++;
-		if (fgets(line, sizeof line, fp) == nullptr)
+		if (!std::fgets(line, sizeof line, fp))
 			error("Unexpected EOF");
 		if (strcmp(line, "}\n") == 0)
 			break;
@@ -323,7 +323,7 @@ doinclude(char *line)
 
 	/* name now contains the name of the include file */
 	for (pp = header_files ; *pp && strcmp(*pp, name) != 0 ; pp++);
-	if (*pp == nullptr)
+	if (!*pp)
 		*pp = savestr(name);
 }
 
@@ -338,7 +338,7 @@ dodecl(char *line1, FILE *fp)
 		addchar('\n', &decls);
 		do {
 			linno++;
-			if (fgets(line, sizeof line, fp) == nullptr)
+			if (!std::fgets(line, sizeof line, fp))
 				error("Unterminated structure declaration");
 			addstr(line, &decls);
 		} while (line[0] != '}');
@@ -347,7 +347,7 @@ dodecl(char *line1, FILE *fp)
 		if (! amiddecls)
 			addchar('\n', &decls);
 		q = nullptr;
-		for (p = line1 + 6 ; *p && strchr("=/\n", *p) == nullptr; p++)
+		for (p = line1 + 6 ; *p && !std::strchr("=/\n", *p); p++)
 			continue;
 		if (*p == '=') {		/* eliminate initialization */
 			for (q = p ; *q && *q != ';' ; q++);
@@ -361,7 +361,7 @@ dodecl(char *line1, FILE *fp)
 		}
 		addstr("extern", &decls);
 		addstr(line1 + 6, &decls);
-		if (q != nullptr)
+		if (q)
 			addstr(q, &decls);
 		amiddecls = 1;
 	}
@@ -427,7 +427,7 @@ addchar(int c, struct text *text)
 
 	if (--text->nleft < 0) {
 		bp = static_cast<struct block *>(ckmalloc(sizeof *bp));
-		if (text->start == nullptr)
+		if (!text->start)
 			text->start = bp;
 		else
 			text->last->next = bp;
@@ -446,7 +446,7 @@ writetext(struct text *text, FILE *fp)
 {
 	struct block *bp;
 
-	if (text->start != nullptr) {
+	if (text->start) {
 		for (bp = text->start ; bp != text->last ; bp = bp->next) {
 			if ((fwrite(bp->text, sizeof (char), BLOCKSIZE, fp)) != BLOCKSIZE)
 				error("Can't write data\n");
@@ -461,10 +461,11 @@ ckfopen(const char *file, const char *mode)
 {
 	FILE *fp;
 
-	if ((fp = fopen(file, mode)) == nullptr) {
-		fprintf(stderr, "Can't open %s\n", file);
-		exit(2);
+	if (!(fp = std::fopen(file, mode))) {
+		std::fprintf(stderr, "Can't open %s\n", file);
+		std::exit(2);
 	}
+
 	return fp;
 }
 
@@ -473,27 +474,28 @@ ckmalloc(int nbytes)
 {
 	char *p;
 
-	if ((p = static_cast<char *>(malloc(nbytes))) == nullptr)
+	if (!(p = static_cast<char *>(std::malloc(nbytes))))
 		error("Out of space");
+
 	return p;
 }
 
 char *
 savestr(char *s)
 {
-	char *p;
+	char *p = static_cast<char *>(ckmalloc(std::strlen(s) + 1));
 
-	p = static_cast<char *>(ckmalloc(strlen(s) + 1));
-	strcpy(p, s);
+	std::strcpy(p, s);
+
 	return p;
 }
 
 static void
 error(const char *msg)
 {
-	if (curfile != nullptr)
-		fprintf(stderr, "%s:%d: ", curfile, linno);
-	fprintf(stderr, "%s\n", msg);
-	exit(2);
+	if (curfile)
+		std::fprintf(stderr, "%s:%d: ", curfile, linno);
+	std::fprintf(stderr, "%s\n", msg);
+	std::exit(2);
 	/* NOTREACHED */
 }

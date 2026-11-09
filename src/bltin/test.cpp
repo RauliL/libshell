@@ -243,7 +243,7 @@ eval:
 	res ^= TRY_SH(oexpr(sh, st, n));
 	argv = st.wp;
 
-	if (argv[0] != nullptr && argv[1] != nullptr)
+	if (argv[0] && argv[1])
 		return syntax(sh, argv[0], "unexpected operator");
 
 	return res;
@@ -322,8 +322,8 @@ primary(ShellContext &sh, TestState &st, enum token n)
 		return res;
 	}
 	if (st.wp_op && st.wp_op->op_type == UNOP) {
-		/* unary expression */
-		if (*++st.wp == nullptr)
+		// unary expression */
+		if (!*++st.wp)
 			return syntax(sh, st.wp_op->op_text, "argument expected");
 		switch (n) {
 		case STREZ:
@@ -362,7 +362,7 @@ binop(ShellContext &sh, TestState &st)
 	t_lex(st, ++st.wp);
 	op = st.wp_op;
 
-	if ((opnd2 = *++st.wp) == nullptr)
+	if (!(opnd2 = *++st.wp))
 		return syntax(sh, op->op_text, "argument expected");
 
 	switch (op->op_num) {

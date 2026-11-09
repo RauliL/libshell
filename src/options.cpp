@@ -128,7 +128,7 @@ procargs(ShellContext &sh, char **xargv)
 	sh.bopt.argptr = xargv;
 	result.login |= TRY_SH(options(sh, 1, &result.minusc));
 	xargv = sh.bopt.argptr;
-	if (*xargv == nullptr) {
+	if (!*xargv) {
 		if (result.minusc)
 			return sh_error(sh, "-c requires an argument");
 		sflag = 1;
@@ -190,7 +190,7 @@ options(ShellContext &sh, int cmdline, std::optional<std::string> *minusc)
 
 	if (cmdline && minusc)
 		minusc->reset();
-	while ((p = *sh.bopt.argptr) != nullptr) {
+	while ((p = *sh.bopt.argptr)) {
 		sh.bopt.argptr++;
 		if ((c = *p++) == '-') {
 			val = 1;
@@ -200,7 +200,7 @@ options(ShellContext &sh, int cmdline, std::optional<std::string> *minusc)
                                         if (p[0] == '\0')
                                                 xflag = vflag = 0;
                                         /* "--" means reset params */
-                                        else if (*sh.bopt.argptr == nullptr)
+                                        else if (!*sh.bopt.argptr)
 						setparam(sh, sh.bopt.argptr);
                                 }
 				break;	  /* "-" or  "--" terminates options */
@@ -232,16 +232,14 @@ options(ShellContext &sh, int cmdline, std::optional<std::string> *minusc)
 static shell::Result<void>
 minus_o(ShellContext &sh, char *name, int val)
 {
-	int i;
-
-	if (name == nullptr) {
+	if (!name) {
 		if (val) {
 			out1str("Current option settings\n");
-			for (i = 0; i < NOPTS; i++)
+			for (int i = 0; i < NOPTS; i++)
 				out1fmt(sh, "%-16s%s\n", optnames[i],
 					sh.opts.list[i] ? "on" : "off");
 		} else {
-			for (i = 0; i < NOPTS; i++)
+			for (int i = 0; i < NOPTS; i++)
                 out1str(std::format(
                     "set %s %s\n",
 					sh.opts.list[i] ? "-o" : "+o",
@@ -250,13 +248,14 @@ minus_o(ShellContext &sh, char *name, int val)
 
 		}
 	} else {
-		for (i = 0; i < NOPTS; i++)
+		for (int i = 0; i < NOPTS; i++)
 			if (std::string_view(name) == optnames[i]) {
 				sh.opts.list[i] = val;
 				return {};
 			}
 		return sh_error(sh, "Illegal option -o {}", name);
 	}
+
 	return {};
 }
 
@@ -343,7 +342,7 @@ setcmd(ShellContext &sh, int argc, char **argv)
 	INTOFF(sh);
 	TRY_SHV(options(sh, 0, nullptr));
 	optschanged(sh);
-	if (*sh.bopt.argptr != nullptr) {
+	if (*sh.bopt.argptr) {
 		setparam(sh, sh.bopt.argptr);
 	}
 	INTON(sh);
@@ -418,10 +417,10 @@ getopts(ShellContext &sh, char *optstr, char *optvar, char **optfirst)
 		p = nullptr;
 	else
 		p = optnext[-1] + off;
-	if (p == nullptr || *p == '\0') {
+	if (!p || *p == '\0') {
 		/* Current word is done, advance */
 		p = *optnext;
-		if (p == nullptr || *p != '-' || *++p == '\0') {
+		if (!p || *p != '-' || *++p == '\0') {
 atend:
 			p = nullptr;
 			done = 1;
@@ -451,7 +450,7 @@ atend:
 	}
 
 	if (*++q == ':') {
-		if (*p == '\0' && (p = *optnext) == nullptr) {
+		if (*p == '\0' && !(p = *optnext)) {
 			if (optstr[0] == ':') {
 				s[0] = c;
 				s[1] = '\0';
@@ -502,9 +501,9 @@ nextopt(ShellContext &sh, std::string_view optstring)
 	char *p;
 	char c;
 
-	if ((p = sh.bopt.optptr) == nullptr || *p == '\0') {
+	if (!(p = sh.bopt.optptr) || *p == '\0') {
 		p = *sh.bopt.argptr;
-		if (p == nullptr || *p != '-' || *++p == '\0')
+		if (!p || *p != '-' || *++p == '\0')
 			return '\0';
 		sh.bopt.argptr++;
 		if (p[0] == '-' && p[1] == '\0')	/* check for "--" */
@@ -523,7 +522,7 @@ nextopt(ShellContext &sh, std::string_view optstring)
 			++i;
 	}
 	if (i + 1 < optstring.size() && optstring[i + 1] == ':') {
-		if (*p == '\0' && (p = *sh.bopt.argptr++) == nullptr)
+		if (*p == '\0' && !(p = *sh.bopt.argptr++))
 			return sh_error(sh, "No arg for -{} option", c);
 		sh.bopt.optionarg = p;
 		p = nullptr;

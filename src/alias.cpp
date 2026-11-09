@@ -118,7 +118,7 @@ aliascmd(ShellContext &sh, int argc, char **argv)
 
 		return EXIT_SUCCESS;
 	}
-	while ((n = *++argv) != nullptr) {
+	while ((n = *++argv)) {
 		char *v;
 
 		if (!*n || !(v = std::strchr(n + 1, '='))) {

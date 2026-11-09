@@ -97,14 +97,14 @@ shellexec(ShellContext &sh, char **argv, const char *path, int idx)
 	char **envp = env.data();
 	int exerrno;
 
-	if (strchr(argv[0], '/') != nullptr) {
+	if (std::strchr(argv[0], '/')) {
 		tryexec(sh, argv[0], argv, envp);
 		e = errno;
 	} else {
 		e = ENOENT;
 		std::string candidate;
 		while (padvance(sh, &path, argv[0], candidate) >= 0) {
-			if (--idx < 0 && sh.pathopt == nullptr) {
+			if (--idx < 0 && !sh.pathopt) {
 				tryexec(sh, candidate.data(), argv, envp);
 				if (errno != ENOENT && errno != ENOTDIR)
 					e = errno;
@@ -199,7 +199,7 @@ padvance_magic(ShellContext &sh, const char **path, const char *name, int magic,
 	const char *start;
 	size_t len;
 
-	if (*path == nullptr)
+	if (!*path)
 		return -1;
 
 	lpathopt = nullptr;
@@ -272,7 +272,7 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 		return 0;
 	}
 
-	if (*sh.bopt.argptr == nullptr) {
+	if (!*sh.bopt.argptr) {
 		for (const auto &cmd : sh.cmdtable) {
 			if (cmd.second.cmdtype == CMDNORMAL)
 				printentry(sh, cmd.first, cmd.second);
@@ -280,7 +280,7 @@ hashcmd(ShellContext &sh, int argc, char **argv)
 		return 0;
 	}
 	c = 0;
-	while ((name = *sh.bopt.argptr) != nullptr) {
+	while ((name = *sh.bopt.argptr)) {
 		tblentry *cmdp = cmdlookup(sh, name, 0);
 		if (cmdp && hash_affected(*cmdp, sh.builtinloc))
 			delete_cmd_entry(sh, name);
@@ -343,8 +343,8 @@ find_command(ShellContext &sh, char *name, struct cmdentry *entry, int act, cons
 	int updatetbl;
 	const builtincmd *bcmd;
 
-	/* If name contains a slash, don't use PATH or hash table */
-	if (strchr(name, '/') != nullptr) {
+	// If name contains a slash, don't use PATH or hash table
+	if (std::strchr(name, '/')) {
 		entry->u.index = -1;
 		if (act & DO_ABS) {
 			while (stat64(name, &statb) < 0) {
@@ -367,8 +367,8 @@ absfail:
 	if (!updatetbl)
 		act |= DO_ALTPATH;
 
-	/* If name is in the table, check answer will be ok */
-	if ((cmdp = cmdlookup(sh, name, 0)) != nullptr) {
+	// If name is in the table, check answer will be ok
+	if ((cmdp = cmdlookup(sh, name, 0))) {
 		int bit;
 
 		switch (cmdp->cmdtype) {
@@ -450,7 +450,7 @@ loop:
 		if (lpathopt) {		/* this is a %func directory */
 			std::string pathcopy(fullname);
 			TRY_SHV(readcmdfile(sh, pathcopy.data()));
-			if ((cmdp = cmdlookup(sh, name, 0)) == nullptr ||
+			if (!(cmdp = cmdlookup(sh, name, 0)) ||
 			    cmdp->cmdtype != CMDFUNCTION)
 				return sh_error(sh, "{} not defined in {}", name,
 					 pathcopy);
@@ -658,7 +658,7 @@ unsetfunc(ShellContext &sh, std::string_view name)
 	std::string key(name);
 	tblentry *cmdp = cmdlookup(sh, key.c_str(), 0);
 
-	if (cmdp != nullptr && cmdp->cmdtype == CMDFUNCTION)
+	if (cmdp && cmdp->cmdtype == CMDFUNCTION)
 		delete_cmd_entry(sh, key.c_str());
 }
 
@@ -709,14 +709,14 @@ describe_command(ShellContext &sh, struct output *out, char *command,
 	/* Then if the standard search path is used, check if it is
 	 * a tracked alias.
 	 */
-	if (path == nullptr) {
+	if (!path) {
 		path = pathval(sh);
 		cmdp = cmdlookup(sh, command, 0);
 	} else {
 		cmdp = nullptr;
 	}
 
-	if (cmdp != nullptr) {
+	if (cmdp) {
 		entry.cmdtype = cmdp->cmdtype;
 		entry.u = cmdp->param;
 	} else {

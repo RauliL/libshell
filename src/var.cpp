@@ -427,7 +427,7 @@ exportcmd(ShellContext &sh, int argc, char **argv)
 	notp = TRY_SH(nextopt(sh, "p")) - 'p';
 	if (notp && ((name = *(aptr = sh.bopt.argptr)))) {
 		do {
-			if ((p = strchr(name, '=')) != nullptr) {
+			if ((p = std::strchr(name, '='))) {
 				p++;
 			} else {
 				if (auto vp = findvar(sh, name)) {
@@ -436,7 +436,7 @@ exportcmd(ShellContext &sh, int argc, char **argv)
 				}
 			}
 			TRY_SHV(sh.set_var(name, p ? std::optional<std::string>(p) : std::nullopt, flag));
-		} while ((name = *++aptr) != nullptr);
+		} while ((name = *++aptr));
 	} else {
 		TRY_SHV(showvars(sh, argv[0], flag, {}));
 	}
@@ -457,7 +457,7 @@ localcmd(ShellContext &sh, int argc, char **argv)
 		return sh_error(sh, "not in a function");
 
 	argv = sh.bopt.argptr;
-	while ((name = *argv++) != nullptr) {
+	while ((name = *argv++)) {
 		TRY_SHV(mklocal(sh, name));
 	}
 	return 0;
@@ -482,10 +482,9 @@ mklocal(ShellContext &sh, std::string_view name, VarFlags flags)
 		lv.text.assign(sh.opts.list, sizeof(sh.opts.list));
 		vp = nullptr;
 	} else {
-		auto eq = name.find('=');
+		const auto eq = name.find('=');
 
-		vp = findvar(sh, name);
-		if (vp == nullptr) {
+		if (!(vp = findvar(sh, name))) {
 			if (eq != std::string_view::npos)
 				vp = TRY_SH(setvareq(sh, std::string(name),
 						     VarFlag::str_fixed | flags));

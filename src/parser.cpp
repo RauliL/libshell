@@ -1194,8 +1194,7 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 					c != '\\' && c != '`' &&
 					c != '$' && (
 						c != '"' ||
-						(eofmark != nullptr &&
-						 !synstack->varnest)
+						(eofmark && !synstack->varnest)
 					) && (
 						c != '}' ||
 						!synstack->varnest
@@ -1218,7 +1217,7 @@ readtoken1(ShellContext &sh, int firstc, char const *syntax, const std::string *
 csquote:
 				synstack->syntax = SQSYNTAX;
 quotemark:
-				if (eofmark == nullptr) {
+				if (!eofmark) {
 					(*(out)++ = (CTLQUOTEMARK));
 				}
 				break;
@@ -1314,7 +1313,7 @@ end_backq:
 endword:
 	if (synstack->syntax == ARISYNTAX)
 		synerror(sh, "Missing '))'");
-	if ((synstack->syntax != BASESYNTAX && eofmark == nullptr) ||
+	if ((synstack->syntax != BASESYNTAX && !eofmark) ||
 	    synstack->backq)
 		synerror(sh, "Unterminated quoted string");
 	if (synstack->varnest != 0) {
@@ -1324,7 +1323,7 @@ endword:
 	(*(out)++ = ('\0'));
 	len = out - eb.base();
 	out = eb.base();
-	if (eofmark == nullptr) {
+	if (!eofmark) {
 		if ((c == '>' || c == '<')
 		 && quotef == 0
 		 && len <= 2
@@ -1569,8 +1568,7 @@ varname:
 					((out) = eb.putc(out, c));
 				/*FALLTHROUGH*/
 			default:
-				p = std::strchr(types, c);
-				if (p == nullptr)
+				if (!(p = std::strchr(types, c)))
 					break;
 				subtype |= p - types + VSNORMAL;
 				break;
