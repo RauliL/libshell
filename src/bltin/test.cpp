@@ -1,4 +1,4 @@
-#include <libshell/config.hpp>
+#include "./config.hpp"
 
 #include "shell.h"
 #include "shell_context.h"

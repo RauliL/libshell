@@ -145,8 +145,8 @@ else()
 endif()
 
 configure_file(
-  config.hpp.in
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/libshell/config.hpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/config.hpp.in"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/config.hpp"
 )
 
 include(FetchContent)
@@ -174,7 +174,6 @@ function(dash_configure_tool target)
     "${target}"
     PRIVATE
       -Wall
-      "SHELL:-include libshell/config.hpp"
   )
   # result.h (via parser.h / arith.h) needs tl::expected headers
   target_link_libraries("${target}" PRIVATE expected)

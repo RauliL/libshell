@@ -31,20 +31,20 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include <libshell//config.hpp>
+#include "./config.hpp"
+
+#include <climits>
+#include <cstdlib>
+#include <cwchar>
+#include <cwctype>
+#include <format>
+#include <optional>
+#include <string>
+#include <type_traits>
 
 #if HAVE_ALLOCA_H
 #include <alloca.h>
 #endif
-
-#include <format>
-#include <climits>
-#include <optional>
-#include <type_traits>
-#include <cstdlib>
-#include <string>
-#include <wchar.h>
-#include <wctype.h>
 
 #include "alias.h"
 #include "builtins.h"

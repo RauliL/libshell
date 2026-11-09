@@ -27,13 +27,11 @@
  */
 #pragma once
 
-#include <libshell/config.hpp>
+#include "./config.hpp"
 
 #include <climits>
 #include <csignal>
 #include <cstddef>
-
-#include <sys/types.h>
 
 #include <libshell.hpp>
 

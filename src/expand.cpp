@@ -31,9 +31,26 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include <libshell/config.hpp>
+#include "./config.hpp"
 
+#include <algorithm>
 #include <cctype>
+#include <cinttypes>
+#include <climits>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cwchar>
+#include <cwctype>
+#include <format>
+#include <iterator>
+#include <string>
+#include <string_view>
+
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <dirent.h>
 #ifdef HAVE_FNMATCH
 #include <fnmatch.h>
@@ -41,25 +58,9 @@
 #ifdef HAVE_GLOB
 #include <glob.h>
 #endif
-#include <format>
-#include <cinttypes>
-#include <climits>
 #ifdef HAVE_GETPWNAM
 #include <pwd.h>
 #endif
-#include <cstdio>
-#include <cstdlib>
-#include <algorithm>
-#include <iterator>
-#include <string>
-#include <string_view>
-#include <cstring>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <cwchar>
-#include <cwctype>
 
 /*
  * Routines to expand arguments to commands.  We have to deal with

@@ -35,7 +35,7 @@
 /*
  * Miscelaneous builtins.
  */
-#include <libshell/config.hpp>
+#include "./config.hpp"
 
 #include <ctype.h>
 #include <inttypes.h>

@@ -1,7 +1,8 @@
 /*
  * Builtin command table. Lookups use an unordered_map of name → entry.
  */
-#include <libshell/config.hpp>
+#include "./config.hpp"
+
 #include <libshell.hpp>
 
 #include "alias.h"

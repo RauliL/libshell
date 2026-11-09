@@ -31,12 +31,19 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include <libshell/config.hpp>
+#include "./config.hpp"
+
+#include <algorithm>
+#include <csignal>
+#include <cstdlib>
+#include <cstring>
+#include <format>
+#include <memory>
+#include <string>
+#include <string_view>
 
 #include <fcntl.h>
-#include <signal.h>
 #include <unistd.h>
-#include <stdlib.h>
 #ifdef HAVE_PATHS_H
 #include <paths.h>
 #endif
@@ -47,12 +54,6 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #endif
-#include <algorithm>
-#include <cstring>
-#include <format>
-#include <memory>
-#include <string>
-#include <string_view>
 
 #include "shell.h"
 #include "shell_context.h"
