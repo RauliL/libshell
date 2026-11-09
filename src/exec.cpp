@@ -66,7 +66,6 @@
 #include "error.h"
 #include "init.h"
 #include "mystring.h"
-#include "show.h"
 #include "jobs.h"
 #include "alias.h"
 #include "system.h"
@@ -126,8 +125,6 @@ shellexec(ShellContext &sh, char **argv, const char *path, int idx)
 		break;
 	}
 	sh.exitstatus = exerrno;
-	TRACE(("shellexec failed for %s, errno %d, suppressint %d\n",
-		argv[0], e, sh.suppressint ));
 	exerror(sh, shell::Error::End, "{}: {}", argv[0], errmsg(e, E_EXEC));
 	/* NOTREACHED */
 }
@@ -376,9 +373,6 @@ absfail:
 
 		switch (cmdp->cmdtype) {
 		default:
-#if DEBUG
-			abort();
-#endif
 		case CMDNORMAL:
 			bit = DO_ALTPATH | DO_REGBLTIN;
 			break;
@@ -442,7 +436,6 @@ loop:
 		if (fullname[0] == '/' && idx <= prev) {
 			if (idx < prev)
 				continue;
-			TRACE(("searchexec \"%s\": no change\n", name));
 			goto success;
 		}
 		while (stat64(fullname.c_str(), &statb) < 0) {
@@ -466,7 +459,6 @@ loop:
 		e = EACCES;	/* if we fail, this will be the error */
 		if (!test_exec(sh, fullname.c_str(), &statb))
 			continue;
-		TRACE(("searchexec \"%s\" returns \"%s\"\n", name, fullname.c_str()));
 		if (!updatetbl) {
 			entry->cmdtype = CMDNORMAL;
 			entry->u.index = idx;
@@ -811,10 +803,6 @@ commandcmd(ShellContext &sh, int argc, char **argv)
 			verify |= VERIFY_VERBOSE;
 		else if (c == 'v')
 			verify |= VERIFY_BRIEF;
-#ifdef DEBUG
-		else if (c != 'p')
-			abort();
-#endif
 		else
 			path = defpath;
 

@@ -114,10 +114,6 @@ struct ShellContext {
 	unsigned closed_redirs = 0;
 	CdState cwd;
 
-#ifdef DEBUG
-	FILE *tracefile = nullptr;
-#endif
-
 	signal_map_type signal_map;
 
 	inline static ShellContext *signaled = nullptr;

@@ -61,7 +61,6 @@
 #include "redir.h"
 #include "main.h"
 #include "mystring.h"
-#include "show.h"
 #include "cd.h"
 
 #define CD_PHYSICAL 1
@@ -167,8 +166,6 @@ docd(ShellContext &sh, const char *dest, int flags)
 	std::optional<std::string> logical;
 	const char *dir = nullptr;
 	int err;
-
-	TRACE(("docd(\"%s\", %d) called\n", dest, flags));
 
 	INTOFF(sh);
 	if (!(flags & CD_PHYSICAL)) {

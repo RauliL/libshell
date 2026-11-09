@@ -66,7 +66,6 @@
 #include "var.h"
 #include "memalloc.h"
 #include "error.h"
-#include "show.h"
 #include "mystring.h"
 #include "parse_error.h"
 
@@ -211,14 +210,10 @@ evaltree(ShellContext &sh, Node *n, EvalFlags flags)
 		goto out;
 
 	if (n == nullptr) {
-		TRACE(("evaltree(NULL) called\n"));
 		goto out;
 	}
 
 	TRY_SHV(dotrap(sh));
-
-	TRACE(("pid %d, evaltree(%p: %d, %lu) called\n",
-	    getpid(), n, n->type, flags.to_ulong()));
 
 	status = TRY_SH(n->eval(sh, flags, checkexit));
 	sh.exitstatus = status;
@@ -238,15 +233,8 @@ exexit:
 }
 
 shell::Result<int>
-Node::eval(ShellContext &sh, EvalFlags, bool &) const
+Node::eval(ShellContext &, EvalFlags, bool &) const
 {
-#ifdef DEBUG
-	out1str(std::format("Node type = {}\n", type));
-	sh.out1->flush(sh);
-#else
-	(void)sh;
-#endif
-
 	return EXIT_SUCCESS;
 }
 
@@ -587,7 +575,6 @@ evalpipe(ShellContext &sh, const Node::Pipe *n, EvalFlags flags)
 	int pip[2];
 	int status = 0;
 
-	TRACE(("evalpipe(0x%lx) called\n", (long)n));
 	pipelen = static_cast<int>(n->cmdlist.size());
 	flags.set(EvalFlag::exit);
 	INTOFF(sh);
@@ -628,7 +615,6 @@ evalpipe(ShellContext &sh, const Node::Pipe *n, EvalFlags flags)
 	}
 	if (n->backgnd == 0) {
 		status = TRY_SH(waitforjob(sh, jp));
-		TRACE(("evalpipe:  job done exit status %d\n", status));
 	}
 	INTON(sh);
 
@@ -678,9 +664,6 @@ evalbackcmd(ShellContext &sh, Node *n, struct backcmd *result)
 	result->jp = jp;
 
 out:
-	TRACE(("evalbackcmd done: fd=%d buflen=%zu jp=0x%x\n",
-		result->fd, result->buf.size(), result->jp));
-
 	return {};
 }
 
@@ -776,7 +759,6 @@ evalcommand(ShellContext &sh, const Node::Command *cmd, EvalFlags flags)
 		sh.lineno -= sh.funcline - 1;
 
 	/* First expand the arguments. */
-	TRACE(("evalcommand(0x%lx, %d) called\n", (long)cmd, flags));
 	file_stop = sh.input.current;
 	sh.back_exitstatus = 0;
 
@@ -843,8 +825,7 @@ evalcommand(ShellContext &sh, const Node::Command *cmd, EvalFlags flags)
 	/* Reserve one extra spot at the front for shellexec. */
 	argv_store.reserve(static_cast<size_t>(argc) + 2);
 	argv_store.push_back(nullptr);
-	for (size_t i = arg0; i < args.size(); i++) {
-		TRACE(("evalcommand arg: %s\n", args[i].c_str()));
+	for (std::size_t i = arg0; i < args.size(); i++) {
 		argv_store.push_back(args[i].data());
 	}
 	argv_store.push_back(nullptr);

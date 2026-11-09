@@ -61,7 +61,6 @@
 #include "error.h"
 #include "mystring.h"
 #include "parser.h"
-#include "show.h"
 #include "system.h"
 
 
@@ -524,9 +523,9 @@ poplocalvars(ShellContext &sh)
 
 	for (auto it = frame.vars.rbegin(); it != frame.vars.rend(); ++it) {
 		struct var *vp = it->vp;
-		TRACE(("poplocalvar %s\n", vp ? vp->text.c_str() : "-"));
-		if (vp == nullptr) {	/* $- saved */
-			memcpy(sh.opts.list, it->text.data(), sizeof(sh.opts.list));
+
+		if (!vp) {	/* $- saved */
+			std::memcpy(sh.opts.list, it->text.data(), sizeof(sh.opts.list));
 			optschanged(sh);
 		} else if (it->flags == VarFlag::unset) {
 			vp->flags &= ~(VarFlag::str_fixed | VarFlag::readonly);

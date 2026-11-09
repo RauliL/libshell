@@ -53,7 +53,6 @@
 #include "main.h"
 #include "output.h"
 #include "error.h"
-#include "show.h"
 #include "eval.h"
 #include "parser.h"
 #include "system.h"
@@ -119,9 +118,6 @@ sh_error_msg(ShellContext &sh, std::string msg)
 {
 	sh.exitstatus = 2;
 
-#ifdef DEBUG
-	TRACE(("sh_error_msg(\"%s\") pid=%d\n", msg.c_str(), getpid()));
-#endif
 	exwarning_msg(sh, msg);
 	flushall(sh);
 
@@ -131,10 +127,6 @@ sh_error_msg(ShellContext &sh, std::string msg)
 tl::unexpected<shell::Error>
 exerror_msg(ShellContext &sh, shell::Error cond, std::string msg)
 {
-#ifdef DEBUG
-	TRACE(("exerror_msg(%d, \"%s\") pid=%d\n", static_cast<int>(cond),
-	       msg.c_str(), getpid()));
-#endif
 	exwarning_msg(sh, msg);
 	flushall(sh);
 

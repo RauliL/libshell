@@ -59,7 +59,6 @@ int *dash_errno = __errno_location();
 #include "mystring.h"
 #include "exec.h"
 #include "parse_error.h"
-#include "show.h"
 
 static shell::Result<std::string> find_dot_file(ShellContext &sh, char *);
 
@@ -74,7 +73,6 @@ cmdloop(ShellContext &sh)
 {
 	int status = 0;
 
-	TRACE(("cmdloop() called\n"));
 	for (;;) {
 		int skip;
 

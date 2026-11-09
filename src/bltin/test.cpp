@@ -367,10 +367,6 @@ binop(ShellContext &sh, TestState &st)
 
 	switch (op->op_num) {
 	default:
-#ifdef DEBUG
-		abort();
-		/* NOTREACHED */
-#endif
 	case STREQ:
 		return strcmp(opnd1, opnd2) == 0;
 	case STRNE:

@@ -62,7 +62,6 @@
 #include "parser.h"
 #include "shell.h"
 #include "shell_context.h"
-#include "show.h"
 #include "syntax.h"
 #include "system.h"
 #include "var.h"
@@ -434,10 +433,8 @@ static Node::ptr
 pipeline(ShellContext &sh)
 {
 	Node::ptr n1, n2, pipenode;
-	int negate;
+	bool negate = false;
 
-	negate = 0;
-	TRACE(("pipeline: entered\n"));
 	if (readtoken(sh) == Token::Not) {
 		negate = !negate;
 		sh.parse.checkkwd = CHKKWD | CHKALIAS;
@@ -520,7 +517,6 @@ command(ShellContext &sh)
 		n1->type = (sh.parse.lasttoken == Token::While)? Node::Type::While : Node::Type::Until;
 		as<Node::Binary>(n1)->ch1 = list(sh, 0);
 		if ((got=readtoken(sh)) != Token::Do) {
-TRACE(("expecting DO got %s %s\n", token_name(got), got == Token::Word ? sh.parse.wordtext.c_str() : ""));
 			synexpect(sh, Token::Do);
 		}
 		as<Node::Binary>(n1)->ch2 = list(sh, 0);
@@ -758,7 +754,6 @@ makename(ShellContext &sh)
 void
 fixredir(ShellContext &sh, Node *n, const char *text, int err)
 {
-	TRACE(("Fix redir %s %d\n", text, err));
 	if (!err)
 		as<Node::Dup>(n)->vname.reset();
 
@@ -788,7 +783,6 @@ parsefname(ShellContext &sh)
 	if (n->type == Node::Type::Here) {
 		if (sh.parse.quoteflag == 0)
 			n->type = Node::Type::XHere;
-		TRACE(("Here document %d\n", n->type));
 		rmescapes(sh.parse.wordtext.data());
 		sh.parse.pending_here->eofmark = sh.parse.wordtext;
 		sh.parse.heredoclist.push_back(
@@ -832,9 +826,6 @@ readtoken(ShellContext &sh)
 {
 	Token t;
 	int kwd = sh.parse.checkkwd;
-#ifdef DEBUG
-	int alreadyseen = sh.parse.tokpushback;
-#endif
 
 top:
 	t = xxreadtoken(sh);
@@ -864,7 +855,6 @@ top:
 		if (const auto pp = findkwd(sh.parse.wordtext)) {
 			t = *pp;
 			sh.parse.lasttoken = t;
-			TRACE(("keyword %s recognized\n", token_name(t)));
 			goto out;
 		}
 	}
@@ -879,12 +869,6 @@ top:
 		}
 	}
 out:
-#ifdef DEBUG
-	if (!alreadyseen)
-	    TRACE(("token %s %s\n", token_name(t), t == Token::Word ? sh.parse.wordtext.c_str() : ""));
-	else
-	    TRACE(("reread token %s %s\n", token_name(t), t == Token::Word ? sh.parse.wordtext.c_str() : ""));
-#endif
 	return (t);
 }
 
@@ -1933,9 +1917,6 @@ getprompt(ShellContext &sh, void *unused)
 
 	switch (sh.parse.whichprompt) {
 	default:
-#ifdef DEBUG
-		return "<internal prompt error>";
-#endif
 	case 0:
 		return {};
 	case 1:

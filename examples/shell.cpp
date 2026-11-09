@@ -117,7 +117,6 @@ run_interactive(ShellContext &sh)
 	int status = 0;
 	int numeof = 0;
 
-	TRACE(("run_interactive() called\n"));
 	for (;;) {
 		int skip;
 

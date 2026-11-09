@@ -198,7 +198,6 @@ set(
   src/parser.cpp
   src/redir.cpp
   src/shell_context.cpp
-  src/show.cpp
   src/signames.cpp
   src/system.cpp
   src/trap.cpp

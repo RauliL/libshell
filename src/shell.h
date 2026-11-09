@@ -43,8 +43,6 @@
  *	SHORTNAMES -> 1 if your linker cannot handle long names.
  *	define BSD if you are running 4.2 BSD or later.
  *	define SYSV if you are running under System V.
- *	define DEBUG=1 to compile in debugging ('set -o debug' to turn on)
- *	define DEBUG=2 to compile in and turn on debugging.
  *	define DO_SHAREDVFORK to indicate that vfork(2) shares its address
  *	       with its parent.
  *
@@ -70,15 +68,6 @@
 #define MKINIT	/* empty */
 
 extern char nullstr[1];		/* null string */
-
-
-#ifdef DEBUG
-#define TRACE(param)	trace param
-#define TRACEV(param)	tracev param
-#else
-#define TRACE(param)
-#define TRACEV(param)
-#endif
 
 #if defined(__GNUC__) && __GNUC__ < 3
 #define va_copy __va_copy

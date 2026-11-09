@@ -59,7 +59,6 @@
 #include "eval.h"
 #include "init.h"
 #include "redir.h"
-#include "show.h"
 #include "main.h"
 #include "parser.h"
 #include "nodes.h"
@@ -127,8 +126,7 @@ Job::calc_status(bool pipefail_on)
 		retval = WTERMSIG(status);
 		retval += 128;
 	}
-	TRACE(("getstatus: job %d, nproc %zu, status %x, retval %x\n",
-		number(), procs.size(), status, retval));
+
 	return retval;
 }
 
@@ -140,9 +138,6 @@ set_curjob(ShellContext &sh, Job *jp, unsigned mode)
 
 	switch (mode) {
 	default:
-#ifdef DEBUG
-		abort();
-#endif
 	case CUR_DELETE:
 		break;
 	case CUR_RUNNING:
@@ -175,9 +170,6 @@ usage:
 			while ((c = TRY_SH(nextopt(sh, "ls:"))) != '\0')
 				switch (c) {
 				default:
-#ifdef DEBUG
-					abort();
-#endif
 				case 'l':
 					list = 1;
 					break;
@@ -469,7 +461,7 @@ makejob(ShellContext &sh, int nprocs)
 	Job *jp = owned.get();
 	sh.jobs[slot] = std::move(owned);
 	sh.job_order.insert(sh.job_order.begin(), jp);
-	TRACE(("makejob(%d) returns %%%d\n", nprocs, jp->number()));
+
 	return jp;
 }
 
@@ -491,11 +483,7 @@ makejob(ShellContext &sh, int nprocs)
 static void
 forkchild(ShellContext &sh, Job *jp, const Node *n, int mode)
 {
-	int lvforked;
-
-	TRACE(("Child shell %d\n", getpid()));
-
-	lvforked = sh.vforked;
+	int lvforked = sh.vforked;
 
 	if (!lvforked) {
 		sh.mypid = 0;
@@ -532,13 +520,11 @@ static shell::Result<void>
 forkparent(ShellContext &sh, Job *jp, const Node *n, int mode, pid_t pid)
 {
 	if (pid < 0) {
-		TRACE(("Fork failed, errno=%d", errno));
 		if (jp)
 			freejob(sh, jp);
 		return sh_error(sh, "Cannot fork");
 	}
 
-	TRACE(("In parent shell:  child = %d\n", pid));
 	if (!jp)
 		return {};
 	if (mode == FORK_BG) {
@@ -552,9 +538,7 @@ forkparent(ShellContext &sh, Job *jp, const Node *n, int mode, pid_t pid)
 shell::Result<int>
 forkshell(ShellContext &sh, Job *jp, Node *n, int mode)
 {
-	int pid;
-
-	TRACE(("forkshell(%%%d, %p, %d) called\n", jp ? jp->number() : 0, n, mode));
+	pid_t pid;
 
 	flush_input(sh);
 
@@ -602,7 +586,6 @@ waitforjob(ShellContext &sh, Job *jp)
 {
 	int st;
 
-	TRACE(("waitforjob(%%%d) called\n", jp ? jp->number() : 0));
 	dowait(sh, jp ? DOWAIT_BLOCK : DOWAIT_NONBLOCK, jp);
 	if (!jp)
 		return sh.exitstatus;
@@ -628,9 +611,7 @@ waitone(ShellContext &sh, int block, Job *job)
 	Job::State state = Job::State::Done;
 
 	INTOFF(sh);
-	TRACE(("dowait(%d) called\n", block));
 	pid = waitproc(sh, block, &status);
-	TRACE(("wait returns pid %d, status=%d\n", pid, status));
 	if (pid <= 0)
 		goto out;
 
@@ -640,8 +621,6 @@ waitone(ShellContext &sh, int block, Job *job)
 		state = Job::State::Done;
 		for (auto &sp : jp->procs) {
 			if (sp.pid == pid) {
-				TRACE(("Job %d: changing status of proc %d from 0x%x to 0x%x\n",
-					jp->number(), pid, sp.status, status));
 				sp.status = status;
 				thisjob = jp;
 			}
@@ -655,10 +634,6 @@ waitone(ShellContext &sh, int block, Job *job)
 
 gotjob:
 	if (state != Job::State::Running && thisjob->state != state) {
-		TRACE(("Job %d: changing state from %d to %d\n",
-			thisjob->number(),
-			static_cast<int>(thisjob->state),
-			static_cast<int>(state)));
 		thisjob->state = state;
 	}
 out:
@@ -775,9 +750,6 @@ cmdtxt(ShellContext &sh, const Node *n, std::string &out)
 		return;
 	switch (n->type) {
 	default:
-#if DEBUG
-		abort();
-#endif
 	case Node::Type::Pipe:
 		for (std::size_t i = 0; i < as<Node::Pipe>(n)->cmdlist.size(); i++) {
 			if (i)

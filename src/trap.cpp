@@ -46,7 +46,6 @@
 #include "nodes.h"	/* for other headers */
 #include "eval.h"
 #include "init.h"
-#include "show.h"
 #include "options.h"
 #include "syntax.h"
 #include "output.h"
@@ -317,7 +316,6 @@ void
 exitshell(ShellContext &sh)
 {
 	sh.savestatus = sh.exitstatus;
-	TRACE(("pid %d, exitshell(%d)\n", getpid(), sh.savestatus));
 	if (sh.trap[0]) {
 		std::string exittrap = std::move(*sh.trap[0]);
 		sh.trap[0].reset();

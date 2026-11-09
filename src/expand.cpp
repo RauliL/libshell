@@ -79,7 +79,6 @@
 #include "parser.h"
 #include "shell.h"
 #include "shell_context.h"
-#include "show.h"
 #include "syntax.h"
 #include "system.h"
 #include "var.h"
@@ -570,7 +569,6 @@ read:
 		do {
 			i = read(in.fd, buf, sizeof buf);
 		} while (i < 0 && errno == EINTR);
-		TRACE(("expbackq: read returns %d\n", i));
 		if (i <= 0)
 			break;
 		p = buf;
@@ -590,10 +588,6 @@ read:
 
 	if (!(flag & EXP_QUOTED))
 		recordregion(sh, startloc, dest - eb.base(), 0);
-	TRACE(("evalbackq: size=%d: \"%.*s\"\n",
-		(dest - eb.base()) - startloc,
-		(dest - eb.base()) - startloc,
-		eb.base() + startloc));
 
 out:
 	sh.expand.argbackq_i++;
@@ -717,10 +711,6 @@ subevalvar(ShellContext &sh, ExpandBuf &eb, char *start, char *str, int strloc, 
 	}
 
 	subtype -= VSTRIMRIGHT;
-#ifdef DEBUG
-	if (subtype < 0 || subtype > 3)
-		abort();
-#endif
 
 	rmescend = eb.base() + strloc;
 	str = preglob(sh, rmescend, 0, &eb);
@@ -860,18 +850,6 @@ again:
 
 	if (subtype == VSNORMAL)
 		goto record;
-
-#ifdef DEBUG
-	switch (subtype) {
-	case VSTRIMLEFT:
-	case VSTRIMLEFTMAX:
-	case VSTRIMRIGHT:
-	case VSTRIMRIGHTMAX:
-		break;
-	default:
-		abort();
-	}
-#endif
 
 	flag |= discard;
 	if (!(flag & EXP_DISCARD)) {

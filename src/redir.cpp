@@ -243,9 +243,6 @@ do_open:
 			f = -2;
 		break;
 	default:
-#ifdef DEBUG
-		abort();
-#endif
 		/* Fall through to eliminate warning. */
 	case Node::Type::Here:
 	case Node::Type::XHere:

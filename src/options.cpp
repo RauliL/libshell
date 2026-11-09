@@ -53,7 +53,6 @@
 #include "memalloc.h"
 #include "error.h"
 #include "mystring.h"
-#include "show.h"
 
 			/* value of $0 */
 	/* current positional parameters */
@@ -144,9 +143,6 @@ procargs(ShellContext &sh, char **xargv)
 	for (i = 0; i < NOPTS; i++)
 		if (sh.opts.list[i] == 2)
 			sh.opts.list[i] = 0;
-#if DEBUG == 2
-	debug = 1;
-#endif
 	/* POSIX 1003.2: first arg after -c cmd is $0, remainder $1... */
 	if (result.minusc) {
 		*result.minusc = *xargv++;
@@ -174,9 +170,6 @@ setarg0:
 void
 optschanged(ShellContext &sh)
 {
-#ifdef DEBUG
-	opentrace(sh);
-#endif
 	setsignal(sh, SIGINT);
 	setsignal(sh, SIGQUIT);
 	setsignal(sh, SIGTERM);
