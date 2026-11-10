@@ -724,32 +724,39 @@ inline constexpr std::size_t pungetc_max =
 inline constexpr std::size_t ibufsiz = BUFSIZ + pungetc_max + 1;
 
 /**
- * One pushed string overlay on a parsefile (alias text or parser
- * re-injection).
+ * One pushed string overlay on a parse file (alias text or parser
+ * re-injection). Owns its text unless it views an alias value.
  */
 struct StringPush {
-	char *prev_string = nullptr;
-	int prev_nleft = 0;
+	std::size_t prev_pos = 0;
+	std::size_t prev_end = 0;
+	int prev_unget = 0;
 	std::shared_ptr<Alias> ap;
-	char *string = nullptr;
+	std::string owned;
+	std::string_view text;
+	std::size_t pos = 0;
 	int unget = 0;
 };
 
 /**
- * One level of the input file stack (script, sourced file, or string).
+ * One level of the input stack (script, sourced file, or string).
+ * `buffer` owns the bytes; `pos`/`end` form an index cursor into it.
  */
 struct ParseFile {
-	ParseFile *prev = nullptr;
-	int linno = 0;
-	int fd = 0;
-	int nleft = 0;
+	int linno = 1;
+	int fd = -1;
 	int eof = 0;
-	char *nextc = nullptr;
-	char *buf = nullptr;
-	std::unique_ptr<char[]> owned_buf;
+	int unget = 0;
+	std::string buffer;
+	std::size_t pos = 0;
+	std::size_t end = 0;
 	std::vector<StringPush> string_stack;
 	std::vector<std::shared_ptr<Alias>> pending_alias_release;
-	int unget = 0;
+
+	inline std::size_t nleft() const
+	{
+		return end > pos ? end - pos : 0;
+	}
 };
 
 struct StdinState {
@@ -761,28 +768,35 @@ struct StdinState {
 
 /**
  * Nested input sources for one shell: base stdin, sourced files, eval
- * strings, and alias string pushes.
+ * strings, and alias string pushes. Frames live in a vector; `current`
+ * / `top` are indices (not raw pointers).
  */
 struct InputStack {
-	ParseFile base{};
-	char basebuf[ibufsiz]{};
-	ParseFile *top = &base;
-	ParseFile *current = &base;
+	std::vector<ParseFile> frames;
+	std::size_t current = 0;
+	std::size_t top = 0;
+	/** When set, popfile on the base frame restores this index (pushstdin). */
+	std::optional<std::size_t> stdin_saved;
 	StdinState stdin{};
 	int stdin_istty = -1;
 
 	InputStack()
 	{
-		base.nextc = base.buf = basebuf;
-		base.linno = 1;
+		frames.resize(1);
+		frames[0].buffer.assign(ibufsiz, '\0');
+		frames[0].fd = 0;
+		frames[0].linno = 1;
 	}
 
 	InputStack(const InputStack &) = delete;
 	InputStack &operator=(const InputStack &) = delete;
 
-	inline ParseFile &cur() { return *current; }
-	inline const ParseFile &cur() const { return *current; }
-	inline int &linno() { return current->linno; }
+	ParseFile &base() { return frames.front(); }
+	const ParseFile &base() const { return frames.front(); }
+	ParseFile &cur() { return frames[current]; }
+	const ParseFile &cur() const { return frames[current]; }
+	int &linno() { return cur().linno; }
+	std::size_t index() const { return current; }
 };
 
 /**

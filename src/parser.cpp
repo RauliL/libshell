@@ -902,11 +902,8 @@ top:
 
 	if (kwd & CHKALIAS) {
 		if (const auto ap = lookupalias(sh, sh.parse.wordtext, true)) {
-			if (!ap->value.empty()) {
-				char *text = ap->value.data();
-
-				pushstring(sh, text, std::move(ap));
-			}
+			if (!ap->value.empty())
+				pushstring(sh, std::string_view(ap->value), ap);
 			goto top;
 		}
 	}
@@ -1181,7 +1178,6 @@ readtoken1(Context &sh, int firstc, char const *syntax, const std::string *eofma
 		.dblquote = syntax == DQSYNTAX,
 	};
 	std::deque<synstack> syn_storage;
-	std::vector<std::string> pushed_strings;
 	int chkeofmark = sh.parse.checkkwd & CHKEOFMARK;
 	struct synstack *synstack = &synbase;
 	bool printesc = syntax == SQSYNTAX;
@@ -1441,11 +1437,8 @@ more_heredoc:
 				len -= c <= PEOF;
 				c = p[-1];
 
-				if (len) {
-					pushed_strings.emplace_back(p, static_cast<size_t>(len));
-					pushstring(sh, pushed_strings.back().data(),
-						   nullptr);
-				}
+				if (len)
+					pushstring(sh, std::string(p, static_cast<size_t>(len)));
 			}
 		}
 
@@ -1752,7 +1745,7 @@ parsebackq: {
                 }
 		pout[-1] = 0;
 		pstr = (eb.commit_to(pout));
-		setinputstring(sh, pstr);
+		setinputstring(sh, std::string(pstr));
         }
 	saveheredoclist = std::move(sh.parse.heredoclist);
 
@@ -1770,7 +1763,7 @@ parsebackq: {
 		TRY_SH_SET(rp, readtoken(sh));
 		if (rp != Token::Rp)
 			return synexpect(sh, Token::Rp);
-		setinputstring(sh, nullstr);
+		setinputstring(sh, std::string_view{});
 	}
 
 	TRY_SHV(parseheredoc(sh));
@@ -1873,9 +1866,8 @@ Result<void>
 try_parse_string(Context &sh, std::string_view s)
 {
 	char save_nflag = sh.opts.noexec();
-	std::string copy(s);
 
-	setinputstring(sh, copy.data());
+	setinputstring(sh, s);
 	sh.opts.noexec() = 1;
 
 	for (;;) {
@@ -1900,7 +1892,7 @@ setprompt(Context &sh, int which)
 	sh.parse.needprompt = 0;
 	sh.parse.whichprompt = which;
 
-	if (!sh.input.current->nleft)
+	if (!sh.input.cur().nleft())
 		out2str(getprompt(sh, nullptr));
 }
 } // namespace
@@ -1908,16 +1900,16 @@ setprompt(Context &sh, int which)
 std::string
 expandstr(Context &sh, const char *ps)
 {
-	ParseFile *file_stop;
+	std::size_t file_stop;
 	std::vector<HereDoc> saveheredoclist;
 	std::string result = ps;
 	int saveprompt;
 	struct ArgNode n{};
 	int err = 0;
 
-	file_stop = sh.input.current;
+	file_stop = sh.input.index();
 
-	setinputstring(sh, result.data());
+	setinputstring(sh, std::string_view(result));
 
 	saveheredoclist = std::move(sh.parse.heredoclist);
 	saveprompt = sh.parse.doprompt;

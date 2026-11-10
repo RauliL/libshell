@@ -198,9 +198,7 @@ eval_input(Context &sh, EvalFlags flags)
 Result<int>
 Context::eval(const std::string &script, EvalFlags flags)
 {
-	std::string copy = script;
-
-	setinputstring(*this, copy.data());
+	setinputstring(*this, script);
 	return eval_input(*this, flags);
 }
 
@@ -760,7 +758,7 @@ Result<int>
 evalcommand(Context &sh, const CommandNode *cmd, EvalFlags flags)
 {
 	std::size_t localvar_stop;
-	ParseFile *file_stop;
+	std::size_t file_stop;
 	std::size_t redir_stop;
 	ArgList args;
 	ArgList vars;
@@ -787,7 +785,7 @@ evalcommand(Context &sh, const CommandNode *cmd, EvalFlags flags)
 		sh.lineno -= sh.funcline - 1;
 
 	/* First expand the arguments. */
-	file_stop = sh.input.current;
+	file_stop = sh.input.index();
 	sh.back_exitstatus = 0;
 
 	cmdentry.type = TableEntry::Type::Builtin;

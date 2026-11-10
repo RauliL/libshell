@@ -67,8 +67,8 @@ extern const char cqchars[];
 
 char *prefix(const char *, const char *);
 tl::unexpected<Error> badnum(Context &sh, std::string_view s);
-Result<intmax_t> atomax(Context &sh, std::string_view, int);
-Result<intmax_t> atomax10(Context &sh, std::string_view);
+Result<std::intmax_t> atomax(Context &sh, std::string_view, int);
+Result<std::intmax_t> atomax10(Context &sh, std::string_view);
 Result<int> number(Context &sh, std::string_view);
 bool is_number(std::string_view);
 std::string single_quote(std::string_view);

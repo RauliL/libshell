@@ -77,13 +77,17 @@ int pgetc(Context &sh, InputStack &in);
 int pgetc_eoa(Context &sh, InputStack &in);
 void pungetc(Context &sh, InputStack &in);
 void pungetn(InputStack &in, int);
-void pushstring(Context &sh, InputStack &in, char *, const std::shared_ptr<Alias> & = nullptr);
+void pushstring(Context &sh, InputStack &in, std::string,
+		const std::shared_ptr<Alias> & = nullptr);
+void pushstring(Context &sh, InputStack &in, std::string_view,
+		const std::shared_ptr<Alias> & = nullptr);
 Result<int> setinputfile(Context &sh, InputStack &in,
 				    std::string_view, int);
-void setinputstring(Context &sh, InputStack &in, char *);
+void setinputstring(Context &sh, InputStack &in, std::string);
+void setinputstring(Context &sh, InputStack &in, std::string_view);
 void pushstdin(Context &sh, InputStack &in);
 void popfile(Context &sh, InputStack &in);
-void unwindfiles(Context &sh, InputStack &in, ParseFile *stop);
+void unwindfiles(Context &sh, InputStack &in, std::size_t stop);
 void popallfiles(Context &sh, InputStack &in);
 void flush_input(Context &sh, InputStack &in);
 void reset_input(Context &sh, InputStack &in);
@@ -94,12 +98,16 @@ int pgetc(Context &sh);
 int pgetc_eoa(Context &sh);
 void pungetc(Context &sh);
 void pungetn(Context &sh, int);
-void pushstring(Context &sh, char *, const std::shared_ptr<Alias> & = nullptr);
+void pushstring(Context &sh, std::string,
+		const std::shared_ptr<Alias> & = nullptr);
+void pushstring(Context &sh, std::string_view,
+		const std::shared_ptr<Alias> & = nullptr);
 Result<int> setinputfile(Context &sh, std::string_view, int);
-void setinputstring(Context &sh, char *);
+void setinputstring(Context &sh, std::string);
+void setinputstring(Context &sh, std::string_view);
 void pushstdin(Context &sh);
 void popfile(Context &sh);
-void unwindfiles(Context &sh, ParseFile *);
+void unwindfiles(Context &sh, std::size_t);
 void flush_input(Context &sh);
 void reset_input(Context &sh);
 

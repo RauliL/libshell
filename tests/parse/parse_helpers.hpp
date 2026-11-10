@@ -69,8 +69,7 @@ inline std::vector<Node::ptr> parse_trees(std::string_view script,
 	for (auto [name, value] : aliases)
 		set_alias(sh, std::string(name), std::string(value));
 
-	std::string copy(script);
-	setinputstring(sh, copy.data());
+	setinputstring(sh, script);
 
 	std::vector<Node::ptr> trees;
 	for (;;) {

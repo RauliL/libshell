@@ -20,7 +20,7 @@ namespace shell {
 void
 init(Context &sh)
 {
-	/* InputStack member ctor already wires basebuf / linno. */
+	/* InputStack member ctor already wires the base frame. */
 	init_signal_names(sh);
 	init_traps(sh);
 	init_shell_vars(sh);

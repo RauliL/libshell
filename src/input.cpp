@@ -35,8 +35,6 @@
 
 #include <cerrno>
 #include <cstdio>	/* defines BUFSIZ */
-#include <cstdlib>
-#include <cstring>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -69,6 +67,22 @@ void popstring(Context &sh, InputStack &in);
 int preadfd(Context &sh, InputStack &in);
 void setinputfd(Context &sh, InputStack &in, int fd, int push);
 int preadbuffer(Context &sh, InputStack &in);
+
+int &
+active_unget(ParseFile &pf)
+{
+	return pf.string_stack.empty() ? pf.unget : pf.string_stack.back().unget;
+}
+
+int
+get_unget_char(ParseFile &pf)
+{
+	int &ug = active_unget(pf);
+	if (pf.string_stack.empty())
+		return static_cast<signed char>(pf.buffer[pf.pos - ug--]);
+	auto &sp = pf.string_stack.back();
+	return static_cast<signed char>(sp.text[sp.pos - ug--]);
+}
 } // namespace
 
 void
@@ -78,9 +92,10 @@ input_reset_interactive(Context &sh)
 
 	popallfiles(sh, sh.input);
 
+	auto &top = sh.input.frames[sh.input.top];
 	c = PEOF;
-	if (sh.input.top->nextc - sh.input.top->buf > sh.input.top->unget)
-		c = sh.input.top->nextc[-sh.input.top->unget - 1];
+	if (top.pos > static_cast<std::size_t>(top.unget))
+		c = static_cast<signed char>(top.buffer[top.pos - top.unget - 1]);
 	while (c != '\n' && c != PEOF && !int_pending(sh))
 		c = pgetc(sh, sh.input);
 }
@@ -89,9 +104,9 @@ void
 input_forkreset(Context &sh)
 {
 	popallfiles(sh, sh.input);
-	if (sh.input.current->fd > 0) {
-		close(sh.input.current->fd);
-		sh.input.current->fd = 0;
+	if (sh.input.cur().fd > 0) {
+		close(sh.input.cur().fd);
+		sh.input.cur().fd = 0;
 	}
 	if (sh.input.stdin.pip[0]) {
 		close(sh.input.stdin.pip[0]);
@@ -202,35 +217,42 @@ int __attribute__((noinline))
 pgetc(Context &sh, InputStack &in)
 {
 	int c;
+	auto &pf = in.cur();
 
-	if (unlikely(!in.current->pending_alias_release.empty()))
-		release_pending_aliases(sh, *in.current);
+	if (unlikely(!pf.pending_alias_release.empty()))
+		release_pending_aliases(sh, pf);
 
 again:
-	if (in.current->unget) {
-		long unget = -static_cast<long>(static_cast<unsigned>(in.current->unget--));
+	if (active_unget(pf))
+		return get_unget_char(pf);
 
-		return (signed char)in.current->nextc[unget];
+	if (!pf.string_stack.empty()) {
+		auto &sp = pf.string_stack.back();
+		if (sp.pos < sp.text.size()) {
+			c = static_cast<signed char>(sp.text[sp.pos++]);
+			if (unlikely(!c))
+				goto again;
+			return c;
+		}
+		popstring(sh, in);
+		goto again;
 	}
 
-nextc:
-	if (likely(in.current->nleft > 0)) {
-		in.current->nleft--;
-		c = (signed char)*in.current->nextc++;
-	} else if (unlikely(!in.current->string_stack.empty())) {
-		popstring(sh, in);
-		/* Alias release must be delayed until the next pgetc
-		 * so pgetc_eoa can still observe the alias frame.
-		 */
-		goto again;
+	if (likely(pf.nleft() > 0)) {
+		c = static_cast<signed char>(pf.buffer[pf.pos++]);
 	} else
 		c = preadbuffer(sh, in);
 
 	/* delete nul characters */
 	if (unlikely(!c)) {
-		in.current->nextc = static_cast<char *>(memmove(
-			in.current->nextc - 1, in.current->nextc, in.current->nleft));
-		goto nextc;
+		if (pf.pos <= pf.end) {
+			std::move(pf.buffer.begin() + static_cast<std::ptrdiff_t>(pf.pos),
+				  pf.buffer.begin() + static_cast<std::ptrdiff_t>(pf.end),
+				  pf.buffer.begin() + static_cast<std::ptrdiff_t>(pf.pos - 1));
+			--pf.end;
+			--pf.pos;
+		}
+		goto again;
 	}
 
 	return c;
@@ -239,11 +261,15 @@ nextc:
 int
 pgetc_eoa(Context &sh, InputStack &in)
 {
-	/* After the last alias character is consumed, nleft is 0 while
-	 * the StringPush frame is still on the stack.
+	/* After the last alias character is consumed, the StringPush frame
+	 * is still on the stack with pos at end.
 	 */
-	return !in.current->string_stack.empty() && in.current->nleft == 0 &&
-	       in.current->string_stack.back().ap ? PEOA : pgetc(sh, in);
+	auto &pf = in.cur();
+	return !pf.string_stack.empty() &&
+			       pf.string_stack.back().pos >= pf.string_stack.back().text.size() &&
+			       pf.string_stack.back().ap && !pf.string_stack.back().unget
+		       ? PEOA
+		       : pgetc(sh, in);
 }
 
 namespace {
@@ -264,20 +290,22 @@ stdin_clear_nonblock(Context &sh)
 int
 preadfd(Context &sh, InputStack &in)
 {
-	char *buf = in.current->buf;
-	int fd = in.current->fd;
+	auto &pf = in.cur();
+	std::size_t keep = pf.pos;
+	if (keep > PUNGETC_MAX)
+		keep = PUNGETC_MAX;
+
+	if (keep > 0)
+		std::memmove(pf.buffer.data(),
+			     pf.buffer.data() + pf.pos - keep, keep);
+	pf.pos = keep;
+	pf.end = keep;
+
+	char *buf = pf.buffer.data() + pf.pos;
+	int fd = pf.fd;
 	bool use_tee;
-	int unget;
 	int pnr;
 	int nr;
-
-	unget = in.current->nextc - buf;
-	if (unget > static_cast<int>(PUNGETC_MAX))
-		unget = static_cast<int>(PUNGETC_MAX);
-
-	memmove(buf, in.current->nextc - unget, unget);
-	buf += unget;
-	in.current->nextc = buf;
 
 	nr = BUFSIZ;
 	use_tee = likely(!fd) && !stdin_bufferable(sh, in);
@@ -300,7 +328,7 @@ retry:
 		nr = read(fd, buf, nr);
 
 	if (nr < 0) {
-		if (errno == EINTR && !(in.base.prev && sh.pending_sig))
+		if (errno == EINTR && !(in.stdin_saved && sh.pending_sig))
 			goto retry;
 		if (fd == 0 && errno == EWOULDBLOCK &&
 		    stdin_clear_nonblock(sh) >= 0) {
@@ -325,47 +353,42 @@ namespace {
 int
 preadbuffer(Context &sh, InputStack &in)
 {
+	auto &pf = in.cur();
 	int more;
-	char *q;
 
-	if (in.current->eof & 2) {
+	if (pf.eof & 2) {
 eof:
-		in.current->eof = 3;
+		pf.eof = 3;
 		return PEOF;
 	}
 	flushall(sh);
 
-	q = in.current->nextc;
-
 	INTOFF(sh);
-	{
-		int nr = q - in.current->nextc;
-		more = preadfd(sh, in);
-		q = in.current->nextc + nr;
-		if (more <= 0) {
-			in.current->nleft = 0;
-			INTON_DEFER(sh);
-			goto eof;
-		}
+	more = preadfd(sh, in);
+	if (more <= 0) {
+		pf.end = pf.pos;
+		INTON_DEFER(sh);
+		goto eof;
 	}
 
-	q += more;
-	in.current->nleft = q - in.current->nextc - 1;
-	*q = '\0';
+	pf.end = pf.pos + static_cast<std::size_t>(more);
+	if (pf.end >= pf.buffer.size())
+		pf.buffer.resize(pf.end + 1);
+	pf.buffer[pf.end] = '\0';
 	INTON_DEFER(sh);
 
 	if (sh.opts.verbose()) {
-		out2str(in.current->nextc);
+		out2str(pf.buffer.c_str() + pf.pos);
 	}
 
-	return (signed char)*in.current->nextc++;
+	return static_cast<signed char>(pf.buffer[pf.pos++]);
 }
 } // namespace
 
 void
 pungetn(InputStack &in, int n)
 {
-	in.current->unget += n;
+	active_unget(in.cur()) += n;
 }
 
 /*
@@ -377,8 +400,8 @@ void
 pungetc(Context &sh, InputStack &in)
 {
 	(void)sh;
-	pungetn(in, 1 - (in.current->eof & 1));
-	in.current->eof &= ~1;
+	pungetn(in, 1 - (in.cur().eof & 1));
+	in.cur().eof &= ~1;
 }
 
 /*
@@ -389,47 +412,81 @@ void
 pushstring(
 	Context &sh,
 	InputStack &in,
-	char *s,
+	std::string text,
 	const std::shared_ptr<Alias> &ap
 )
 {
-	const auto len = std::strlen(s);
+	auto &pf = in.cur();
 
 	INTOFF(sh);
-	in.current->string_stack.push_back(StringPush{
-		.prev_string = in.current->nextc,
-		.prev_nleft = in.current->nleft,
-		.ap = ap,
-		.string = s,
-		.unget = in.current->unget,
-	});
+	StringPush sp;
+	sp.prev_pos = pf.pos;
+	sp.prev_end = pf.end;
+	sp.prev_unget = pf.unget;
+	sp.ap = ap;
+	sp.owned = std::move(text);
+	sp.text = sp.owned;
+	sp.pos = 0;
+	sp.unget = 0;
 	if (ap)
 		ap->in_use = true;
-	in.current->nextc = s;
-	in.current->nleft = static_cast<int>(len);
-	in.current->unget = 0;
+	pf.unget = 0;
+	pf.string_stack.push_back(std::move(sp));
 	INTON_DEFER(sh);
+}
+
+void
+pushstring(
+	Context &sh,
+	InputStack &in,
+	std::string_view text,
+	const std::shared_ptr<Alias> &ap
+)
+{
+	/*
+	 * Alias overlays view the alias value directly (kept alive by
+	 * shared_ptr). All other overlays copy into owned storage.
+	 */
+	if (ap && text.data() == ap->value.data() &&
+	    text.size() == ap->value.size()) {
+		auto &pf = in.cur();
+		INTOFF(sh);
+		StringPush sp;
+		sp.prev_pos = pf.pos;
+		sp.prev_end = pf.end;
+		sp.prev_unget = pf.unget;
+		sp.ap = ap;
+		sp.text = ap->value;
+		sp.pos = 0;
+		sp.unget = 0;
+		ap->in_use = true;
+		pf.unget = 0;
+		pf.string_stack.push_back(std::move(sp));
+		INTON_DEFER(sh);
+		return;
+	}
+	pushstring(sh, in, std::string(text), ap);
 }
 
 namespace {
 void
 popstring(Context &sh, InputStack &in)
 {
-	auto sp = in.current->string_stack.back();
+	auto &pf = in.cur();
+	auto sp = std::move(pf.string_stack.back());
 
 	INTOFF(sh);
-	if (sp.ap && in.current->nextc > sp.string) {
-		if (in.current->nextc[-1] == ' ' ||
-		    in.current->nextc[-1] == '\t') {
+	if (sp.ap && sp.pos > 0) {
+		char last = sp.text[sp.pos - 1];
+		if (last == ' ' || last == '\t')
 			sh.parse.checkkwd |= CHKALIAS;
-		}
 	}
-	in.current->nextc = sp.prev_string;
-	in.current->nleft = sp.prev_nleft;
-	in.current->unget = sp.unget;
-	in.current->string_stack.pop_back();
+	pf.pos = sp.prev_pos;
+	pf.end = sp.prev_end;
+	pf.unget = sp.prev_unget;
+	pf.string_stack.pop_back();
 	if (sp.ap)
-		in.current->pending_alias_release.push_back(std::move(sp.ap));
+		pf.pending_alias_release.push_back(std::move(sp.ap));
 	INTON_DEFER(sh);
 }
 } // namespace
@@ -470,25 +527,36 @@ setinputfd(Context &sh, InputStack &in, int fd, int push)
 	pushfile(sh, in);
 	if (!push)
 		in.top = in.current;
-	in.current->fd = fd;
-	in.current->owned_buf = std::make_unique<char[]>(IBUFSIZ);
-	in.current->nextc = in.current->buf = in.current->owned_buf.get();
+	auto &pf = in.cur();
+	pf.fd = fd;
+	pf.buffer.assign(IBUFSIZ, '\0');
+	pf.pos = 0;
+	pf.end = 0;
 }
 } // namespace
 
 /*
- * Like setinputfile, but takes input from a string.
+ * Like setinputfile, but takes input from an owned string.
  */
 
 void
-setinputstring(Context &sh, InputStack &in, char *string)
+setinputstring(Context &sh, InputStack &in, std::string string)
 {
 	INTOFF(sh);
 	pushfile(sh, in);
-	in.current->nextc = string;
-	in.current->nleft = std::strlen(string);
-	in.current->eof = 2;
+	auto &pf = in.cur();
+	pf.buffer = std::move(string);
+	pf.pos = 0;
+	pf.end = pf.buffer.size();
+	pf.fd = -1;
+	pf.eof = 2;
 	INTON_DEFER(sh);
+}
+
+void
+setinputstring(Context &sh, InputStack &in, std::string_view string)
+{
+	setinputstring(sh, in, std::string(string));
 }
 
 /*
@@ -500,12 +568,8 @@ namespace {
 void
 pushfile(Context &, InputStack &in)
 {
-	auto *pf = new ParseFile{};
-
-	pf->prev = in.current;
-	pf->linno = 1;
-	pf->fd = -1;
-	in.current = pf;
+	in.frames.push_back(ParseFile{});
+	in.current = in.frames.size() - 1;
 }
 } // namespace
 
@@ -513,45 +577,51 @@ void
 pushstdin(Context &sh, InputStack &in)
 {
 	INTOFF(sh);
-	in.base.prev = in.current;
-	in.current = &in.base;
+	if (in.current != 0) {
+		in.stdin_saved = in.current;
+		in.current = 0;
+	}
 	INTON_DEFER(sh);
 }
 
 void
 popfile(Context &sh, InputStack &in)
 {
-	ParseFile *pf = in.current;
-
 	INTOFF(sh);
-	if (pf == &in.base) {
-		in.current = pf->prev;
-		pf->prev = nullptr;
-		goto out;
+	if (in.current == 0 && in.stdin_saved) {
+		in.current = *in.stdin_saved;
+		in.stdin_saved.reset();
+		INTON_DEFER(sh);
+		return;
 	}
 
-	if (pf->fd >= 0)
-		close(pf->fd);
-	pf->owned_buf.reset();
-	pf->buf = nullptr;
-	if (!pf->pending_alias_release.empty())
-		release_pending_aliases(sh, *pf);
-	while (!pf->string_stack.empty()) {
+	if (in.current == 0) {
+		INTON_DEFER(sh);
+		return;
+	}
+
+	auto &pf = in.cur();
+	if (pf.fd >= 0)
+		close(pf.fd);
+	if (!pf.pending_alias_release.empty())
+		release_pending_aliases(sh, pf);
+	while (!pf.string_stack.empty()) {
 		popstring(sh, in);
-		release_pending_aliases(sh, *pf);
+		release_pending_aliases(sh, pf);
 	}
-	in.current = pf->prev;
-	pf->prev = nullptr;
-	delete pf;
 
-out:
+	in.frames.pop_back();
+	in.current = in.frames.size() - 1;
+	if (in.top >= in.frames.size())
+		in.top = in.current;
+
 	INTON_DEFER(sh);
 }
 
 void __attribute__((noinline))
-unwindfiles(Context &sh, InputStack &in, ParseFile *stop)
+unwindfiles(Context &sh, InputStack &in, std::size_t stop)
 {
-	while (in.base.prev || in.current != stop)
+	while (in.stdin_saved || in.current != stop)
 		popfile(sh, in);
 }
 
@@ -568,16 +638,17 @@ popallfiles(Context &sh, InputStack &in)
 void __attribute__((noinline))
 flush_input(Context &sh, InputStack &in)
 {
-	int left = in.base.nleft;
+	auto &base = in.base();
+	int left = static_cast<int>(base.nleft());
 
 	INTOFF(sh);
 	if (in.stdin.seekable && left)
 		lseek(0, -left, SEEK_CUR);
 	else if (in.stdin.pending > left) {
-		flush_tee(sh, in.basebuf, BUFSIZ, in.stdin.pending - left);
+		flush_tee(sh, base.buffer.data(), BUFSIZ, in.stdin.pending - left);
 		in.stdin.pending = 0;
 	}
-	in.base.nleft = 0;
+	base.end = base.pos;
 	INTON_DEFER(sh);
 }
 
@@ -585,7 +656,7 @@ void
 reset_input(Context &sh, InputStack &in)
 {
 	in.stdin_istty = -1;
-	in.base.eof = 0;
+	in.base().eof = 0;
 	flush_input(sh, in);
 }
 
@@ -622,9 +693,15 @@ pungetn(Context &sh, int n)
 }
 
 void
-pushstring(Context &sh, char *s, const std::shared_ptr<Alias> &ap)
+pushstring(Context &sh, std::string s, const std::shared_ptr<Alias> &ap)
 {
-	pushstring(sh, sh.input, s, std::move(ap));
+	pushstring(sh, sh.input, std::move(s), ap);
+}
+
+void
+pushstring(Context &sh, std::string_view s, const std::shared_ptr<Alias> &ap)
+{
+	pushstring(sh, sh.input, s, ap);
 }
 
 Result<int>
@@ -634,7 +711,13 @@ setinputfile(Context &sh, std::string_view fname, int flags)
 }
 
 void
-setinputstring(Context &sh, char *string)
+setinputstring(Context &sh, std::string string)
+{
+	setinputstring(sh, sh.input, std::move(string));
+}
+
+void
+setinputstring(Context &sh, std::string_view string)
 {
 	setinputstring(sh, sh.input, string);
 }
@@ -652,7 +735,7 @@ popfile(Context &sh)
 }
 
 void
-unwindfiles(Context &sh, ParseFile *stop)
+unwindfiles(Context &sh, std::size_t stop)
 {
 	unwindfiles(sh, sh.input, stop);
 }

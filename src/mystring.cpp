@@ -57,8 +57,6 @@
 
 using namespace shell;
 
-char nullstr[1];		/* zero length string */
-
 namespace shell {
 
 const char dolatstr[] = { CTLQUOTEMARK, CTLVAR, VSNORMAL | VSBIT, '@', '=',
@@ -92,12 +90,12 @@ badnum(Context &sh, std::string_view s)
 /*
  * Convert a string into an integer of type intmax_t.  Alow trailing spaces.
  */
-Result<intmax_t>
+Result<std::intmax_t>
 atomax(Context &sh, std::string_view s, int base)
 {
 	std::string tmp(s);
 	char *p;
-	intmax_t r;
+	std::intmax_t r;
 
 	errno = 0;
 	r = std::strtoimax(tmp.c_str(), &p, base);
@@ -118,7 +116,7 @@ atomax(Context &sh, std::string_view s, int base)
 	return r;
 }
 
-Result<intmax_t>
+Result<std::intmax_t>
 atomax10(Context &sh, std::string_view s)
 {
 	return atomax(sh, s, 10);
@@ -132,7 +130,8 @@ atomax10(Context &sh, std::string_view s)
 Result<int>
 number(Context &sh, std::string_view s)
 {
-	intmax_t n;
+	std::intmax_t n;
+
 	TRY_SH_SET(n, atomax10(sh, s));
 
 	if (n < 0 || n > INT_MAX)

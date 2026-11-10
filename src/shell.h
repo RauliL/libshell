@@ -65,8 +65,6 @@
 #endif
 #endif
 
-extern char nullstr[1];		/* null string */
-
 #if defined(__GNUC__) && __GNUC__ < 3
 #define va_copy __va_copy
 #endif
