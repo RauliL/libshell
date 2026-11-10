@@ -49,8 +49,8 @@
 
 namespace shell {
 
-Result<int> killcmd(Context &, int, char **);
-Result<int> waitcmd(Context &, int, char **);
+Result<int> killcmd(Context &, BuiltinArgs);
+Result<int> waitcmd(Context &, BuiltinArgs);
 Job *makejob(Context &, int);
 Result<int> forkshell(Context &, Job *, Node *, int);
 Result<Job *> vforkexec(Context &, const Node *, char **,

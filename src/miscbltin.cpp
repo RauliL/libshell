@@ -76,31 +76,30 @@ namespace shell {
  */
 namespace {
 Result<void>
-readcmd_handle_line(Context &sh, ExpandBuf &eb, char *s, int ac, char **ap)
+readcmd_handle_line(Context &sh, ExpandBuf &eb, char *s, BuiltinArgs vars)
 {
 	ArgList fields;
 	size_t i = 0;
 
 	s = eb.commit_to(s);
 
-	ifsbreakup(sh, s, ac, &fields);
+	ifsbreakup(sh, s, static_cast<int>(vars.size()), &fields);
 	ifsfree(sh);
 
-	do {
+	for (std::size_t vi = 0; vi < vars.size(); ++vi) {
 		if (i >= fields.size()) {
 			/* nullify remaining arguments */
-			do {
-				TRY_SHV(setvar(sh, *ap, ""));
-			} while (*++ap);
+			for (; vi < vars.size(); ++vi)
+				TRY_SHV(setvar(sh, std::string(vars[vi]), ""));
 
 			return {};
 		}
 
 		/* set variable to field */
 		rmescapes(fields[i].data());
-		TRY_SHV(setvar(sh, *ap, fields[i]));
+		TRY_SHV(setvar(sh, std::string(vars[vi]), fields[i]));
 		i++;
-	} while (*++ap);
+	}
 	return {};
 }
 } // namespace
@@ -114,19 +113,17 @@ readcmd_handle_line(Context &sh, ExpandBuf &eb, char *s, int ac, char **ap)
  */
 
 Result<int>
-readcmd(Context &sh, int argc, char **argv)
+readcmd(Context &sh, BuiltinArgs)
 {
-	char *prompt;
+	std::string_view prompt;
 	int startloc;
 	int newloc;
 	int status;
-	char **ap;
 	int rflag;
 	char *p;
 	int i;
 
 	rflag = 0;
-	prompt = nullptr;
 	for (;;) {
 		TRY_SH_SET(i, nextopt(sh, "p:r"));
 		if (i == '\0')
@@ -136,10 +133,11 @@ readcmd(Context &sh, int argc, char **argv)
 		else
 			rflag = 1;
 	}
-	if (prompt && isatty(0)) {
+	if (!prompt.empty() && isatty(0)) {
 		out2str(prompt);
 	}
-	if (!*(ap = sh.bopt.argptr))
+	auto vars = sh.bopt.remaining();
+	if (vars.empty())
 		return sh_error(sh, "arg count");
 
 	status = 0;
@@ -194,7 +192,7 @@ start:
 	popfile(sh);
 	recordregion(sh, startloc, p - eb.base(), 0);
 	eb.putc_nul(p);
-	TRY_SHV(readcmd_handle_line(sh, eb, p + 1, argc - (ap - argv), ap));
+	TRY_SHV(readcmd_handle_line(sh, eb, p + 1, vars));
 	return status;
 }
 
@@ -208,12 +206,13 @@ start:
  */
 
 Result<int>
-umaskcmd(Context &sh, int argc, char **argv)
+umaskcmd(Context &sh, BuiltinArgs)
 {
 	char *ap;
 	int mask;
 	int i;
 	int symbolic_mode = 0;
+	std::string mode_arg;
 
 	for (;;) {
 		TRY_SH_SET(i, nextopt(sh, "S"));
@@ -227,7 +226,7 @@ umaskcmd(Context &sh, int argc, char **argv)
 	umask(mask);
 	INTON(sh);
 
-	if (!(ap = *sh.bopt.argptr)) {
+	if (sh.bopt.empty()) {
 		if (symbolic_mode) {
 			char buf[18];
 			int j;
@@ -250,11 +249,13 @@ umaskcmd(Context &sh, int argc, char **argv)
 	} else {
 		int new_mask;
 
+		mode_arg = std::string(sh.bopt.current());
+		ap = mode_arg.data();
 		if (isdigit((unsigned char) *ap)) {
 			new_mask = 0;
 			do {
 				if (*ap >= '8' || *ap < '0')
-					return sh_error(sh, "Illegal number: {}", *sh.bopt.argptr);
+					return sh_error(sh, "Illegal number: {}", mode_arg);
 				new_mask = (new_mask << 3) + (*ap - '0');
 			} while (*++ap != '\0');
 		} else {
@@ -318,7 +319,7 @@ umaskcmd(Context &sh, int argc, char **argv)
 			}
 			if (*ap) {
 error:
-				return sh_error(sh, "Illegal mode: {}", *sh.bopt.argptr);
+				return sh_error(sh, "Illegal mode: {}", mode_arg);
 				return 1;
 			}
 			new_mask = ~new_mask;
@@ -411,7 +412,7 @@ printlim(Context &sh, enum limtype how, const struct rlimit *limit,
 } // namespace
 
 Result<int>
-ulimitcmd(Context &sh, int argc, char **argv)
+ulimitcmd(Context &sh, BuiltinArgs)
 {
 	int	c;
 	rlim_t val = 0;
@@ -481,13 +482,14 @@ ulimitcmd(Context &sh, int argc, char **argv)
 	for (l = limit_table; l->option != what; l++)
 		;
 
-	set = *sh.bopt.argptr ? 1 : 0;
+	set = sh.bopt.empty() ? 0 : 1;
 	if (set) {
-		char *p = *sh.bopt.argptr;
+		auto arg = sh.bopt.current();
+		const char *p = arg.data();
 
-		if (all || sh.bopt.argptr[1])
+		if (all || sh.bopt.remaining().size() > 1)
 			return sh_error(sh, "too many arguments");
-		if (strcmp(p, "unlimited") == 0)
+		if (arg == "unlimited")
 			val = RLIM_INFINITY;
 		else {
 			val = (rlim_t) 0;

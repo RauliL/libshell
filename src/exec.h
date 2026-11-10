@@ -79,9 +79,9 @@ void hashcd(Context &);
 void changepath(Context &, std::string_view);
 void defun(Context &, const DefunNode *);
 void unsetfunc(Context &, std::string_view);
-Result<int> hashcmd(Context &sh, int, char **);
-Result<int> typecmd(Context &sh, int, char **);
-Result<int> commandcmd(Context &sh, int, char **);
+Result<int> hashcmd(Context &sh, BuiltinArgs);
+Result<int> typecmd(Context &sh, BuiltinArgs);
+Result<int> commandcmd(Context &sh, BuiltinArgs);
 
 int test_file_access(Context &sh, const char *path, int mode);
 int test_access(const struct ::stat64 *sp, int stmode);

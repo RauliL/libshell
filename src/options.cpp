@@ -108,9 +108,10 @@ const char optletters[NOPTS] = {
 namespace {
 Result<int> options(Context &sh, int,
 				  std::optional<std::string> *minusc);
-Result<void> minus_o(Context &sh, char *, int);
+Result<void> minus_o(Context &sh, const char *, int);
 Result<void> setoption(Context &sh, int, int);
-Result<int> getopts(Context &sh, char *, char *, char **);
+Result<int> getopts(Context &sh, std::string_view optstr,
+		    std::string_view optvar, BuiltinArgs optfirst);
 } // namespace
 
 /*
@@ -122,6 +123,7 @@ procargs(Context &sh, char **xargv)
 {
 	int i;
 	ProcArgsResult result;
+	std::vector<std::string_view> host_args;
 
 	result.login = xargv[0] && xargv[0][0] == '-';
 	if (xargv[0])
@@ -130,14 +132,17 @@ procargs(Context &sh, char **xargv)
 		xargv++;
 	for (i = 0; i < NOPTS; i++)
 		sh.opts.list[i] = 2;
-	sh.bopt.argptr = xargv;
+	for (char **p = xargv; *p; ++p)
+		host_args.emplace_back(*p);
+	sh.bopt.reset(host_args);
 	{
 		int tmp;
 		TRY_SH_SET(tmp, options(sh, 1, &result.minusc));
 		result.login |= tmp;
 	}
-	xargv = sh.bopt.argptr;
-	if (!*xargv) {
+	auto rem = sh.bopt.remaining();
+	std::size_t ri = 0;
+	if (rem.empty()) {
 		if (result.minusc)
 			return sh_error(sh, "-c requires an argument");
 		sh.opts.stdin_opt() = 1;
@@ -154,13 +159,13 @@ procargs(Context &sh, char **xargv)
 			sh.opts.list[i] = 0;
 	/* POSIX 1003.2: first arg after -c cmd is $0, remainder $1... */
 	if (result.minusc) {
-		*result.minusc = *xargv++;
-		if (*xargv)
+		*result.minusc = std::string(rem[ri++]);
+		if (ri < rem.size())
 			goto setarg0;
 	} else if (!sh.opts.stdin_opt()) {
-		TRY_SHV(setinputfile(sh, *xargv, 0));
+		TRY_SHV(setinputfile(sh, rem[ri], 0));
 setarg0:
-		sh.arg0 = *xargv++;
+		sh.arg0 = std::string(rem[ri++]);
 	}
 
 	sh.opts.c_mode = result.minusc.has_value();
@@ -168,8 +173,8 @@ setarg0:
 	sh.shellparam.p.clear();
 	sh.shellparam.optind = 1;
 	sh.shellparam.optoff = -1;
-	while (*xargv)
-		sh.shellparam.p.emplace_back(*xargv++);
+	while (ri < rem.size())
+		sh.shellparam.p.emplace_back(rem[ri++]);
 	optschanged(sh);
 
 	return result;
@@ -184,51 +189,61 @@ optschanged(Context &sh)
 }
 
 /*
- * Process shell options.  The global variable sh.bopt.argptr contains a pointer
- * to the argument list; we advance it past the options.
+ * Process shell options.  `sh.bopt` holds the argument span; we advance
+ * `argi` past the options.
  */
 
 namespace {
 Result<int>
 options(Context &sh, int cmdline, std::optional<std::string> *minusc)
 {
-	char *p;
 	int val;
 	int c;
 	int login = 0;
 
 	if (cmdline && minusc)
 		minusc->reset();
-	while ((p = *sh.bopt.argptr)) {
-		sh.bopt.argptr++;
-		if ((c = *p++) == '-') {
+	while (!sh.bopt.empty()) {
+		auto arg = sh.bopt.current();
+		sh.bopt.advance();
+		if (arg.empty())
+			continue;
+		c = arg[0];
+		std::size_t pi = 1;
+		if (c == '-') {
 			val = 1;
-                        if (p[0] == '\0' || (p[0] == '-' && p[1] == '\0')) {
-                                if (!cmdline) {
-                                        /* "-" means turn off -x and -v */
-                                        if (p[0] == '\0')
-                                                sh.opts.xtrace() = sh.opts.verbose() = 0;
-                                        /* "--" means reset params */
-                                        else if (!*sh.bopt.argptr)
-						setparam(sh, sh.bopt.argptr);
-                                }
-				break;	  /* "-" or  "--" terminates options */
+			if (arg.size() == 1 ||
+			    (arg.size() == 2 && arg[1] == '-')) {
+				if (!cmdline) {
+					/* "-" means turn off -x and -v */
+					if (arg.size() == 1)
+						sh.opts.xtrace() =
+							sh.opts.verbose() = 0;
+					/* "--" means reset params */
+					else if (sh.bopt.empty())
+						setparam(sh, sh.bopt.remaining());
+				}
+				break; /* "-" or  "--" terminates options */
 			}
 		} else if (c == '+') {
 			val = 0;
 		} else {
-			sh.bopt.argptr--;
+			sh.bopt.argi--;
 			break;
 		}
-		while ((c = *p++) != '\0') {
+		while (pi < arg.size()) {
+			c = arg[pi++];
 			if (c == 'c' && cmdline && minusc) {
 				*minusc = std::string(); /* filled after shell args */
 			} else if (c == 'l' && cmdline) {
 				login = 1;
 			} else if (c == 'o') {
-				TRY_SHV(minus_o(sh, *sh.bopt.argptr, val));
-				if (*sh.bopt.argptr)
-					sh.bopt.argptr++;
+				const char *oname = sh.bopt.empty()
+							    ? nullptr
+							    : sh.bopt.current().data();
+				TRY_SHV(minus_o(sh, oname, val));
+				if (!sh.bopt.empty())
+					sh.bopt.advance();
 			} else {
 				TRY_SHV(setoption(sh, c, val));
 			}
@@ -239,7 +254,7 @@ options(Context &sh, int cmdline, std::optional<std::string> *minusc)
 }
 
 Result<void>
-minus_o(Context &sh, char *name, int val)
+minus_o(Context &sh, const char *name, int val)
 {
 	if (!name) {
 		if (val) {
@@ -335,12 +350,13 @@ Context::get_option(std::string_view name) const
  */
 
 void
-setparam(Context &sh, char **argv)
+setparam(Context &sh, BuiltinArgs argv)
 {
 	std::vector<std::string> newparam;
 
-	while (*argv)
-		newparam.emplace_back(*argv++);
+	newparam.reserve(argv.size());
+	for (auto arg : argv)
+		newparam.emplace_back(arg);
 	freeparam(sh, &sh.shellparam);
 	sh.shellparam.p = std::move(newparam);
 	sh.shellparam.optind = 1;
@@ -362,11 +378,11 @@ freeparam(Context &sh, ShellParam *param)
  */
 
 Result<int>
-shiftcmd(Context &sh, int argc, char **argv)
+shiftcmd(Context &sh, BuiltinArgs argv)
 {
 	int n = 1;
 
-	if (argc > 1)
+	if (argv.size() > 1)
 		TRY_SH_SET(n, number(sh, argv[1]));
 	if (static_cast<std::size_t>(n) > sh.shellparam.p.size())
 		return sh_error(sh, "can't shift that many");
@@ -385,16 +401,15 @@ shiftcmd(Context &sh, int argc, char **argv)
  */
 
 Result<int>
-setcmd(Context &sh, int argc, char **argv)
+setcmd(Context &sh, BuiltinArgs argv)
 {
-	if (argc == 1)
+	if (argv.size() == 1)
 		return showvars(sh, "", {}, Variable::Flag::Unset);
 	INTOFF(sh);
 	TRY_SHV(options(sh, 0, nullptr));
 	optschanged(sh);
-	if (*sh.bopt.argptr) {
-		setparam(sh, sh.bopt.argptr);
-	}
+	if (!sh.bopt.remaining().empty())
+		setparam(sh, sh.bopt.remaining());
 	INTON(sh);
 
 	return EXIT_SUCCESS;
@@ -416,31 +431,36 @@ getoptsreset(Context &sh, std::string_view value)
  */
 
 Result<int>
-getoptscmd(Context &sh, int argc, char **argv)
+getoptscmd(Context &sh, BuiltinArgs argv)
 {
-	char **optbase;
-
 	TRY_SHV(nextopt(sh, ""));
-	argc -= sh.bopt.argptr - argv - 1;
-	argv = sh.bopt.argptr - 1;
-	std::vector<char *> shell_ptrs;
-	if (argc < 3)
+	/* Rebuild argv as: command-name placeholder + remaining args. */
+	auto rem = sh.bopt.remaining();
+	std::vector<std::string_view> av;
+	av.reserve(rem.size() + 1);
+	av.emplace_back(argv.empty() ? std::string_view{} : argv[0]);
+	for (auto a : rem)
+		av.push_back(a);
+	argv = av;
+
+	std::vector<std::string_view> shell_views;
+	BuiltinArgs optbase;
+	if (argv.size() < 3)
 		return sh_error(sh, "Usage: getopts optstring var [arg...]");
-	else if (argc == 3) {
-		shell_ptrs.reserve(sh.shellparam.p.size() + 1);
+	else if (argv.size() == 3) {
+		shell_views.reserve(sh.shellparam.p.size());
 		for (auto &s : sh.shellparam.p)
-			shell_ptrs.push_back(s.data());
-		shell_ptrs.push_back(nullptr);
-		optbase = shell_ptrs.data();
-		if (static_cast<unsigned>(sh.shellparam.optind) > sh.shellparam.p.size() + 1) {
+			shell_views.emplace_back(s);
+		optbase = shell_views;
+		if (static_cast<unsigned>(sh.shellparam.optind) >
+		    sh.shellparam.p.size() + 1) {
 			sh.shellparam.optind = 1;
 			sh.shellparam.optoff = -1;
 		}
-	}
-	else {
-		optbase = &argv[3];
+	} else {
+		optbase = argv.subspan(3);
 		if (static_cast<unsigned>(sh.shellparam.optind) >
-		    static_cast<unsigned>(argc - 2)) {
+		    static_cast<unsigned>(argv.size() - 2)) {
 			sh.shellparam.optind = 1;
 			sh.shellparam.optoff = -1;
 		}
@@ -451,86 +471,118 @@ getoptscmd(Context &sh, int argc, char **argv)
 
 namespace {
 Result<int>
-getopts(Context &sh, char *optstr, char *optvar, char **optfirst)
+getopts(Context &sh, std::string_view optstr, std::string_view optvar,
+	BuiltinArgs optfirst)
 {
-	char *p, *q;
+	std::string_view p;
 	char c = '?';
 	int done = 0;
 	char s[2];
-	char **optnext;
+	std::size_t nexti;
 	int ind = sh.shellparam.optind;
 	int off = sh.shellparam.optoff;
+	std::string_view prev;
 
 	sh.shellparam.optind = -1;
-	optnext = optfirst + ind - 1;
+	nexti = static_cast<std::size_t>(ind - 1);
 
-	if (ind <= 1 || off < 0 ||
-	    std::strlen(optnext[-1]) < static_cast<size_t>(off))
-		p = nullptr;
-	else
-		p = optnext[-1] + off;
-	if (!p || *p == '\0') {
+	if (ind <= 1 || off < 0 || nexti == 0 ||
+	    nexti - 1 >= optfirst.size() ||
+	    optfirst[nexti - 1].size() < static_cast<size_t>(off))
+		p = {};
+	else {
+		prev = optfirst[nexti - 1];
+		p = prev.substr(static_cast<size_t>(off));
+	}
+	if (p.empty()) {
 		/* Current word is done, advance */
-		p = *optnext;
-		if (!p || *p != '-' || *++p == '\0') {
+		if (nexti >= optfirst.size()) {
 atend:
-			p = nullptr;
+			p = {};
 			done = 1;
 			goto out;
 		}
-		optnext++;
-		if (p[0] == '-' && p[1] == '\0')	/* check for "--" */
+		auto cur = optfirst[nexti];
+		if (cur.empty() || cur[0] != '-' || cur.size() == 1)
+			goto atend;
+		p = cur.substr(1);
+		nexti++;
+		if (p == "-") /* check for "--" */
 			goto atend;
 	}
 
-	c = *p++;
-	for (q = optstr[0] == ':' ? optstr + 1 : optstr; *q != c; ) {
-		if (*q == '\0') {
-			if (optstr[0] == ':') {
-				s[0] = c;
-				s[1] = '\0';
-				TRY_SHV(setvar(sh, "OPTARG", s));
-			} else {
-                sh.errout.write(sh, std::format("Illegal option -{}\n", static_cast<char>(c)));
-				unsetvar(sh, "OPTARG");
+	c = p[0];
+	p.remove_prefix(1);
+	{
+		std::string_view q =
+			optstr[0] == ':' ? optstr.substr(1) : optstr;
+		for (;;) {
+			if (q.empty()) {
+				if (optstr[0] == ':') {
+					s[0] = c;
+					s[1] = '\0';
+					TRY_SHV(setvar(sh, "OPTARG", s));
+				} else {
+					sh.errout.write(
+						sh,
+						std::format("Illegal option -{}\n",
+							    static_cast<char>(c)));
+					unsetvar(sh, "OPTARG");
+				}
+				c = '?';
+				goto out;
 			}
-			c = '?';
-			goto out;
+			if (q[0] == c)
+				break;
+			q.remove_prefix(1);
+			if (!q.empty() && q[0] == ':')
+				q.remove_prefix(1);
 		}
-		if (*++q == ':')
-			q++;
+
+		q.remove_prefix(1);
+		if (!q.empty() && q[0] == ':') {
+			std::string_view optarg = p;
+			if (optarg.empty()) {
+				if (nexti >= optfirst.size()) {
+					if (optstr[0] == ':') {
+						s[0] = c;
+						s[1] = '\0';
+						TRY_SHV(setvar(sh, "OPTARG", s));
+						c = ':';
+					} else {
+						sh.errout.write(
+							sh,
+							std::format(
+								"No arg for -{} option\n",
+								static_cast<char>(c)));
+						unsetvar(sh, "OPTARG");
+						c = '?';
+					}
+					goto out;
+				}
+				optarg = optfirst[nexti];
+				nexti++;
+			}
+			TRY_SHV(setvar(sh, "OPTARG", std::string(optarg)));
+			p = {};
+		} else
+			TRY_SHV(setvar(sh, "OPTARG", ""));
 	}
 
-	if (*++q == ':') {
-		if (*p == '\0' && !(p = *optnext)) {
-			if (optstr[0] == ':') {
-				s[0] = c;
-				s[1] = '\0';
-				TRY_SHV(setvar(sh, "OPTARG", s));
-				c = ':';
-			} else {
-                sh.errout.write(sh, std::format("No arg for -{} option\n", static_cast<char>(c)));
-				unsetvar(sh, "OPTARG");
-				c = '?';
-			}
-			goto out;
-		}
-
-		if (p == *optnext)
-			optnext++;
-		TRY_SHV(setvar(sh, "OPTARG", p));
-		p = nullptr;
-	} else
-		TRY_SHV(setvar(sh, "OPTARG", ""));
-
 out:
-	ind = optnext - optfirst + 1;
+	ind = static_cast<int>(nexti) + 1;
 	TRY_SHV(sh.set_int_var("OPTIND", ind, Variable::Flag::NoFunc));
 	s[0] = c;
 	s[1] = '\0';
-	TRY_SHV(setvar(sh, optvar, s));
+	TRY_SHV(setvar(sh, std::string(optvar), s));
 
-	sh.shellparam.optoff = p ? p - *(optnext - 1) : -1;
+	if (p.empty() || nexti == 0)
+		sh.shellparam.optoff = -1;
+	else {
+		auto base = optfirst[nexti - 1];
+		sh.shellparam.optoff =
+			static_cast<int>(p.data() - base.data());
+	}
 	sh.shellparam.optind = ind;
 
 	return done;
@@ -538,10 +590,6 @@ out:
 } // namespace
 
 /*
- * XXX - should get rid of.  have all builtins use getopt(3).  the
- * library getopt must have the BSD extension static variable "optreset"
- * otherwise it can't be used within the shell safely.
- *
  * Standard option processing (a la getopt) for builtin routines.  The
  * only argument that is passed to nextopt is the option string; the
  * other arguments are unnecessary.  It return the character, or '\0' on
@@ -551,18 +599,22 @@ out:
 Result<int>
 nextopt(Context &sh, std::string_view optstring)
 {
-	char *p;
+	std::string_view p = sh.bopt.optrest;
 	char c;
 
-	if (!(p = sh.bopt.optptr) || *p == '\0') {
-		p = *sh.bopt.argptr;
-		if (!p || *p != '-' || *++p == '\0')
+	if (p.empty()) {
+		if (sh.bopt.empty())
 			return '\0';
-		sh.bopt.argptr++;
-		if (p[0] == '-' && p[1] == '\0')	/* check for "--" */
+		auto arg = sh.bopt.current();
+		if (arg.empty() || arg[0] != '-' || arg.size() == 1)
+			return '\0';
+		sh.bopt.advance();
+		p = arg.substr(1);
+		if (p == "-") /* check for "--" */
 			return '\0';
 	}
-	c = *p++;
+	c = p[0];
+	p.remove_prefix(1);
 	std::size_t i = 0;
 	for (;;) {
 		if (i >= optstring.size())
@@ -575,12 +627,17 @@ nextopt(Context &sh, std::string_view optstring)
 			++i;
 	}
 	if (i + 1 < optstring.size() && optstring[i + 1] == ':') {
-		if (*p == '\0' && !(p = *sh.bopt.argptr++))
-			return sh_error(sh, "No arg for -{} option", c);
-		sh.bopt.optionarg = p;
-		p = nullptr;
+		if (p.empty()) {
+			if (sh.bopt.empty())
+				return sh_error(sh, "No arg for -{} option", c);
+			sh.bopt.optionarg = sh.bopt.current();
+			sh.bopt.advance();
+		} else {
+			sh.bopt.optionarg = p;
+		}
+		p = {};
 	}
-	sh.bopt.optptr = p;
+	sh.bopt.optrest = p;
 	return c;
 }
 

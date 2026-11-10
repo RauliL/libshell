@@ -156,22 +156,24 @@ set_curjob(Context &sh, Job *jp, unsigned mode)
 } // namespace
 
 Result<int>
-killcmd(Context &sh, int argc, char **argv)
+killcmd(Context &sh, BuiltinArgs argv)
 {
 	int signo = -1;
 	int list = 0;
 	int i;
 	pid_t pid;
 	Job *jp;
+	BuiltinArgs targets;
 
-	if (argc <= 1) {
+	if (argv.size() <= 1) {
 usage:
 		return sh_error(sh, "Usage: kill [-s sigspec | -signum | -sigspec] [pid | job]... or\n"
 "kill -l [exitstatus]");
 	}
 
-	if (**++argv == '-') {
-		signo = decode_signal(sh, *argv + 1, 1);
+	targets = argv.subspan(1);
+	if (!targets.empty() && !targets[0].empty() && targets[0][0] == '-') {
+		signo = decode_signal(sh, targets[0].substr(1), 1);
 		if (signo < 0) {
 			int c;
 
@@ -193,15 +195,15 @@ usage:
 		                        break;
 				}
 			}
-			argv = sh.bopt.argptr;
+			targets = sh.bopt.remaining();
 		} else
-			argv++;
+			targets = targets.subspan(1);
 	}
 
 	if (!list && signo < 0)
 		signo = SIGTERM;
 
-	if ((signo < 0 || !*argv) ^ list) {
+	if ((signo < 0 || targets.empty()) ^ list) {
 		goto usage;
 	}
 
@@ -209,36 +211,36 @@ usage:
 		Output *out;
 
 		out = sh.out1;
-		if (!*argv) {
+		if (targets.empty()) {
 			out->write(sh, "0\n");
 			for (i = 1; i < NSIG; i++) {
 				out->write(sh, std::format("{}\n", sh.find_signal_name(i).value_or("")));
 			}
 			return 0;
 		}
-		TRY_SH_SET(signo, number(sh, *argv));
+		TRY_SH_SET(signo, number(sh, targets[0]));
 		if (signo > 128)
 			signo -= 128;
 		if (0 < signo && signo < NSIG)
 			out->write(sh, std::format("{}\n", sh.find_signal_name(signo).value_or("")));
 		else
 			return sh_error(sh, "invalid signal number or exit status: {}",
-				 *argv);
+				 targets[0]);
 		return 0;
 	}
 
 	i = 0;
-	do {
-		if (**argv == '%') {
-			TRY_SH_SET(jp, getjob(sh, *argv));
+	for (auto arg : targets) {
+		if (!arg.empty() && arg[0] == '%') {
+			TRY_SH_SET(jp, getjob(sh, arg.data()));
 			pid = -jp->pgid();
 		} else {
 			int n;
-			if (**argv == '-') {
-				TRY_SH_SET(n, number(sh, *argv + 1));
+			if (!arg.empty() && arg[0] == '-') {
+				TRY_SH_SET(n, number(sh, arg.substr(1)));
 				pid = -n;
 			} else {
-				TRY_SH_SET(n, number(sh, *argv));
+				TRY_SH_SET(n, number(sh, arg));
 				pid = n;
 			}
 		}
@@ -246,7 +248,7 @@ usage:
 			sh_warnx(sh, "{}", strerror(errno));
 			i = 1;
 		}
-	} while (*++argv);
+	}
 
 	return i;
 }
@@ -292,7 +294,7 @@ freejob(Context &sh, Job *jp)
 } // namespace
 
 Result<int>
-waitcmd(Context &sh, int argc, char **argv)
+waitcmd(Context &sh, BuiltinArgs)
 {
 	Job *job;
 	int retval;
@@ -301,8 +303,8 @@ waitcmd(Context &sh, int argc, char **argv)
 	TRY_SHV(nextopt(sh, ""));
 	retval = 0;
 
-	argv = sh.bopt.argptr;
-	if (!*argv) {
+	auto rem = sh.bopt.remaining();
+	if (rem.empty()) {
 		/* wait for all jobs */
 		for (;;) {
 			jp = nullptr;
@@ -321,10 +323,10 @@ waitcmd(Context &sh, int argc, char **argv)
 	}
 
 	retval = 127;
-	do {
-		if (**argv != '%') {
+	for (auto arg : rem) {
+		if (arg.empty() || arg[0] != '%') {
 			pid_t pid;
-			TRY_SH_SET(pid, number(sh, *argv));
+			TRY_SH_SET(pid, number(sh, arg));
 			job = nullptr;
 			for (Job *j : sh.job_order) {
 				if (!j->processes.empty() && j->processes.back().pid == pid) {
@@ -333,18 +335,16 @@ waitcmd(Context &sh, int argc, char **argv)
 				}
 			}
 			if (!job)
-				goto repeat;
+				continue;
 		} else {
-			TRY_SH_SET(job, getjob(sh, *argv));
+			TRY_SH_SET(job, getjob(sh, arg.data()));
 		}
 		/* loop until process terminated */
 		if (!dowait(sh, DOWAIT_WAITCMD, job))
 			goto sigout;
 		job->waited = true;
 		retval = job->calc_status(sh.opts.pipefail());
-repeat:
-		;
-	} while (*++argv);
+	}
 
 out:
 	return retval;

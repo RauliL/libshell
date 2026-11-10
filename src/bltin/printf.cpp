@@ -55,7 +55,8 @@ using namespace shell;
 namespace shell {
 
 struct PrintfState {
-	char **gargv = nullptr;
+	BuiltinArgs args{};
+	std::size_t ai = 0;
 	int rval = 0;
 };
 
@@ -76,13 +77,13 @@ void check_conversion(Context &sh, PrintfState &, const char *,
 #define PF(f, func) { \
 	switch (reinterpret_cast<char *>(param) - reinterpret_cast<char *>(array)) { \
 	default: \
-		printf(f, array[0], array[1], func); \
+		out1fmt(sh, f, array[0], array[1], func); \
 		break; \
 	case sizeof(*param): \
-		printf(f, array[0], func); \
+		out1fmt(sh, f, array[0], func); \
 		break; \
 	case 0: \
-		printf(f, func); \
+		out1fmt(sh, f, func); \
 		break; \
 	} \
 }
@@ -137,22 +138,24 @@ print_escape_str(Context &sh, const char *f, int *param, int *array, const char 
 } // namespace
 
 Result<int>
-printfcmd(Context &sh, int argc, char *argv[])
+printfcmd(Context &sh, BuiltinArgs)
 {
 	char *fmt;
 	char *format;
 	int ch;
 	PrintfState st;
+	std::string format_storage;
 
 	TRY_SHV(nextopt(sh, ""));
 
-	argv = sh.bopt.argptr;
-	format = *argv;
+	auto rem = sh.bopt.remaining();
+	if (rem.empty())
+		return sh_error(sh, "usage: printf format [arg ...]");
 
-	if (!format)
-		return error("usage: printf format [arg ...]");
-
-	st.gargv = ++argv;
+	format_storage = std::string(rem[0]);
+	format = format_storage.data();
+	st.args = rem.subspan(1);
+	st.ai = 0;
 
 #define SKIP1	"#-+ 0"
 #define SKIP2	"*0123456789"
@@ -183,7 +186,7 @@ printfcmd(Context &sh, int argc, char *argv[])
 				continue;
 			}
 			if (ch != '%' || (*fmt == '%' && (++fmt || 1))) {
-				putchar(ch);
+				out1c(ch);
 				continue;
 			}
 
@@ -215,7 +218,7 @@ printfcmd(Context &sh, int argc, char *argv[])
 
 			ch = *fmt;
 			if (!ch)
-				return error("missing format character");
+				return sh_error(sh, "missing format character");
 			/* null terminate format string to we can use it
 			   as an argument to printf. */
 			nextch = fmt[1];
@@ -272,11 +275,11 @@ printfcmd(Context &sh, int argc, char *argv[])
 				break;
 			}
 			default:
-				return error("{}: invalid directive", start);
+				return sh_error(sh, "{}: invalid directive", start);
 			}
 			*++fmt = nextch;
 		}
-	} while (st.gargv != argv && *st.gargv);
+	} while (st.ai < st.args.size());
 
 out:
 	return st.rval;
@@ -501,32 +504,31 @@ getchr(PrintfState &st)
 {
 	int val = 0;
 
-	if (*st.gargv)
-		val = **st.gargv++;
+	if (st.ai < st.args.size() && !st.args[st.ai].empty())
+		val = static_cast<unsigned char>(st.args[st.ai++][0]);
+	else if (st.ai < st.args.size())
+		++st.ai;
 	return val;
 }
 
 const char *
 getstr(PrintfState &st)
 {
-	const char *val = "";
-
-	if (*st.gargv)
-		val = *st.gargv++;
-
-	return val;
+	if (st.ai >= st.args.size())
+		return "";
+	return st.args[st.ai++].data();
 }
 
 std::uintmax_t
 getuintmax(Context &sh, PrintfState &st, int sign)
 {
 	uintmax_t val = 0;
-	char *cp, *ep;
+	char *ep;
+	const char *cp;
 
-	cp = *st.gargv;
-	if (!cp)
+	if (st.ai >= st.args.size())
 		goto out;
-	st.gargv++;
+	cp = st.args[st.ai++].data();
 
 	val = (unsigned char) cp[1];
 	if (*cp == '\"' || *cp == '\'')
@@ -543,12 +545,12 @@ double
 getdouble(Context &sh, PrintfState &st)
 {
 	double val;
-	char *cp, *ep;
+	char *ep;
+	const char *cp;
 
-	cp = *st.gargv;
-	if (!cp)
+	if (st.ai >= st.args.size())
 		return 0;
-	st.gargv++;
+	cp = st.args[st.ai++].data();
 
 	if (*cp == '\"' || *cp == '\'')
 		return (unsigned char) cp[1];
@@ -565,37 +567,39 @@ check_conversion(Context &sh, PrintfState &st, const char *s,
 {
 	if (*ep) {
 		if (ep == s)
-			warnx("{}: expected numeric value", s);
+			sh_warnx(sh, "{}: expected numeric value", s);
 		else
-			warnx("{}: not completely converted", s);
+			sh_warnx(sh, "{}: not completely converted", s);
 		st.rval = 1;
 	} else if (errno == ERANGE) {
-		warnx("{}: {}", s, strerror(ERANGE));
+		sh_warnx(sh, "{}: {}", s, strerror(ERANGE));
 		st.rval = 1;
 	}
 }
 } // namespace
 
 Result<int>
-echocmd(Context &sh, int argc, char **argv)
+echocmd(Context &sh, BuiltinArgs argv)
 {
 	const char *lastfmt = "%s\n";
 	int nonl;
+	std::size_t i = 1;
 
-	if (*++argv && std::string_view(*argv) == "-n") {
-		argv++;
+	if (i < argv.size() && argv[i] == "-n") {
+		++i;
 		lastfmt = "%s";
 	}
 
 	do {
 		const char *fmt = "%s ";
-		char *s = *argv;
+		const char *s = (i < argv.size()) ? argv[i].data() : "";
 
-		if (!s || !*++argv)
+		++i;
+		if (i >= argv.size())
 			fmt = lastfmt;
 
-		TRY_SH_SET(nonl, print_escape_str(sh, fmt, nullptr, nullptr, s ? s : ""));
-	} while (!nonl && *argv);
+		TRY_SH_SET(nonl, print_escape_str(sh, fmt, nullptr, nullptr, s));
+	} while (!nonl && i < argv.size());
 	return 0;
 }
 

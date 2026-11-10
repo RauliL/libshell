@@ -62,7 +62,6 @@ namespace shell {
  */
 tl::unexpected<Error> onint(Context &sh);
 
-/* Avoid `.error()` in macros: bltin.h `#define error(...)` would rewrite it. */
 template <typename T>
 inline tl::unexpected<Error>
 shell_fail_of(const Result<T> &r)

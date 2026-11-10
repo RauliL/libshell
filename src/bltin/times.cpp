@@ -12,7 +12,7 @@ using namespace shell;
 namespace shell {
 
 Result<int>
-timescmd(Context &sh, int argc, char *argv[])
+timescmd(Context &sh, BuiltinArgs)
 {
 	struct tms buf;
 	long int clk_tck = sysconf(_SC_CLK_TCK);
@@ -37,8 +37,8 @@ timescmd(Context &sh, int argc, char *argv[])
 	mcstime = cstime / 60;
 	cstime -= mcstime * 60.0;
 
-	printf("%dm%fs %dm%fs\n%dm%fs %dm%fs\n", mutime, utime, mstime, stime,
-	       mcutime, cutime, mcstime, cstime);
+	out1fmt(sh, "%dm%fs %dm%fs\n%dm%fs %dm%fs\n", mutime, utime, mstime,
+		stime, mcutime, cutime, mcstime, cstime);
 	return 0;
 }
 

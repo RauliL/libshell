@@ -112,22 +112,22 @@ lookupalias(Context &sh, std::string_view name, bool check)
 }
 
 Result<int>
-aliascmd(Context &sh, int argc, char **argv)
+aliascmd(Context &sh, BuiltinArgs argv)
 {
-	char *n;
 	int ret = EXIT_SUCCESS;
 
-	if (argc == 1) {
+	if (argv.size() == 1) {
 		for (const auto &entry : sh.aliases) {
 			printalias(sh, *entry.second);
 		}
 
 		return EXIT_SUCCESS;
 	}
-	while ((n = *++argv)) {
-		char *v;
+	for (std::size_t i = 1; i < argv.size(); ++i) {
+		auto n = argv[i];
+		auto eq = n.find('=', 1);
 
-		if (!*n || !(v = std::strchr(n + 1, '='))) {
+		if (n.empty() || eq == std::string_view::npos) {
 			const auto ap = lookupalias(sh, n, false);
 
 			if (!ap) {
@@ -137,7 +137,9 @@ aliascmd(Context &sh, int argc, char **argv)
 				printalias(sh, *ap);
 			}
 		} else {
-			TRY_SHV(setalias(sh, n, v + 1));
+			std::string aname(n.substr(0, eq));
+			TRY_SHV(setalias(sh, aname.c_str(),
+					 n.substr(eq + 1).data()));
 		}
 	}
 
@@ -145,9 +147,10 @@ aliascmd(Context &sh, int argc, char **argv)
 }
 
 Result<int>
-unaliascmd(Context &sh, int argc, char **argv)
+unaliascmd(Context &sh, BuiltinArgs)
 {
 	int i;
+	int status = 0;
 
 	for (;;) {
 		TRY_SH_SET(i, nextopt(sh, "a"));
@@ -159,16 +162,16 @@ unaliascmd(Context &sh, int argc, char **argv)
 			return EXIT_SUCCESS;
 		}
 	}
-	for (i = 0; *sh.bopt.argptr; sh.bopt.argptr++) {
+	for (auto name : sh.bopt.remaining()) {
 		int found;
-		TRY_SH_SET(found, unalias(sh, *sh.bopt.argptr));
+		TRY_SH_SET(found, unalias(sh, name));
 		if (found) {
-			sh.out2->write(sh, std::format("unalias: {} not found\n", *sh.bopt.argptr));
-			i = EXIT_FAILURE;
+			sh.out2->write(sh, std::format("unalias: {} not found\n", name));
+			status = EXIT_FAILURE;
 		}
 	}
 
-	return i;
+	return status;
 }
 
 void

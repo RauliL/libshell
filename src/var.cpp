@@ -440,12 +440,11 @@ showvars(Context &sh, std::string_view prefix, const Variable::Flags &on, const 
  */
 
 Result<int>
-exportcmd(Context &sh, int argc, char **argv)
+exportcmd(Context &sh, BuiltinArgs argv)
 {
-	char *name;
-	const char *p;
-	char **aptr;
-	Variable::Flags flag = argv[0][0] == 'r' ? Variable::Flag::ReadOnly : Variable::Flag::Exported;
+	Variable::Flags flag = (!argv.empty() && argv[0][0] == 'r')
+				       ? Variable::Flag::ReadOnly
+				       : Variable::Flag::Exported;
 	int notp;
 
 	{
@@ -453,20 +452,25 @@ exportcmd(Context &sh, int argc, char **argv)
 		TRY_SH_SET(tmp, nextopt(sh, "p"));
 		notp = tmp - 'p';
 	}
-	if (notp && ((name = *(aptr = sh.bopt.argptr)))) {
-		do {
-			if ((p = std::strchr(name, '='))) {
-				p++;
+	auto rem = sh.bopt.remaining();
+	if (notp && !rem.empty()) {
+		for (auto name : rem) {
+			auto eq = name.find('=');
+			if (eq != std::string_view::npos) {
+				TRY_SHV(sh.set_var(
+					name, std::optional<std::string>(
+						      name.substr(eq + 1)),
+					flag));
 			} else {
 				if (auto vp = findvar(sh, name)) {
 					vp->flags |= flag;
 					continue;
 				}
+				TRY_SHV(sh.set_var(name, std::nullopt, flag));
 			}
-			TRY_SHV(sh.set_var(name, p ? std::optional<std::string>(p) : std::nullopt, flag));
-		} while ((name = *++aptr));
+		}
 	} else {
-		TRY_SHV(showvars(sh, argv[0], flag, {}));
+		TRY_SHV(showvars(sh, argv.empty() ? "" : argv[0], flag, {}));
 	}
 	return 0;
 }
@@ -476,17 +480,13 @@ exportcmd(Context &sh, int argc, char **argv)
  */
 
 Result<int>
-localcmd(Context &sh, int argc, char **argv)
+localcmd(Context &sh, BuiltinArgs)
 {
-	char *name;
-
 	if (sh.stack.empty())
 		return sh_error(sh, "not in a function");
 
-	argv = sh.bopt.argptr;
-	while ((name = *argv++)) {
+	for (auto name : sh.bopt.remaining())
 		TRY_SHV(mklocal(sh, name));
-	}
 	return 0;
 }
 
@@ -604,9 +604,8 @@ unwindlocalvars(Context &sh, std::size_t stop)
  */
 
 Result<int>
-unsetcmd(Context &sh, int argc, char **argv)
+unsetcmd(Context &sh, BuiltinArgs)
 {
-	char **ap;
 	int i;
 	int flag = 0;
 
@@ -617,13 +616,13 @@ unsetcmd(Context &sh, int argc, char **argv)
 		flag = i;
 	}
 
-	for (ap = sh.bopt.argptr; *ap ; ap++) {
+	for (auto name : sh.bopt.remaining()) {
 		if (flag != 'f') {
-			TRY_SHV(unsetvar(sh, *ap));
+			TRY_SHV(unsetvar(sh, std::string(name)));
 			continue;
 		}
 		if (flag != 'v')
-			unsetfunc(sh, *ap);
+			unsetfunc(sh, name);
 	}
 	return 0;
 }

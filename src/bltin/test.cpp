@@ -98,8 +98,16 @@ struct t_op {
 
 /** Expression-walker state for one `test`/`[` invocation. */
 struct TestState {
-	char **wp = nullptr;
+	BuiltinArgs args{};
+	std::size_t wi = 0;
 	const t_op *wp_op = nullptr;
+
+	bool at_end() const { return wi >= args.size(); }
+	std::string_view cur() const
+	{
+		return at_end() ? std::string_view{} : args[wi];
+	}
+	const char *cur_c() const { return cur().data(); }
 };
 
 namespace {
@@ -154,8 +162,8 @@ Result<int> nexpr(Context &sh, TestState &, enum token);
 Result<int> primary(Context &sh, TestState &, enum token);
 Result<int> binop(Context &sh, TestState &);
 int filstat(char *, enum token);
-enum token t_lex(TestState &, char **);
-int isoperand(char **);
+enum token t_lex(TestState &);
+int isoperand(TestState &);
 bool newerf(const char *, const char *);
 bool olderf(const char *, const char *);
 int equalf(const char *, const char *);
@@ -200,25 +208,27 @@ getop(const char *s)
 } // namespace
 
 Result<int>
-testcmd(Context &sh, int argc, char **argv)
+testcmd(Context &sh, BuiltinArgs argv)
 {
 	const t_op *op;
 	enum token n;
 	int res = 1;
 	TestState st;
+	std::size_t begin = 1;
+	std::size_t end = argv.size();
 
-	if (*argv[0] == '[') {
-		if (*argv[--argc] != ']')
-			return error("missing ]");
-		argv[argc] = nullptr;
+	if (!argv.empty() && argv[0][0] == '[') {
+		if (end < 2 || argv[end - 1] != "]")
+			return sh_error(sh, "missing ]");
+		--end;
 	}
 
 recheck:
-	argv++;
-	argc--;
-
-	if (argc < 1)
+	if (begin >= end)
 		return res;
+
+	auto args = argv.subspan(begin, end - begin);
+	std::size_t argc = args.size();
 
 	/*
 	 * POSIX prescriptions: he who wrote this deserves the Nobel
@@ -226,37 +236,41 @@ recheck:
 	 */
 	switch (argc) {
 	case 3:
-		op = getop(argv[1]);
+		op = getop(args[1].data());
 		if (op && op->op_type == BINOP) {
 			n = OPERAND;
+			st.args = args;
+			st.wi = 0;
 			goto eval;
 		}
 		/* fall through */
 
 	case 4:
-		if (!strcmp(argv[0], "(") && !strcmp(argv[argc - 1], ")")) {
-			argv[--argc] = nullptr;
-			argv++;
-			argc--;
-		} else if (!strcmp(argv[0], "!")) {
+		if (args[0] == "(" && args[argc - 1] == ")") {
+			++begin;
+			--end;
+			args = argv.subspan(begin, end - begin);
+			argc = args.size();
+		} else if (args[0] == "!") {
 			res = 0;
+			++begin;
 			goto recheck;
 		}
 	}
 
-	n = t_lex(st, argv);
+	st.args = args;
+	st.wi = 0;
+	n = t_lex(st);
 
 eval:
-	st.wp = argv;
 	{
 		int tmp;
 		TRY_SH_SET(tmp, oexpr(sh, st, n));
 		res ^= tmp;
 	}
-	argv = st.wp;
 
-	if (argv[0] && argv[1])
-		return syntax(sh, argv[0], "unexpected operator");
+	if (!st.at_end() && st.wi + 1 < st.args.size())
+		return syntax(sh, st.cur_c(), "unexpected operator");
 
 	return res;
 }
@@ -266,9 +280,9 @@ tl::unexpected<Error>
 syntax(Context &sh, const char *op, const char *msg)
 {
 	if (op && *op)
-		return error("{}: {}", op, msg);
+		return sh_error(sh, "{}: {}", op, msg);
 	else
-		return error("{}", msg);
+		return sh_error(sh, "{}", msg);
 }
 
 Result<int>
@@ -280,12 +294,18 @@ oexpr(Context &sh, TestState &st, enum token n)
 		int tmp;
 		TRY_SH_SET(tmp, aexpr(sh, st, n));
 		res |= tmp;
-		if (!*st.wp)
+		if (st.at_end())
 			break;
-		n = t_lex(st, st.wp + 1);
+		{
+			auto save = st.wi;
+			st.wi = save + 1;
+			n = t_lex(st);
+			st.wi = save;
+		}
 		if (n != BOR)
 			break;
-		n = t_lex(st, st.wp += 2);
+		st.wi += 2;
+		n = t_lex(st);
 	}
 	return res;
 }
@@ -300,12 +320,18 @@ aexpr(Context &sh, TestState &st, enum token n)
 		TRY_SH_SET(tmp, nexpr(sh, st, n));
 		if (!tmp)
 			res = 0;
-		if (!*st.wp)
+		if (st.at_end())
 			break;
-		n = t_lex(st, st.wp + 1);
+		{
+			auto save = st.wi;
+			st.wi = save + 1;
+			n = t_lex(st);
+			st.wi = save;
+		}
 		if (n != BAND)
 			break;
-		n = t_lex(st, st.wp += 2);
+		st.wi += 2;
+		n = t_lex(st);
 	}
 	return res;
 }
@@ -316,9 +342,8 @@ nexpr(Context &sh, TestState &st, enum token n)
 	if (n != UNOT)
 		return primary(sh, st, n);
 
-	n = t_lex(st, st.wp + 1);
-	if (n != EOI)
-		st.wp++;
+	++st.wi;
+	n = t_lex(st);
 	{
 		int tmp;
 		TRY_SH_SET(tmp, nexpr(sh, st, n));
@@ -335,45 +360,55 @@ primary(Context &sh, TestState &st, enum token n)
 	if (n == EOI)
 		return 0;		/* missing expression */
 	if (n == LPAREN) {
-		if ((nn = t_lex(st, ++st.wp)) == RPAREN)
+		++st.wi;
+		nn = t_lex(st);
+		if (nn == RPAREN)
 			return 0;	/* missing expression */
 		TRY_SH_SET(res, oexpr(sh, st, nn));
-		if (t_lex(st, ++st.wp) != RPAREN)
+		++st.wi;
+		if (t_lex(st) != RPAREN)
 			return syntax(sh, nullptr, "closing paren expected");
 		return res;
 	}
 	if (st.wp_op && st.wp_op->op_type == UNOP) {
 		// unary expression */
-		if (!*++st.wp)
+		++st.wi;
+		if (st.at_end())
 			return syntax(sh, st.wp_op->op_text, "argument expected");
 		switch (n) {
 		case STREZ:
-			return strlen(*st.wp) == 0;
+			return st.cur().empty();
 		case STRNZ:
-			return strlen(*st.wp) != 0;
+			return !st.cur().empty();
 		case FILTT: {
 			intmax_t tmp;
-			TRY_SH_SET(tmp, getn(sh, *st.wp));
+			TRY_SH_SET(tmp, getn(sh, st.cur_c()));
 			return isatty(tmp);
 		}
 #ifdef HAVE_FACCESSAT
 		case FILRD:
-			return test_file_access(sh, *st.wp, R_OK);
+			return test_file_access(sh, st.cur_c(), R_OK);
 		case FILWR:
-			return test_file_access(sh, *st.wp, W_OK);
+			return test_file_access(sh, st.cur_c(), W_OK);
 		case FILEX:
-			return test_file_access(sh, *st.wp, X_OK);
+			return test_file_access(sh, st.cur_c(), X_OK);
 #endif
 		default:
-			return filstat(*st.wp, n);
+			return filstat(const_cast<char *>(st.cur_c()), n);
 		}
 	}
 
-	if (t_lex(st, st.wp + 1), st.wp_op && st.wp_op->op_type == BINOP) {
-		return binop(sh, st);
+	{
+		auto save = st.wi;
+		st.wi = save + 1;
+		t_lex(st);
+		auto is_binop = st.wp_op && st.wp_op->op_type == BINOP;
+		st.wi = save;
+		if (is_binop)
+			return binop(sh, st);
 	}
 
-	return strlen(*st.wp) > 0;
+	return !st.cur().empty();
 }
 
 Result<int>
@@ -382,12 +417,15 @@ binop(Context &sh, TestState &st)
 	const char *opnd1, *opnd2;
 	const t_op *op;
 
-	opnd1 = *st.wp;
-	t_lex(st, ++st.wp);
+	opnd1 = st.cur_c();
+	++st.wi;
+	t_lex(st);
 	op = st.wp_op;
 
-	if (!(opnd2 = *++st.wp))
+	++st.wi;
+	if (st.at_end())
 		return syntax(sh, op->op_text, "argument expected");
+	opnd2 = st.cur_c();
 
 	switch (op->op_num) {
 	default:
@@ -497,18 +535,16 @@ filstat(char *nm, enum token mode)
 }
 
 enum token
-t_lex(TestState &st, char **tp)
+t_lex(TestState &st)
 {
-	char *s = *tp;
-
-	if (s == 0) {
+	if (st.at_end()) {
 		st.wp_op = nullptr;
 		return EOI;
 	}
 
-	const t_op *op = getop(s);
-	if (op && !(op->op_type == UNOP && isoperand(tp)) &&
-	    !(op->op_num == LPAREN && !tp[1])) {
+	const t_op *op = getop(st.cur_c());
+	if (op && !(op->op_type == UNOP && isoperand(st)) &&
+	    !(op->op_num == LPAREN && st.wi + 1 >= st.args.size())) {
 		st.wp_op = op;
 		return static_cast<token>(op->op_num);
 	}
@@ -518,16 +554,14 @@ t_lex(TestState &st, char **tp)
 }
 
 int
-isoperand(char **tp)
+isoperand(TestState &st)
 {
-	char *s;
-
-	if (!(s = tp[1]))
+	if (st.wi + 1 >= st.args.size())
 		return 1;
-	if (!tp[2])
+	if (st.wi + 2 >= st.args.size())
 		return 0;
 
-	const t_op *op = getop(s);
+	const t_op *op = getop(st.args[st.wi + 1].data());
 	return op && op->op_type == BINOP;
 }
 

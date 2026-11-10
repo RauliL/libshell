@@ -80,11 +80,13 @@ Result<int> evalsubshell(Context &sh, const Node *, EvalFlags);
 Result<void> expredir(Context &sh, Node *);
 Result<int> evalpipe(Context &sh, const PipeNode *, EvalFlags);
 Result<int> evalcommand(Context &sh, const CommandNode *, EvalFlags);
-Result<int> evalbltin(Context &sh, const BuiltinCommand *, int, char **, EvalFlags);
-Result<int> evalfun(Context &sh, const std::shared_ptr<Node> &, int, char **, EvalFlags);
+Result<int> evalbltin(Context &sh, const BuiltinCommand *, BuiltinArgs,
+		      EvalFlags);
+Result<int> evalfun(Context &sh, const std::shared_ptr<Node> &, BuiltinArgs,
+		    EvalFlags);
 Result<void> prehash(Context &sh, Node *);
 int eprintlist(Context &sh, Output *, const ArgList &, int);
-Result<int> bltincmd(Context &sh, int, char **);
+Result<int> bltincmd(Context &sh, BuiltinArgs);
 
 const struct BuiltinCommand bltin = {
 	.name = "",
@@ -120,19 +122,20 @@ eval_exitreset(Context &sh)
  */
 
 Result<int>
-evalcmd(Context &sh, int argc, char **argv, EvalFlags flags)
+evalcmd(Context &sh, BuiltinArgs argv, EvalFlags flags)
 {
-        if (argc > 1) {
-                if (argc == 2)
-                        return sh.eval(argv[1], flags & EvalFlag::Tested);
-                std::string concat = argv[1];
-                for (char **ap = argv + 2; *ap; ap++) {
-                        concat.push_back(' ');
-                        concat.append(*ap);
-                }
-                return sh.eval(concat, flags & EvalFlag::Tested);
-        }
-        return 0;
+	if (argv.size() > 1) {
+		if (argv.size() == 2)
+			return sh.eval(std::string(argv[1]),
+				       flags & EvalFlag::Tested);
+		std::string concat(argv[1]);
+		for (std::size_t i = 2; i < argv.size(); ++i) {
+			concat.push_back(' ');
+			concat.append(argv[i]);
+		}
+		return sh.eval(concat, flags & EvalFlag::Tested);
+	}
+	return 0;
 }
 
 namespace {
@@ -760,19 +763,20 @@ evalcommand(Context &sh, const CommandNode *cmd, EvalFlags flags)
 	Node *argp;
 	ArgList args;
 	ArgList vars;
-	char **argv;
+	char **argv = nullptr;
 	int argc;
 	size_t arg0 = 0;
 	size_t xtrace_end = 0;
 	struct cmdentry cmdentry;
 	Job *jp;
-	char *lastarg;
+	const char *lastarg = nullptr;
 	const char *path;
 	int spclbltin;
 	int cmd_flag;
 	int execcmd;
 	int status;
 	std::vector<char *> argv_store;
+	std::vector<std::string_view> argv_views;
 	Variable::Flags vflags;
 	int vlocal;
 
@@ -845,18 +849,20 @@ evalcommand(Context &sh, const CommandNode *cmd, EvalFlags flags)
 
 	TRY_SH_SET(localvar_stop, pushlocalvars(sh, vlocal));
 
+	argv_views.reserve(static_cast<size_t>(argc));
+	for (std::size_t i = arg0; i < args.size(); i++)
+		argv_views.emplace_back(args[i]);
+
 	/* Reserve one extra spot at the front for shellexec. */
 	argv_store.reserve(static_cast<size_t>(argc) + 2);
 	argv_store.push_back(nullptr);
-	for (std::size_t i = arg0; i < args.size(); i++) {
+	for (std::size_t i = arg0; i < args.size(); i++)
 		argv_store.push_back(args[i].data());
-	}
 	argv_store.push_back(nullptr);
 	argv = argv_store.data() + 1;
 
-	lastarg = nullptr;
 	if (sh.opts.interactive() && sh.funcline == 0 && argc > 0)
-		lastarg = argv[argc - 1];
+		lastarg = args.back().c_str();
 
 	sh.preverrout.fd = 2;
 	TRY_SHV(expredir(sh, cmd->redirect.get()));
@@ -933,7 +939,7 @@ bail:
 		/* NOTREACHED */
 
 	case TableEntry::Type::Builtin: {
-		auto br = evalbltin(sh, cmdentry.u.cmd, argc, argv, flags);
+		auto br = evalbltin(sh, cmdentry.u.cmd, argv_views, flags);
 		if (!br)
 			return br;
 		if (*br && !(sh.exception == Error::Generic && spclbltin <= 0))
@@ -942,7 +948,7 @@ bail:
 	}
 
 	case TableEntry::Type::Function:
-		TRY_SHV(evalfun(sh, cmdentry.u.func, argc, argv, flags));
+		TRY_SHV(evalfun(sh, cmdentry.u.func, argv_views, flags));
 		break;
 	}
 
@@ -968,20 +974,20 @@ freestdout(Context &sh)
 }
 
 Result<int>
-evalbltin(Context &sh, const BuiltinCommand *cmd, int argc, char **argv, EvalFlags flags)
+evalbltin(Context &sh, const BuiltinCommand *cmd, BuiltinArgs argv,
+	  EvalFlags flags)
 {
 	std::string savecmdname = std::move(sh.commandname);
 	int i = 0;
 
-	sh.commandname = argv[0] ? argv[0] : "";
-	sh.bopt.argptr = argv + 1;
-	sh.bopt.optptr = nullptr;			/* initialize nextopt */
+	sh.commandname = argv.empty() ? "" : std::string(argv[0]);
+	sh.bopt.reset(argv, argv.empty() ? 0 : 1);
 
 	Result<int> r;
 	if (cmd == &builtin_eval)
-		r = evalcmd(sh, argc, argv, flags);
+		r = evalcmd(sh, argv, flags);
 	else
-		r = cmd->builtin(sh, argc, argv);
+		r = cmd->builtin(sh, argv);
 
 	if (!r) {
 		sh.exception = r.error();
@@ -1006,7 +1012,8 @@ evalbltin(Context &sh, const BuiltinCommand *cmd, int argc, char **argv, EvalFla
 }
 
 Result<int>
-evalfun(Context &sh, const std::shared_ptr<Node> &func, int argc, char **argv, EvalFlags flags)
+evalfun(Context &sh, const std::shared_ptr<Node> &func, BuiltinArgs argv,
+	EvalFlags flags)
 {
 	ShellParam saveparam = std::move(sh.shellparam);
 	int savefuncline = sh.funcline;
@@ -1024,7 +1031,7 @@ evalfun(Context &sh, const std::shared_ptr<Node> &func, int argc, char **argv, E
 		failed = true;
 	} else {
 		sh.shellparam.p.clear();
-		for (int i = 1; i < argc; i++)
+		for (std::size_t i = 1; i < argv.size(); i++)
 			sh.shellparam.p.emplace_back(argv[i]);
 		sh.shellparam.optind = 1;
 		sh.shellparam.optoff = -1;
@@ -1083,7 +1090,7 @@ prehash(Context &sh, Node *n)
 
 namespace {
 Result<int>
-bltincmd(Context &sh, int argc, char **argv)
+bltincmd(Context &sh, BuiltinArgs)
 {
 	/*
 	 * Preserve sh.exitstatus of a previous possible redirection
@@ -1105,10 +1112,10 @@ bltincmd(Context &sh, int argc, char **argv)
  */
 
 Result<int>
-breakcmd(Context &sh, int argc, char **argv)
+breakcmd(Context &sh, BuiltinArgs argv)
 {
 	int n;
-	if (argc > 1)
+	if (argv.size() > 1)
 		TRY_SH_SET(n, number(sh, argv[1]));
 	else
 		n = 1;
@@ -1118,7 +1125,9 @@ breakcmd(Context &sh, int argc, char **argv)
 	if (n > sh.loopnest)
 		n = sh.loopnest;
 	if (n > 0) {
-		sh.evalskip = (**argv == 'c') ? EvalSkip::Continue : EvalSkip::Break;
+		sh.evalskip = (!argv.empty() && argv[0][0] == 'c')
+				      ? EvalSkip::Continue
+				      : EvalSkip::Break;
 		sh.skipcount = n;
 	}
 	return 0;
@@ -1129,7 +1138,7 @@ breakcmd(Context &sh, int argc, char **argv)
  */
 
 Result<int>
-returncmd(Context &sh, int argc, char **argv)
+returncmd(Context &sh, BuiltinArgs argv)
 {
 	EvalSkip skip;
 	int status;
@@ -1138,7 +1147,7 @@ returncmd(Context &sh, int argc, char **argv)
 	 * If called outside a function, do what ksh does;
 	 * skip the rest of the file.
 	 */
-	if (argv[1]) {
+	if (argv.size() > 1) {
 		skip = EvalSkip::Func;
 		TRY_SH_SET(status, number(sh, argv[1]));
 	} else {
@@ -1151,26 +1160,31 @@ returncmd(Context &sh, int argc, char **argv)
 }
 
 Result<int>
-falsecmd(Context &sh, int argc, char **argv)
+falsecmd(Context &sh, BuiltinArgs)
 {
 	return EXIT_FAILURE;
 }
 
 Result<int>
-truecmd(Context &sh, int argc, char **argv)
+truecmd(Context &sh, BuiltinArgs)
 {
 	return EXIT_SUCCESS;
 }
 
 Result<int>
-execcmd(Context &sh, int argc, char **argv)
+execcmd(Context &sh, BuiltinArgs argv)
 {
-	if (argc > 1) {
+	if (argv.size() > 1) {
 		sh.opts.interactive() = 0;		/* exit on error */
 		sh.opts.monitor() = 0;
 		optschanged(sh);
 		flush_input(sh);
-		shellexec(sh, argv + 1, pathval(sh), 0);
+		std::vector<char *> ptrs;
+		ptrs.reserve(argv.size());
+		for (std::size_t i = 1; i < argv.size(); ++i)
+			ptrs.push_back(const_cast<char *>(argv[i].data()));
+		ptrs.push_back(nullptr);
+		shellexec(sh, ptrs.data(), pathval(sh), 0);
 	}
 
 	return EXIT_SUCCESS;

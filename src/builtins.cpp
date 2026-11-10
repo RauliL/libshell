@@ -20,22 +20,22 @@ using namespace shell;
 
 namespace shell {
 
-Result<int> echocmd(Context &sh, int, char **);
-Result<int> printfcmd(Context &sh, int, char **);
-Result<int> testcmd(Context &sh, int argc, char **argv);
-Result<int> timescmd(Context &sh, int argc, char *argv[]);
-Result<int> breakcmd(Context &sh, int argc, char **argv);
-Result<int> returncmd(Context &sh, int argc, char **argv);
-Result<int> falsecmd(Context &sh, int argc, char **argv);
-Result<int> truecmd(Context &sh, int argc, char **argv);
-Result<int> execcmd(Context &sh, int argc, char **argv);
-Result<int> hashcmd(Context &sh, int argc, char **argv);
-Result<int> typecmd(Context &sh, int argc, char **argv);
-Result<int> commandcmd(Context &sh, int argc, char **argv);
-Result<int> readcmd(Context &sh, int argc, char **argv);
-Result<int> umaskcmd(Context &sh, int argc, char **argv);
+Result<int> echocmd(Context &sh, BuiltinArgs);
+Result<int> printfcmd(Context &sh, BuiltinArgs);
+Result<int> testcmd(Context &sh, BuiltinArgs);
+Result<int> timescmd(Context &sh, BuiltinArgs);
+Result<int> breakcmd(Context &sh, BuiltinArgs);
+Result<int> returncmd(Context &sh, BuiltinArgs);
+Result<int> falsecmd(Context &sh, BuiltinArgs);
+Result<int> truecmd(Context &sh, BuiltinArgs);
+Result<int> execcmd(Context &sh, BuiltinArgs);
+Result<int> hashcmd(Context &sh, BuiltinArgs);
+Result<int> typecmd(Context &sh, BuiltinArgs);
+Result<int> commandcmd(Context &sh, BuiltinArgs);
+Result<int> readcmd(Context &sh, BuiltinArgs);
+Result<int> umaskcmd(Context &sh, BuiltinArgs);
 #if HAVE_GETRLIMIT
-Result<int> ulimitcmd(Context &sh, int argc, char **argv);
+Result<int> ulimitcmd(Context &sh, BuiltinArgs);
 #endif
 
 namespace {

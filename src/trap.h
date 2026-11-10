@@ -49,7 +49,7 @@ extern volatile sig_atomic_t pending_sig;
 extern volatile sig_atomic_t gotsigchld;
 
 
-Result<int> trapcmd(Context &sh, int, char **);
+Result<int> trapcmd(Context &sh, BuiltinArgs);
 void init_traps(Context &sh);
 Result<void> clear_traps(Context &sh, const Node *);
 void setsignal(Context &sh, int);

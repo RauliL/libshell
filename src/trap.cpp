@@ -80,15 +80,15 @@ init_traps(Context &sh)
 }
 
 Result<int>
-trapcmd(Context &sh, int argc, char **argv)
+trapcmd(Context &sh, BuiltinArgs)
 {
 	const char *action;
-	char **ap;
 	int signo;
 
 	TRY_SHV(nextopt(sh, ""));
-	ap = sh.bopt.argptr;
-	if (!*ap) {
+	auto ap = sh.bopt.remaining();
+	std::size_t ai = 0;
+	if (ap.empty()) {
 		for (signo = 0 ; signo < NSIG ; signo++) {
 			if (sh.trap[signo]) {
                 out1str(std::format(
@@ -103,13 +103,15 @@ trapcmd(Context &sh, int argc, char **argv)
 	}
 	if (sh.ptrap)
 		TRY_SHV(clear_traps(sh, nullptr));
-	if (!ap[1] || decode_signum(sh, *ap) >= 0)
+	if (ap.size() < 2 || decode_signum(sh, ap[0]) >= 0)
 		action = nullptr;
-	else
-		action = *ap++;
-	while (*ap) {
-		if ((signo = decode_signal(sh, *ap, 0)) < 0) {
-            sh.out2->write(sh, std::format("trap: {}: bad trap\n", *ap));
+	else {
+		action = ap[ai].data();
+		++ai;
+	}
+	while (ai < ap.size()) {
+		if ((signo = decode_signal(sh, ap[ai], 0)) < 0) {
+            sh.out2->write(sh, std::format("trap: {}: bad trap\n", ap[ai]));
 
 			return EXIT_FAILURE;
 		}
@@ -130,7 +132,7 @@ trapcmd(Context &sh, int argc, char **argv)
 		if (signo != 0)
 			setsignal(sh, signo);
 		INTON(sh);
-		ap++;
+		++ai;
 	}
 
 	return EXIT_SUCCESS;

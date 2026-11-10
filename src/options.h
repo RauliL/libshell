@@ -55,11 +55,11 @@ extern const char optletters[NOPTS];
 
 Result<ProcArgsResult> procargs(Context &sh, char **);
 void optschanged(Context &sh);
-void setparam(Context &sh, char **);
+void setparam(Context &sh, BuiltinArgs);
 void freeparam(Context &sh, ShellParam *);
-Result<int> shiftcmd(Context &sh, int, char **);
-Result<int> setcmd(Context &sh, int, char **);
-Result<int> getoptscmd(Context &sh, int, char **);
+Result<int> shiftcmd(Context &sh, BuiltinArgs);
+Result<int> setcmd(Context &sh, BuiltinArgs);
+Result<int> getoptscmd(Context &sh, BuiltinArgs);
 Result<int> nextopt(Context &sh, std::string_view);
 void getoptsreset(Context &sh, std::string_view);
 

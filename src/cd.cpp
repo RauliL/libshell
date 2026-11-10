@@ -92,7 +92,7 @@ cdopt(Context &sh)
 } // namespace
 
 Result<int>
-cdcmd(Context &sh, int argc, char **argv)
+cdcmd(Context &sh, BuiltinArgs)
 {
 	const char *dest;
 	const char *path;
@@ -104,7 +104,7 @@ cdcmd(Context &sh, int argc, char **argv)
 	std::string candidate;
 
 	TRY_SH_SET(flags, cdopt(sh));
-	dest = *sh.bopt.argptr;
+	dest = sh.bopt.empty() ? nullptr : sh.bopt.current().data();
 	if (!dest)
 		dest = bltinlookup(sh, "HOME");
 	else if (dest[0] == '-' && dest[1] == '\0') {
@@ -298,7 +298,7 @@ getpwd(Context &sh)
 } // namespace
 
 Result<int>
-pwdcmd(Context &sh, int argc, char **argv)
+pwdcmd(Context &sh, BuiltinArgs)
 {
 	int flags;
 	const char *dir = sh.cwd.curdir.c_str();

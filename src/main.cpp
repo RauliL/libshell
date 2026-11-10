@@ -214,15 +214,15 @@ find_dot_file(Context &sh, char *basename)
 } // namespace
 
 Result<int>
-dotcmd(Context &sh, int argc, char **argv)
+dotcmd(Context &sh, BuiltinArgs)
 {
 	int status = 0;
 
 	TRY_SHV(nextopt(sh, ""));
-	argv = sh.bopt.argptr;
+	auto rem = sh.bopt.remaining();
 
-	if (*argv) {
-		auto fullname_r = find_dot_file(sh, *argv);
+	if (!rem.empty()) {
+		auto fullname_r = find_dot_file(sh, const_cast<char *>(rem[0].data()));
 		if (!fullname_r)
 			return tl::unexpected(fullname_r.error());
 		std::string fullname = *std::move(fullname_r);
@@ -239,9 +239,9 @@ dotcmd(Context &sh, int argc, char **argv)
 }
 
 Result<int>
-exitcmd(Context &sh, int argc, char **argv)
+exitcmd(Context &sh, BuiltinArgs argv)
 {
-	if (argc > 1)
+	if (argv.size() > 1)
 		TRY_SH_SET(sh.savestatus, number(sh, argv[1]));
 
 	return exraise(sh, Error::Exit);

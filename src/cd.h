@@ -43,8 +43,8 @@
 
 namespace shell {
 
-Result<int> cdcmd(Context &sh, int, char **);
-Result<int> pwdcmd(Context &sh, int, char **);
+Result<int> cdcmd(Context &sh, BuiltinArgs);
+Result<int> pwdcmd(Context &sh, BuiltinArgs);
 Result<void> setpwd(Context &sh, std::optional<std::string_view> val,
 			       int setold, bool refresh_phys = false);
 

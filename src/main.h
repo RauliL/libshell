@@ -48,7 +48,7 @@ namespace shell {
 
 Result<int> cmdloop(Context &sh);
 Result<void> readcmdfile(Context &sh, std::string_view);
-Result<int> dotcmd(Context &sh, int, char **);
-Result<int> exitcmd(Context &sh, int, char **);
+Result<int> dotcmd(Context &sh, BuiltinArgs);
+Result<int> exitcmd(Context &sh, BuiltinArgs);
 
 } // namespace shell

@@ -258,11 +258,10 @@ hash_affected(const TableEntry &cmdp, int builtinloc)
 } // namespace
 
 Result<int>
-hashcmd(Context &sh, int argc, char **argv)
+hashcmd(Context &sh, BuiltinArgs)
 {
 	int c;
 	struct cmdentry entry;
-	char *name;
 	bool clear;
 
 	clear = false;
@@ -277,7 +276,7 @@ hashcmd(Context &sh, int argc, char **argv)
 		return 0;
 	}
 
-	if (!*sh.bopt.argptr) {
+	if (sh.bopt.empty()) {
 		for (const auto &cmd : sh.cmdtable) {
 			if (cmd.second.type == TableEntry::Type::Normal)
 				printentry(sh, cmd.first, cmd.second);
@@ -285,14 +284,14 @@ hashcmd(Context &sh, int argc, char **argv)
 		return 0;
 	}
 	c = 0;
-	while ((name = *sh.bopt.argptr)) {
-		TableEntry *cmdp = cmdlookup(sh, name, 0);
+	for (auto name : sh.bopt.remaining()) {
+		TableEntry *cmdp = cmdlookup(sh, name.data(), 0);
 		if (cmdp && hash_affected(*cmdp, sh.builtinloc))
-			delete_cmd_entry(sh, name);
-		TRY_SHV(find_command(sh, name, &entry, DO_ERR, pathval(sh)));
+			delete_cmd_entry(sh, name.data());
+		TRY_SHV(find_command(sh, const_cast<char *>(name.data()), &entry,
+				     DO_ERR, pathval(sh)));
 		if (entry.type == TableEntry::Type::Unknown)
 			c = 1;
-		sh.bopt.argptr++;
 	}
 	return c;
 }
@@ -665,14 +664,16 @@ unsetfunc(Context &sh, std::string_view name)
  */
 
 Result<int>
-typecmd(Context &sh, int argc, char **argv)
+typecmd(Context &sh, BuiltinArgs)
 {
 	int err = 0;
 
 	TRY_SHV(nextopt(sh, ""));
-	while (*sh.bopt.argptr) {
+	for (auto name : sh.bopt.remaining()) {
 		int tmp;
-		TRY_SH_SET(tmp, describe_command(sh, sh.out1, *sh.bopt.argptr++, nullptr, 1));
+		TRY_SH_SET(tmp, describe_command(sh, sh.out1,
+						 const_cast<char *>(name.data()),
+						 nullptr, 1));
 		err |= tmp;
 	}
 	return err;
@@ -795,9 +796,8 @@ out:
 } // namespace
 
 Result<int>
-commandcmd(Context &sh, int argc, char **argv)
+commandcmd(Context &sh, BuiltinArgs)
 {
-	char *cmd;
 	int c;
 	enum {
 		VERIFY_BRIEF = 1,
@@ -818,9 +818,10 @@ commandcmd(Context &sh, int argc, char **argv)
 			path = defpath;
 	}
 
-	cmd = *sh.bopt.argptr;
-	if (verify && cmd)
-		return describe_command(sh, sh.out1, cmd, path, verify - VERIFY_BRIEF);
+	if (verify && !sh.bopt.empty())
+		return describe_command(
+			sh, sh.out1, const_cast<char *>(sh.bopt.current().data()),
+			path, verify - VERIFY_BRIEF);
 
 	return 0;
 }

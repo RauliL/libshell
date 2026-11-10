@@ -84,13 +84,13 @@ std::vector<std::string_view> listvars(Context &sh, const Variable::Flags &on,
 std::vector<char *> environment(Context &sh);
 Result<int> showvars(Context &sh, std::string_view prefix,
 				const Variable::Flags &on, const Variable::Flags &off);
-Result<int> exportcmd(Context &sh, int, char **);
-Result<int> localcmd(Context &sh, int, char **);
+Result<int> exportcmd(Context &sh, BuiltinArgs);
+Result<int> localcmd(Context &sh, BuiltinArgs);
 Result<void> mklocal(Context &sh, std::string_view name,
 				const Variable::Flags &flags = {});
 Result<std::size_t> pushlocalvars(Context &sh, int push);
 Result<void> unwindlocalvars(Context &sh, std::size_t stop);
-Result<int> unsetcmd(Context &sh, int, char **);
+Result<int> unsetcmd(Context &sh, BuiltinArgs);
 Result<void> unsetvar(Context &sh, const std::string &);
 
 } // namespace shell

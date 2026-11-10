@@ -34,55 +34,19 @@
  *	@(#)bltin.h	8.1 (Berkeley) 5/31/93
  */
 
-/*
- * This file is included by programs which are optionally built into the
- * shell.  If SHELL is defined, we try to map the standard UNIX library
- * routines to ash routines using defines.
- */
+#pragma once
 
 #include "../shell.h"
 #include "../mystring.h"
 #include "../options.h"
 #include "../output.h"
 #include "../error.h"
-#include <stdio.h>
-
 
 namespace shell {
 
-#ifdef SHELL
-#undef stdout
-#undef stderr
-#undef putc
-#undef putchar
-#undef fileno
-#define stdout (sh.out1)
-#define stderr (sh.out2)
-#define printf(...) out1fmt(sh, __VA_ARGS__)
-#define putc(c, file)	outc(sh, c, file)
-#define putchar(c)	out1c(c)
-#define FILE struct output
-#define fprintf(f, ...) outfmt(sh, f, __VA_ARGS__)
-#define fputs(s, f) ((f)->write(sh, (s)))
-#define fflush(f) ((f)->flush(sh))
-#define fileno(f) ((f)->fd)
-#define ferror outerr
-#define INITARGS(argv)
-#define	error(...) sh_error(sh, __VA_ARGS__)
-#define	warn(...) sh_warnx(sh, __VA_ARGS__)
-#define	warnx(...) sh_warnx(sh, __VA_ARGS__)
-#define exit(status) exitshell(sh)
-#define setprogname(s)
-#define getprogname() (sh.commandname.c_str())
-#define setlocate(l,s) 0
-
-#define getenv(p) bltinlookup(sh, (p))
-
-#else
-#undef main
-#define INITARGS(argv)	if (!(commandname = argv[0])) {fputs("Argc is zero\n", stderr); exit(2);} else
-#endif
-
-Result<int> echocmd(Context &sh, int, char **);
+Result<int> echocmd(Context &sh, BuiltinArgs);
+Result<int> printfcmd(Context &sh, BuiltinArgs);
+Result<int> testcmd(Context &sh, BuiltinArgs);
+Result<int> timescmd(Context &sh, BuiltinArgs);
 
 } // namespace shell

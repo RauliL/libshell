@@ -423,12 +423,46 @@ struct ShellOptions {
 };
 
 /**
- * Scratch for builtin `nextopt` / argv walking.
+ * Non-owning argv for builtins (`argv[0]` is the command name).
+ * Points into the owning `ArgList` / host argv views for the call.
+ */
+using BuiltinArgs = std::span<const std::string_view>;
+
+/**
+ * Scratch for builtin / host `nextopt` walking over a `BuiltinArgs` span.
  */
 struct NextOptState {
-	char **argptr = nullptr;
-	char *optionarg = nullptr;
-	char *optptr = nullptr;
+	BuiltinArgs args{};
+	std::size_t argi = 0;
+	std::string_view optionarg{};
+	/** Remainder of the current `-abc` cluster; empty means take a new arg. */
+	std::string_view optrest{};
+
+	void reset(BuiltinArgs a, std::size_t start = 0)
+	{
+		args = a;
+		argi = start;
+		optionarg = {};
+		optrest = {};
+	}
+
+	bool empty() const { return argi >= args.size(); }
+
+	std::string_view current() const
+	{
+		return empty() ? std::string_view{} : args[argi];
+	}
+
+	void advance()
+	{
+		if (argi < args.size())
+			++argi;
+	}
+
+	BuiltinArgs remaining() const
+	{
+		return empty() ? BuiltinArgs{} : args.subspan(argi);
+	}
 };
 
 struct BuiltinCommand {
@@ -438,7 +472,7 @@ struct BuiltinCommand {
 		Assign = 0x4,
 	};
 
-	using callback_type = Result<int>(*)(Context &, int, char **);
+	using callback_type = Result<int>(*)(Context &, BuiltinArgs);
 
 	const char *name;
 	callback_type builtin;
