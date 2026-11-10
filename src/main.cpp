@@ -34,7 +34,8 @@
 
 #include <string>
 #include <string.h>
-#include <sys/stat.h>
+#include <filesystem>
+#include <system_error>
 
 #include "main.h"
 #include "options.h"
@@ -194,7 +195,7 @@ Result<std::string>
 find_dot_file(Context &sh, char *basename)
 {
 	const char *path = pathval(sh);
-	struct stat64 statb;
+	std::error_code ec;
 
 	/* don't try this for absolute or relative paths */
 	if (strchr(basename, '/'))
@@ -203,7 +204,7 @@ find_dot_file(Context &sh, char *basename)
 	std::string fullname;
 	while (padvance(sh, &path, basename, fullname) >= 0) {
 		if ((!sh.pathopt || *sh.pathopt == 'f') &&
-		    !stat64(fullname.c_str(), &statb) && S_ISREG(statb.st_mode)) {
+		    std::filesystem::is_regular_file(fullname, ec)) {
 			return fullname;
 		}
 	}

@@ -49,6 +49,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <filesystem>
+#include <system_error>
 #ifdef HAVE_FNMATCH
 #include <fnmatch.h>
 #endif
@@ -1656,7 +1658,7 @@ char *
 expmeta(Context &sh, ExpandBuf &eb, char *name, unsigned name_len, size_t expdir_len)
 {
 	const char mesc = FNMATCH_IS_ENABLED ? '\\' : CTLESC;
-	struct stat64 statb;
+	std::error_code ec;
 	struct dirent64 *dp;
 	char *endname;
 	char *zeroedp;
@@ -1689,8 +1691,11 @@ expmeta(Context &sh, ExpandBuf &eb, char *name, unsigned name_len, size_t expdir
 		if (!expdir_len)
 			goto out_opendir;
 		enddir = expmeta_rmescapes(sh, enddir, name);
-		if (lstat64(cp, &statb) >= 0)
-			cp = addfnamealt(sh, eb, enddir + 1, expdir_len);
+		{
+			auto st = std::filesystem::symlink_status(cp, ec);
+			if (!ec && std::filesystem::exists(st))
+				cp = addfnamealt(sh, eb, enddir + 1, expdir_len);
+		}
 		goto out_opendir;
 	}
 	start = static_cast<char *>(memrchr(name, '/', static_cast<size_t>(p - name)));

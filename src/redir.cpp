@@ -40,6 +40,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <filesystem>
+#include <system_error>
 
 /*
  * Code for dealing with input/sh.output redirection.
@@ -198,6 +200,7 @@ openredirect(Context &sh, Node *redir)
 	const char *fname;
 	int flags;
 	int f;
+	std::error_code ec;
 
 	switch (redir->type) {
 	case Node::Type::From:
@@ -212,12 +215,13 @@ do_open:
 		/* Take care of noclobber mode. */
 		if (sh.opts.noclobber()) {
 			fname = as<FileNode>(redir)->expfname.c_str();
-			if (stat64(fname, &sb) < 0) {
+			auto st = std::filesystem::status(fname, ec);
+			if (ec || !std::filesystem::exists(st)) {
 				flags = O_WRONLY|O_CREAT|O_EXCL;
 				goto do_open;
 			}
 
-			if (S_ISREG(sb.st_mode))
+			if (std::filesystem::is_regular_file(st))
 				goto ecreate;
 
 			TRY_SH_SET(f, sh_open(sh, fname, O_WRONLY, 0));

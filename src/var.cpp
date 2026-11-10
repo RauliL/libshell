@@ -43,7 +43,8 @@
 #include <string_view>
 #include <vector>
 
-#include <sys/stat.h>
+#include <filesystem>
+#include <system_error>
 #include <unistd.h>
 #ifdef HAVE_PATHS_H
 #endif
@@ -123,7 +124,7 @@ void
 init_shell_vars(Context &sh)
 {
 	char **envp;
-	struct stat64 st1, st2;
+	std::error_code ec;
 
 	initvar(sh);
 	for (envp = environ; *envp; envp++) {
@@ -142,8 +143,7 @@ init_shell_vars(Context &sh)
 	auto pwd = sh.get_var("PWD");
 	if (pwd) {
 		if (pwd->empty() || (*pwd)[0] != '/' ||
-		    stat64(pwd->data(), &st1) || stat64(".", &st2) ||
-		    st1.st_dev != st2.st_dev || st1.st_ino != st2.st_ino)
+		    !std::filesystem::equivalent(pwd->data(), ".", ec))
 			pwd = std::nullopt;
 	}
 	setpwd(sh, pwd, false);

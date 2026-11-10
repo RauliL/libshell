@@ -36,6 +36,8 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <filesystem>
+#include <system_error>
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -313,21 +315,26 @@ printentry(Context &sh, const std::string &cmdname, const TableEntry &cmdp)
 }
 
 int
-test_exec(Context &sh, const char *fullname, struct stat64 *statb)
+test_exec(Context &sh, const char *fullname,
+	  const std::filesystem::file_status &st)
 {
-	if (!S_ISREG(statb->st_mode))
+	if (!std::filesystem::is_regular_file(st))
 		return 0;
 
-	if ((statb->st_mode & 0111) != 0111 &&
+	using std::filesystem::perms;
+	constexpr auto all_exec =
+		perms::owner_exec | perms::group_exec | perms::others_exec;
+	if ((st.permissions() & all_exec) == all_exec)
+		return 1;
+
 #ifdef HAVE_FACCESSAT
-	    !test_file_access(sh, fullname, X_OK)
+	return test_file_access(sh, fullname, X_OK);
 #else
-	    !test_access(statb, X_OK)
-#endif
-	   )
+	struct stat64 statb;
+	if (stat64(fullname, &statb))
 		return 0;
-
-	return 1;
+	return test_access(&statb, X_OK);
+#endif
 }
 } // namespace
 
@@ -343,7 +350,8 @@ find_command(Context &sh, char *name, struct cmdentry *entry, int act, const cha
 	int idx;
 	int prev;
 	std::string fullname;
-	struct stat64 statb;
+	std::filesystem::file_status statb;
+	std::error_code ec;
 	int e;
 	int updatetbl;
 	const BuiltinCommand *bcmd;
@@ -352,17 +360,19 @@ find_command(Context &sh, char *name, struct cmdentry *entry, int act, const cha
 	if (std::strchr(name, '/')) {
 		entry->u.index = -1;
 		if (act & DO_ABS) {
-			while (stat64(name, &statb) < 0) {
+			for (;;) {
+				statb = std::filesystem::status(name, ec);
 #ifdef SYSV
-				if (errno == EINTR)
+				if (ec == std::errc::interrupted)
 					continue;
 #endif
-absfail:
+				break;
+			}
+			if (ec || !std::filesystem::exists(statb) ||
+			    !test_exec(sh, name, statb)) {
 				entry->type = TableEntry::Type::Unknown;
 				return {};
 			}
-			if (!test_exec(sh, name, &statb))
-				goto absfail;
 		}
 		entry->type = TableEntry::Type::Normal;
 		return {};
@@ -443,15 +453,22 @@ loop:
 				continue;
 			goto success;
 		}
-		while (stat64(fullname.c_str(), &statb) < 0) {
+		for (;;) {
+			statb = std::filesystem::status(fullname, ec);
 #ifdef SYSV
-			if (errno == EINTR)
+			if (ec == std::errc::interrupted)
 				continue;
 #endif
-			if (errno != ENOENT && errno != ENOTDIR)
-				e = errno;
+			break;
+		}
+		if (ec) {
+			if (ec != std::errc::no_such_file_or_directory &&
+			    ec != std::errc::not_a_directory)
+				e = ec.value();
 			goto loop;
 		}
+		if (!std::filesystem::exists(statb))
+			goto loop;
 		if (lpathopt) {		/* this is a %func directory */
 			std::string pathcopy(fullname);
 			TRY_SHV(readcmdfile(sh, pathcopy.data()));
@@ -462,7 +479,7 @@ loop:
 			goto success;
 		}
 		e = EACCES;	/* if we fail, this will be the error */
-		if (!test_exec(sh, fullname.c_str(), &statb))
+		if (!test_exec(sh, fullname.c_str(), statb))
 			continue;
 		if (!updatetbl) {
 			entry->type = TableEntry::Type::Normal;

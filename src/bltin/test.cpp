@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <cstring>
+#include <filesystem>
+#include <system_error>
 #include <sys/stat.h>
 #include <unistd.h>
 #include "../exec.h"
@@ -485,50 +487,79 @@ binop(Context &sh, TestState &st)
 int
 filstat(char *nm, enum token mode)
 {
-	struct stat64 s;
+	namespace fs = std::filesystem;
+	std::error_code ec;
 
-	if (mode == FILSYM ? lstat64(nm, &s) : stat64(nm, &s))
-		return 0;
+	if (mode == FILSYM) {
+		auto s = fs::symlink_status(nm, ec);
+		return !ec && fs::is_symlink(s);
+	}
 
+	/*
+	 * Ownership, size, and permission-bit access checks still need
+	 * struct stat; std::filesystem::file_status does not expose them.
+	 */
 	switch (mode) {
 #ifndef HAVE_FACCESSAT
 	case FILRD:
-		return test_access(&s, R_OK);
 	case FILWR:
-		return test_access(&s, W_OK);
 	case FILEX:
-		return test_access(&s, X_OK);
 #endif
+	case FILGZ:
+	case FILUID:
+	case FILGID: {
+		struct stat64 s;
+
+		if (stat64(nm, &s))
+			return 0;
+		switch (mode) {
+#ifndef HAVE_FACCESSAT
+		case FILRD:
+			return test_access(&s, R_OK);
+		case FILWR:
+			return test_access(&s, W_OK);
+		case FILEX:
+			return test_access(&s, X_OK);
+#endif
+		case FILGZ:
+			return !!s.st_size;
+		case FILUID:
+			return s.st_uid == geteuid();
+		case FILGID:
+			return s.st_gid == getegid();
+		default:
+			return 1;
+		}
+	}
+	default:
+		break;
+	}
+
+	auto s = fs::status(nm, ec);
+	if (ec || !fs::exists(s))
+		return 0;
+
+	switch (mode) {
 	case FILEXIST:
 		return 1;
 	case FILREG:
-		return S_ISREG(s.st_mode);
+		return fs::is_regular_file(s);
 	case FILDIR:
-		return S_ISDIR(s.st_mode);
+		return fs::is_directory(s);
 	case FILCDEV:
-		return S_ISCHR(s.st_mode);
+		return fs::is_character_file(s);
 	case FILBDEV:
-		return S_ISBLK(s.st_mode);
+		return fs::is_block_file(s);
 	case FILFIFO:
-		return S_ISFIFO(s.st_mode);
+		return fs::is_fifo(s);
 	case FILSOCK:
-		return S_ISSOCK(s.st_mode);
-	case FILSYM:
-		return S_ISLNK(s.st_mode);
+		return fs::is_socket(s);
 	case FILSUID:
-		return (s.st_mode & S_ISUID) != 0;
+		return (s.permissions() & fs::perms::set_uid) != fs::perms::none;
 	case FILSGID:
-		return (s.st_mode & S_ISGID) != 0;
-#ifdef S_ISVTX
+		return (s.permissions() & fs::perms::set_gid) != fs::perms::none;
 	case FILSTCK:
-		return (s.st_mode & S_ISVTX) != 0;
-#endif
-	case FILGZ:
-		return !!s.st_size;
-	case FILUID:
-		return s.st_uid == geteuid();
-	case FILGID:
-		return s.st_gid == getegid();
+		return (s.permissions() & fs::perms::sticky_bit) != fs::perms::none;
 	default:
 		return 1;
 	}
@@ -568,50 +599,36 @@ isoperand(TestState &st)
 bool
 newerf(const char *f1, const char *f2)
 {
-	struct stat64 b1, b2;
+	std::error_code ec1, ec2;
+	auto t1 = std::filesystem::last_write_time(f1, ec1);
+	auto t2 = std::filesystem::last_write_time(f2, ec2);
 
-	if (stat64(f1, &b1) != 0)
+	if (ec1)
 		return false;
-	if (stat64(f2, &b2) != 0)
+	if (ec2)
 		return true;
-
-#ifdef HAVE_ST_MTIM
-	return b1.st_mtim.tv_sec > b2.st_mtim.tv_sec ||
-	       (b1.st_mtim.tv_sec == b2.st_mtim.tv_sec &&
-		b1.st_mtim.tv_nsec > b2.st_mtim.tv_nsec);
-#else
-	return b1.st_mtime > b2.st_mtime;
-#endif
+	return t1 > t2;
 }
 
 bool
 olderf(const char *f1, const char *f2)
 {
-	struct stat64 b1, b2;
+	std::error_code ec1, ec2;
+	auto t1 = std::filesystem::last_write_time(f1, ec1);
+	auto t2 = std::filesystem::last_write_time(f2, ec2);
 
-	if (stat64(f2, &b2) != 0)
+	if (ec2)
 		return false;
-	if (stat64(f1, &b1) != 0)
+	if (ec1)
 		return true;
-
-#ifdef HAVE_ST_MTIM
-	return b1.st_mtim.tv_sec < b2.st_mtim.tv_sec ||
-	       (b1.st_mtim.tv_sec == b2.st_mtim.tv_sec &&
-		b1.st_mtim.tv_nsec < b2.st_mtim.tv_nsec);
-#else
-	return b1.st_mtime < b2.st_mtime;
-#endif
+	return t1 < t2;
 }
 
 int
 equalf(const char *f1, const char *f2)
 {
-	struct stat64 b1, b2;
-
-	return (stat64(f1, &b1) == 0 &&
-		stat64(f2, &b2) == 0 &&
-		b1.st_dev == b2.st_dev &&
-		b1.st_ino == b2.st_ino);
+	std::error_code ec;
+	return std::filesystem::equivalent(f1, f2, ec);
 }
 } // namespace
 
@@ -620,11 +637,16 @@ namespace {
 int
 has_exec_bit_set(Context &sh, const char *path)
 {
-	struct stat64 st;
+	std::error_code ec;
+	auto st = std::filesystem::status(path, ec);
 
-	if (stat64(path, &st))
+	if (ec || !std::filesystem::exists(st))
 		return 0;
-	return st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH);
+
+	using std::filesystem::perms;
+	constexpr auto any_exec =
+		perms::owner_exec | perms::group_exec | perms::others_exec;
+	return (st.permissions() & any_exec) != perms::none;
 }
 } // namespace
 
