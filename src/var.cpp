@@ -146,7 +146,7 @@ init_shell_vars(Context &sh)
 		    st1.st_dev != st2.st_dev || st1.st_ino != st2.st_ino)
 			pwd = std::nullopt;
 	}
-	setpwd(sh, pwd, 0);
+	setpwd(sh, pwd, false);
 }
 
 namespace {

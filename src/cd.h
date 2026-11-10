@@ -45,7 +45,11 @@ namespace shell {
 
 Result<int> cdcmd(Context &sh, BuiltinArgs);
 Result<int> pwdcmd(Context &sh, BuiltinArgs);
-Result<void> setpwd(Context &sh, std::optional<std::string_view> val,
-			       int setold, bool refresh_phys = false);
+Result<void> setpwd(
+	Context &sh,
+	const std::optional<std::filesystem::path> &value,
+	bool set_old,
+	bool refresh_phys = false
+);
 
 } // namespace shell

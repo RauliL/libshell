@@ -39,7 +39,6 @@
 #include <string>
 #include <utility>
 
-#include <sys/stat.h>
 #include <unistd.h>
 #ifdef __CYGWIN__
 #include <sys/cygwin.h>
@@ -67,7 +66,7 @@ namespace shell {
 namespace {
 Result<int> docd(Context &sh, const char *, int);
 Result<std::optional<std::string>> updatepwd(Context &sh, const char *);
-std::string getpwd(Context &sh);
+std::filesystem::path getpwd(Context &sh);
 Result<int> cdopt(Context &sh);
 
 Result<int>
@@ -98,7 +97,7 @@ cdcmd(Context &sh, BuiltinArgs)
 	const char *path;
 	const char *p;
 	char c;
-	struct stat64 statb;
+	std::error_code ec;
 	int flags;
 	int len;
 	std::string candidate;
@@ -135,7 +134,7 @@ dotdot:
 		c = *p;
 		p = candidate.c_str();
 
-		if (stat64(p, &statb) >= 0 && S_ISDIR(statb.st_mode)) {
+		if (std::filesystem::is_directory(p, ec)) {
 			if (c && c != ':')
 				flags |= CD_PRINT;
 docd:
@@ -157,7 +156,7 @@ err:
 	return sh_error(sh, "can't cd to {}", dest);
 out:
 	if (flags & CD_PRINT)
-        out1str(std::format("{}\n", sh.cwd.curdir));
+        out1str(std::format("{}\n", sh.cwd.curdir.string()));
 	return 0;
 }
 
@@ -171,30 +170,30 @@ Result<int>
 docd(Context &sh, const char *dest, int flags)
 {
 	std::optional<std::string> logical;
-	const char *dir = nullptr;
-	int err;
+	std::optional<std::filesystem::path> dir;
+	std::error_code ec;
 
 	INTOFF(sh);
 	if (!(flags & CD_PHYSICAL)) {
-		auto up = updatepwd(sh, dest);
+		const auto up = updatepwd(sh, dest);
+
 		if (!up)
 			return tl::unexpected(up.error());
 		logical = std::move(*up);
-		if (logical)
-			dest = dir = logical->c_str();
+		if (logical) {
+			dir = *logical;
+			dest = dir->c_str();
+		}
 	}
-	err = chdir(dest);
-	if (err)
+	std::filesystem::current_path(dest, ec);
+	if (ec)
 		goto out;
-	TRY_SHV(setpwd(sh,
-			 dir ? std::optional<std::string_view>(dir)
-			     : std::nullopt,
-			 1));
+	TRY_SHV(setpwd(sh, dir, true));
 	hashcd(sh);
 out:
 	INTON(sh);
 
-	return err;
+	return ec.value();
 }
 } // namespace
 
@@ -274,26 +273,19 @@ updatepwd(Context &sh, const char *dir)
  * directory, this routine returns immediately.
  */
 namespace {
-std::string
+std::filesystem::path
 getpwd(Context &sh)
 {
-#ifdef __GLIBC__
-	char *dir = getcwd(0, 0);
+	std::error_code ec;
+	std::filesystem::path path = std::filesystem::current_path(ec);
 
-	if (dir) {
-		std::string s(dir);
-		free(dir);
-		return s;
+	if (ec) {
+		sh_warnx(sh, "getcwd() failed: {}", ec.message());
+
+		return {};
 	}
-#else
-	char buf[PATH_MAX];
 
-	if (getcwd(buf, sizeof(buf)))
-		return buf;
-#endif
-
-	sh_warnx(sh, "getcwd() failed: {}", strerror(errno));
-	return {};
+	return path;
 }
 } // namespace
 
@@ -301,27 +293,28 @@ Result<int>
 pwdcmd(Context &sh, BuiltinArgs)
 {
 	int flags;
-	const char *dir = sh.cwd.curdir.c_str();
+	std::filesystem::path dir = sh.cwd.curdir;
 
 	TRY_SH_SET(flags, cdopt(sh));
 	if (flags) {
 		if (sh.cwd.physdir.empty())
-			TRY_SHV(setpwd(sh, std::nullopt, 0, true));
-		dir = sh.cwd.physdir.c_str();
+			TRY_SHV(setpwd(sh, std::nullopt, false, true));
+		dir = sh.cwd.physdir;
 	}
-    out1str(std::format("{}\n", dir));
-	return 0;
+    out1str(std::format("{}\n", dir.string()));
+
+	return EXIT_SUCCESS;
 }
 
 Result<void>
 setpwd(
 	Context &sh,
-	std::optional<std::string_view> val,
-	int setold,
+	const std::optional<std::filesystem::path> &value,
+	bool set_old,
 	bool refresh_phys
 )
 {
-	if (setold)
+	if (set_old)
 		TRY_SHV(setvar(sh, "OLDPWD", sh.cwd.curdir, Variable::Flag::Exported));
 
 	INTOFF(sh);
@@ -329,11 +322,11 @@ setpwd(
 		sh.cwd.physdir = getpwd(sh);
 	} else {
 		sh.cwd.physdir.clear();
-		if (!val) {
+		if (!value || value->empty()) {
 			sh.cwd.curdir = getpwd(sh);
 			sh.cwd.physdir = sh.cwd.curdir;
 		} else {
-			sh.cwd.curdir = *val;
+			sh.cwd.curdir = *value;
 		}
 	}
 	INTON(sh);

@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <csignal>
 #include <cwchar>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -359,9 +360,9 @@ struct Job {
  */
 struct CdState {
 	/** Empty when unknown. */
-	std::string curdir;
+	std::filesystem::path curdir;
 	/** Empty when unknown. */
-	std::string physdir;
+	std::filesystem::path physdir;
 };
 
 /**
@@ -1010,14 +1011,19 @@ struct Context {
 	void set_stdout(const Output::sink_type &sink);
 	void set_stderr(const Output::sink_type &sink);
 
-	/** Logical working directory tracked by the shell (`PWD` / `cd`). */
-	std::string_view get_cwd() const;
+	/**
+	 * Logical working directory tracked by the shell (`PWD` / `cd`).
+	 */
+	inline const std::filesystem::path &get_cwd() const
+	{
+		return cwd.curdir;
+	}
 
 	/**
 	 * Update the shell's logical cwd and `PWD` without changing the
 	 * process working directory (which is process-global).
 	 */
-	Result<void> set_cwd(std::string_view path);
+	Result<void> set_cwd(const std::filesystem::path &path);
 
 	std::optional<std::string_view> find_signal_name(int signal) const;
 

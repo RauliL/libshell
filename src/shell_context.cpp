@@ -45,16 +45,10 @@ Context::set_stderr(const Output::sink_type &sink)
 	errout.sink = sink;
 }
 
-std::string_view
-Context::get_cwd() const
-{
-	return cwd.curdir;
-}
-
 Result<void>
-Context::set_cwd(std::string_view path)
+Context::set_cwd(const std::filesystem::path &path)
 {
-	return setpwd(*this, path, 0);
+	return setpwd(*this, path, false);
 }
 
 Result<ProcArgsResult>
