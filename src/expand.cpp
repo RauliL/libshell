@@ -1512,6 +1512,7 @@ nometa2:
 			INTON_DEFER(sh);
 nometa:
 			rmescapes(s.data());
+			s.resize(std::strlen(s.c_str()));
 			out.push_back(std::move(s));
 			break;
 		default:	/* GLOB_NOSPACE */
@@ -1570,6 +1571,7 @@ expandmeta(Context &sh, ExpandBuf &eb, ArgList &strs)
 			 */
 nometa:
 			rmescapes(s.data());
+			s.resize(std::strlen(s.c_str()));
 			out.push_back(std::move(s));
 		} else {
 			std::sort(sh.expand.exparg.begin(), sh.expand.exparg.end(),

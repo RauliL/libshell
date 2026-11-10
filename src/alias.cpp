@@ -50,28 +50,25 @@ using namespace shell;
 namespace shell {
 
 namespace {
-Result<void> setalias(Context &sh, const char *, const char *);
-
 Result<void>
-setalias(Context &sh, const char *name, const char *val)
+setalias(Context &sh, std::string_view name, std::string_view val)
 {
-	const char *p = name;
+	if (name.empty())
+		return sh_error(sh, "Invalid alias name: {}", name);
 
-	do {
-		if (BASESYNTAX[(signed char)*p] != CWORD)
+	for (unsigned char c : name) {
+		if (BASESYNTAX[static_cast<signed char>(c)] != CWORD)
 			return sh_error(sh, "Invalid alias name: {}", name);
-	} while (*++p != '=');
-
-	size_t namelen = static_cast<size_t>(val - name - 1); /* bytes before '=' */
-	std::string key(name, namelen);
+	}
 
 	return with_interrupts_off(sh, [&]() -> Result<void> {
+		std::string key(name);
 		auto &slot = sh.aliases[key];
 
 		if (!slot)
 			slot = std::make_shared<Alias>();
 		slot->name = std::move(key);
-		slot->value = val;
+		slot->value = std::string(val);
 
 		return {};
 	});
@@ -137,9 +134,7 @@ aliascmd(Context &sh, BuiltinArgs argv)
 				printalias(sh, *ap);
 			}
 		} else {
-			std::string aname(n.substr(0, eq));
-			TRY_SHV(setalias(sh, aname.c_str(),
-					 n.substr(eq + 1).data()));
+			TRY_SHV(setalias(sh, n.substr(0, eq), n.substr(eq + 1)));
 		}
 	}
 

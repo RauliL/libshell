@@ -120,7 +120,7 @@ print_escape_str(Context &sh, const char *f, int *param, int *array, const char 
 	escaped.back() = (!!((f[1] - 's') | done) - 1) & f[2];
 	total += !!escaped.back();
 	if (f[1] == 's') {
-		sh.out1->write(sh, escaped);
+		sh.out1->write(sh, escaped.data(), static_cast<std::size_t>(total));
 		return done;
 	}
 

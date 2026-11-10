@@ -56,8 +56,22 @@ target_link_libraries(
 )
 dash_configure_tool(var_tests)
 
+add_executable(
+  builtin_tests
+  ./builtin/builtin_tests.cpp
+)
+target_link_libraries(
+  builtin_tests
+  PRIVATE
+    shell
+    Catch2::Catch2WithMain
+)
+dash_configure_tool(builtin_tests)
+
 list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")
 include(Catch)
-catch_discover_tests(parse_tests)
+
 catch_discover_tests(arith_tests)
+catch_discover_tests(builtin_tests)
+catch_discover_tests(parse_tests)
 catch_discover_tests(var_tests)
