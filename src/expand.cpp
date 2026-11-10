@@ -83,17 +83,9 @@
 #include <cstdint>
 #include <utility>
 
-/*
- * _rmescape() flags
- */
-
 using namespace shell;
 
 namespace shell {
-
-#define RMESCAPE_ALLOC	0x1	/* Allocate a new string */
-#define RMESCAPE_GLOB	0x2	/* Add backslashes for glob */
-#define RMESCAPE_GROW	0x8	/* Grow ExpandBuf instead of a std::string */
 
 /* Add CTLESC when necessary. */
 #define QUOTES_ESC	(EXP_FULL | EXP_CASE)
@@ -141,30 +133,9 @@ size_t cvtnum(Context &sh, ExpandBuf &eb, intmax_t num, ExpandFlags flags);
 tl::unexpected<Error> varunset(Context &sh, const char *, const char *, const char *, int);
 } // namespace
 
-/*
- * Prepare a pattern for a glob(3) call.
- *
- * When a new string is allocated, it is written into *heap (or into *eb
- * when RMESCAPE_GROW is set). The returned pointer aliases pattern, *eb,
- * or *heap and is valid for as long as that storage lives.
- */
-
 namespace {
-inline char *
-preglob(Context &sh, const char *pattern, int flag, ExpandBuf *eb = nullptr,
-	std::string *heap = nullptr)
-{
-	if (FNMATCH_IS_ENABLED) {
-		if (!flag)
-			flag = eb ? RMESCAPE_GROW : 0;
-		flag |= RMESCAPE_ALLOC;
-	}
-	flag |= RMESCAPE_GLOB;
-	return _rmescapes(sh, const_cast<char *>(pattern), flag, eb, heap);
-}
-
 size_t
-mesclen(Context &sh, const char *start, const char *p, char mesc)
+mesclen(const char *start, const char *p, char mesc)
 {
 	size_t esc = 0;
 
@@ -175,13 +146,13 @@ mesclen(Context &sh, const char *start, const char *p, char mesc)
 }
 
 size_t
-esclen(Context &sh, const char *start, const char *p)
+esclen(const char *start, const char *p)
 {
-	return mesclen(sh, start, p, CTLESC);
+	return mesclen(start, p, CTLESC);
 }
 
 __attribute__((noinline)) unsigned
-mbnext(Context &sh, const char *p)
+mbnext(const char *p)
 {
 	unsigned start = 0;
 	unsigned end = 0;
@@ -235,7 +206,7 @@ expandarg(Context &sh, Node *arg, ArgList *alist, ExpandFlags flag)
 	sh.expand.argbackq_i = 0;
 	eb.start();
 	TRY_SHV(argstr(sh, eb, as<ArgNode>(arg)->text.data(), flag));
-	p = (eb.commit_to(eb.dest));
+	p = eb.commit_rel();
 	{
 		ArgList words;
 		/*
@@ -265,7 +236,7 @@ expandarg_to_string(Context &sh, Node *arg, ExpandFlags flag)
 	sh.expand.argbackq_i = 0;
 	eb.start();
 	TRY_SHV(argstr(sh, eb, as<ArgNode>(arg)->text.data(), flag));
-	eb.putc_nul(eb.dest);
+	eb.putc_nul();
 	std::string result(eb.base());
 	ifsfree(sh);
 	return result;
@@ -312,7 +283,7 @@ tilde:
 			p = exptilde(sh, eb, p, flag);
 	}
 start:
-	startloc = eb.dest - eb.base();
+	startloc = static_cast<int>(eb.rel());
 	for (;;) {
 		unsigned ml;
 		unsigned mb;
@@ -332,12 +303,12 @@ start:
 		}
 		if (length > 0 && !(flag & EXP_DISCARD)) {
 			int newloc;
-			char *q;
 
-			q = eb.nputs(p, length, eb.dest);
-			q[-1] &= end - 1;
-			eb.dest = q - (flag & EXP_WORD ? end : 0);
-			newloc = q - eb.base() - end;
+			eb.nputs(p, length);
+			eb.ptr()[-1] &= end - 1;
+			newloc = static_cast<int>(eb.rel()) - end;
+			if (flag & EXP_WORD)
+				eb.set_rel(static_cast<std::size_t>(newloc));
 			if (breakall && !inquotes && newloc > startloc) {
 				recordregion(sh, startloc, newloc, 0);
 			}
@@ -381,7 +352,7 @@ addquote:
 			break;
 		case CTLMBCHAR:
 			c = (signed char)*p--;
-			mb = mbnext(sh, p);
+			mb = mbnext(p);
 			ml = (mb >> 8) - 2;
 			if (flag & (QUOTES_ESC | EXP_MBCHAR)) {
 				length = (mb >> 8) + (mb & 0xff);
@@ -393,7 +364,7 @@ addquote:
 				startloc += ml;
 			p += mb & 0xff;
 			if (!(flag & EXP_DISCARD))
-				eb.dest = eb.nputs(p, ml, eb.dest);
+				eb.nputs(p, ml);
 			p += mb >> 8;
 			break;
 		case CTLESC:
@@ -507,28 +478,26 @@ expari(Context &sh, ExpandBuf &eb, char *start, ExpandFlags flag)
 	intmax_t result;
 	char *p;
 
-	p = eb.base();
-	begoff = eb.dest - p;
+	begoff = static_cast<int>(eb.rel());
 	TRY_SH_SET(p, argstr(sh, eb, start, flag & EXP_DISCARD));
 
 	if (flag & EXP_DISCARD)
 		goto out;
 
-	start = eb.base();
-	endoff = eb.dest - start;
-	start += begoff;
-	((eb.dest) += (start - eb.dest));
+	endoff = static_cast<int>(eb.rel());
+	start = eb.base() + begoff;
+	eb.set_rel(static_cast<std::size_t>(begoff));
 
 	TRY_SHV(removerecordregions(sh, begoff));
 
 	{
 		std::size_t su = eb.used;
-		eb.commit(endoff);
+		eb.commit(static_cast<std::size_t>(endoff));
 		TRY_SH_SET(result, sh.arith(start));
 		eb.rewind(su);
 	}
 
-	len = cvtnum(sh, eb, result, flag);
+	len = static_cast<int>(cvtnum(sh, eb, result, flag));
 
 	if (likely(!(flag & EXP_QUOTED)))
 		recordregion(sh, begoff, begoff + len, 0);
@@ -550,17 +519,16 @@ expbackq(Context &sh, ExpandBuf &eb, Node *cmd, ExpandFlags flag)
 	int i;
 	char buf[128];
 	char *p;
-	char *dest;
 	int startloc;
 
 	if (flag & EXP_DISCARD)
 		goto out;
 
 	INTOFF(sh);
-	startloc = eb.dest - eb.base();
+	startloc = static_cast<int>(eb.rel());
 	{
 		std::size_t su = eb.used;
-		eb.commit(startloc);
+		eb.commit(static_cast<std::size_t>(startloc));
 		TRY_SHV(evalbackcmd(sh, cmd, &in));
 		eb.rewind(su);
 	}
@@ -589,13 +557,12 @@ read:
 	INTON(sh);
 
 	/* Eat all trailing newlines */
-	dest = eb.dest;
-	for (; dest > (eb.base() + startloc) && dest[-1] == '\n';)
-		(--(dest));
-	eb.dest = dest;
+	while (eb.rel() > static_cast<std::size_t>(startloc) &&
+	       eb.ptr()[-1] == '\n')
+		--eb.pos;
 
 	if (!(flag & EXP_QUOTED))
-		recordregion(sh, startloc, dest - eb.base(), 0);
+		recordregion(sh, startloc, static_cast<int>(eb.rel()), 0);
 
 out:
 	sh.expand.argbackq_i++;
@@ -631,7 +598,7 @@ scanleft(Context &sh, char *startp, char *endp, char *rmesc, char *rmescend,
 		if (!c)
 			break;
 
-		mb = mbnext(sh, loc);
+		mb = mbnext(loc);
 		loc += (mb & 0xff) + (mb >> 8);
 		ml = (mb >> 8) > 3 ? (mb >> 8) - 2 : 1;
 		loc2 += ml;
@@ -664,7 +631,7 @@ scanright(Context &sh, char *startp, char *endp, char *rmesc, char *rmescend,
 		if (--loc < startp)
 			break;
 		if (!esc--)
-			esc = esclen(sh, startp, loc);
+			esc = esclen(startp, loc);
 		if (esc % 2) {
 			esc--;
 			loc--;
@@ -690,13 +657,13 @@ subevalvar(Context &sh, ExpandBuf &eb, char *start, char *str, int strloc, int s
 	int quotes = (flag & QUOTES_ESC).value();
 	char *startp;
 	char *loc;
-	long amount;
 	char *rmesc, *rmescend;
 	int zero;
 	char *(*scan)(Context &, char *, char *, char *, char *, char *, int, int);
-	int nstrloc = strloc;
 	char *endp;
 	char *p;
+	std::string pat_storage;
+	std::string rmesc_storage;
 
 	TRY_SH_SET(p, argstr(sh, eb, start, (flag & EXP_DISCARD) | EXP_TILDE |
 			  (str ? ExpandFlags{} : ExpandFlags{EXP_CASE})));
@@ -718,23 +685,20 @@ subevalvar(Context &sh, ExpandBuf &eb, char *start, char *str, int strloc, int s
 
 	subtype -= VSTRIMRIGHT;
 
-	rmescend = eb.base() + strloc;
-	str = preglob(sh, rmescend, 0, &eb);
-	if (FNMATCH_IS_ENABLED) {
-		startp = eb.base() + startloc;
-		rmescend = eb.base() + strloc;
-		nstrloc = str - eb.base();
-	}
+	pat_storage = preglob(eb.base() + strloc);
+	str = pat_storage.data();
+	startp = eb.base() + startloc;
 
 	rmesc = startp;
+	rmescend = eb.base() + strloc;
 	if (FNMATCH_IS_ENABLED || !quotes) {
-		rmesc = _rmescapes(sh, startp, RMESCAPE_ALLOC | RMESCAPE_GROW, &eb);
-		if (rmesc != startp)
-			rmescend = eb.dest;
+		rmesc_storage = rmescapes(startp);
+		rmesc = rmesc_storage.data();
+		rmescend = rmesc + rmesc_storage.size();
 		startp = eb.base() + startloc;
-		str = eb.base() + nstrloc;
+	} else {
+		rmescend--;
 	}
-	rmescend--;
 
 	/* zero = subtype == VSTRIMLEFT || subtype == VSTRIMLEFTMAX */
 	zero = subtype >> 1;
@@ -761,13 +725,12 @@ subevalvar(Context &sh, ExpandBuf &eb, char *start, char *str, int strloc, int s
 		rmescend = loc;
 	}
 
-	memmove(startp, rmesc, rmescend - rmesc);
+	memmove(startp, rmesc, static_cast<std::size_t>(rmescend - rmesc));
 	loc = startp + (rmescend - rmesc);
 
 out:
 	*loc = '\0';
-	amount = loc - eb.dest;
-	((eb.dest) += (amount));
+	eb.set_rel(static_cast<std::size_t>(loc - eb.base()));
 
 	/* Remove any recorded regions beyond start of variable */
 	TRY_SHV(removerecordregions(sh, startloc));
@@ -799,7 +762,7 @@ evalvar(Context &sh, ExpandBuf &eb, char *p, ExpandFlags flag)
 
 	quoted = flag & EXP_QUOTED;
 	var = p;
-	startloc = eb.dest - eb.base();
+	startloc = static_cast<int>(eb.rel());
 	p = strchr(p, '=') + 1;
 
 	mbchar = {};
@@ -864,10 +827,10 @@ again:
 		 * Terminate the string and start recording the pattern
 		 * right after it
 		 */
-		((eb.dest) = eb.putc(eb.dest, '\0'));
+		eb.putc('\0');
 	}
 
-	patloc = eb.dest - eb.base();
+	patloc = static_cast<int>(eb.rel());
 	TRY_SH_SET(p, subevalvar(sh, eb, p, nullptr, patloc, startloc, varflags, flag));
 
 record:
@@ -882,7 +845,7 @@ really_record:
 			if (!nulonly)
 				return p;
 		}
-		recordregion(sh, startloc, eb.dest - eb.base(), nulonly);
+		recordregion(sh, startloc, static_cast<int>(eb.rel()), nulonly);
 	}
 	return p;
 }
@@ -950,7 +913,8 @@ memtodest(Context &sh, ExpandBuf &eb, const char *p, size_t len, ExpandFlags fla
 		return 0;
 
 	/* CTLMBCHAR, 2, c, c, 2, CTLMBCHAR */
-	q = eb.makespace(len * 3, eb.dest);
+	eb.makespace(len * 3);
+	q = eb.ptr();
 
 	static_assert((static_cast<unsigned>(ExpandFlag::full) |
 		       static_cast<unsigned>(ExpandFlag::case_pat)) == 0x11 &&
@@ -1008,7 +972,7 @@ memtodest(Context &sh, ExpandBuf &eb, const char *p, size_t len, ExpandFlags fla
 		q = chtodest(sh, c, syntax, q);
 	}
 
-	eb.dest = q;
+	eb.set_ptr(q);
 	return count;
 }
 
@@ -1052,7 +1016,7 @@ varvalue(Context &sh, ExpandBuf &eb, char *name, int varflags, ExpandFlags flags
 		flags &= ~QUOTES_ESC;
 	seps = "";
 	seplen = flags.test(EXP_FULL) ? 1u : 0u;
-	start = eb.dest - eb.base();
+	start = eb.rel();
 
 	switch (*name) {
 	case '$':
@@ -1069,17 +1033,18 @@ varvalue(Context &sh, ExpandBuf &eb, char *name, int varflags, ExpandFlags flags
 		if (num == 0)
 			return -1;
 numvar:
-		len = cvtnum(sh, eb, num, flags);
+		len = static_cast<ssize_t>(cvtnum(sh, eb, num, flags));
 		break;
 	case '-':
-		p = eb.makespace(NOPTS, eb.dest);
+		eb.makespace(NOPTS);
+		p = eb.ptr();
 		for (i = NOPTS - 1; i >= 0; i--) {
 			if (sh.opts.list[i] && optletters[i]) {
 				(*(p)++ = (optletters[i]));
 				len++;
 			}
 		}
-		eb.dest = p;
+		eb.set_ptr(p);
 		break;
 	case '@':
 		if ((flags & (EXP_QUOTED | EXP_FULL)) ==
@@ -1152,7 +1117,7 @@ value:
 	}
 
 	if (discard)
-		eb.dest = eb.base() + start;
+		eb.set_rel(start);
 
 	return len;
 }
@@ -1217,7 +1182,7 @@ ifsbreakup_slow(Context &sh, struct ifs_state *ifst, ArgList *alist,
 
 	q = p;
 
-	ifschar = mbnext(sh, p);
+	ifschar = mbnext(p);
 	p += ifschar & 0xff;
 	ml = (ifschar >> 8) > 3 ?
 	     (ifschar >> 8) - 2 : 0;
@@ -1492,7 +1457,8 @@ expandmeta_glob(Context &sh, ArgList &strs)
 #endif
 
 		INTOFF(sh);
-		p = preglob(sh, s.c_str(), 0, nullptr, &preg);
+		preg = preglob(s);
+		p = preg.c_str();
 		i = glob64(p, GLOB_ALTDIRFUNC | GLOB_NOMAGIC, 0, &pglob);
 		switch (i) {
 		case 0:
@@ -1513,9 +1479,7 @@ nometa2:
 			globfree64(&pglob);
 			INTON_DEFER(sh);
 nometa:
-			rmescapes(s.data());
-			s.resize(std::strlen(s.c_str()));
-			out.push_back(std::move(s));
+			out.push_back(rmescapes(s));
 			break;
 		default:	/* GLOB_NOSPACE */
 			return sh_error(sh, "Out of space");
@@ -1551,7 +1515,6 @@ expandmeta(Context &sh, ExpandBuf &eb, ArgList &strs)
 
 	ArgList out;
 	for (std::string &s : strs) {
-		char *p;
 		unsigned len;
 		std::string preg;
 
@@ -1561,20 +1524,18 @@ expandmeta(Context &sh, ExpandBuf &eb, ArgList &strs)
 			goto nometa;
 
 		INTOFF(sh);
-		p = preglob(sh, s.c_str(), RMESCAPE_ALLOC, nullptr, &preg);
-		len = strlen(p);
+		preg = preglob(s);
+		len = static_cast<unsigned>(preg.size());
 
 		sh.expand.exparg.clear();
-		expmeta(sh, eb, p, len, 0);
+		expmeta(sh, eb, preg.data(), len, 0);
 		INTON(sh);
 		if (sh.expand.exparg.empty()) {
 			/*
 			 * no matches
 			 */
 nometa:
-			rmescapes(s.data());
-			s.resize(std::strlen(s.c_str()));
-			out.push_back(std::move(s));
+			out.push_back(rmescapes(s));
 		} else {
 			std::sort(sh.expand.exparg.begin(), sh.expand.exparg.end(),
 				  [](const std::string &a, const std::string &b) {
@@ -1609,12 +1570,17 @@ addfnamealt(Context &sh, ExpandBuf &eb, char *enddir, size_t expdir_len)
 }
 
 char *
-expmeta_rmescapes(Context &sh, char *enddir, const char *name)
+expmeta_rmescapes(char *enddir, const char *name)
 {
 	const char *p;
 
-	if (!FNMATCH_IS_ENABLED)
-		return strchrnul(rmescapes(strcpy(enddir, name)), 0);
+	if (!FNMATCH_IS_ENABLED) {
+		std::string unesc = rmescapes(name);
+		enddir = static_cast<char *>(
+			mempcpy(enddir, unesc.data(), unesc.size()));
+		*enddir = '\0';
+		return enddir;
+	}
 
 	p = name;
 	do {
@@ -1684,13 +1650,13 @@ expmeta(Context &sh, ExpandBuf &eb, char *name, unsigned name_len, size_t expdir
 		p = strpbrk(p + esc, "*?]");
 		if (!p)
 			break;
-		esc = mesclen(sh, name, p, mesc) & 1;
+		esc = mesclen(name, p, mesc) & 1;
 	} while (esc);
 	/* No meta characters */
 	if (likely(!p)) {
 		if (!expdir_len)
 			goto out_opendir;
-		enddir = expmeta_rmescapes(sh, enddir, name);
+		enddir = expmeta_rmescapes(enddir, name);
 		{
 			auto st = std::filesystem::symlink_status(cp, ec);
 			if (!ec && std::filesystem::exists(st))
@@ -1702,7 +1668,7 @@ expmeta(Context &sh, ExpandBuf &eb, char *name, unsigned name_len, size_t expdir
 	if (start) {
 		c = *++start;
 		*start = 0;
-		enddir = expmeta_rmescapes(sh, enddir, name);
+		enddir = expmeta_rmescapes(enddir, name);
 		*start = c;
 		expdir_len = enddir - cp;
 	} else
@@ -1717,7 +1683,7 @@ expmeta(Context &sh, ExpandBuf &eb, char *name, unsigned name_len, size_t expdir
 	zeroedp = p;
 	endname = p;
 	if (*p) {
-		esc = mesclen(sh, name, p, mesc) & 1;
+		esc = mesclen(name, p, mesc) & 1;
 		zeroedp -= esc;
 		endname++;
 	}
@@ -1742,7 +1708,7 @@ expmeta(Context &sh, ExpandBuf &eb, char *name, unsigned name_len, size_t expdir
 		len = strlen(dname) + 1;
 		p = dname;
 		if (!FNMATCH_IS_ENABLED) {
-			eb.dest = enddir;
+			eb.set_ptr(enddir);
 			memtodest(sh, eb, p, len, EXP_MBCHAR | EXP_KEEPNUL);
 			cp = eb.base();
 			enddir = cp + expdir_len;
@@ -1790,11 +1756,10 @@ addfname(Context &sh, char *name)
 
 namespace {
 inline int
-patmatch(Context &sh, char *pattern, const char *string, ExpandBuf *eb)
+patmatch(Context &sh, char *pattern, const char *string, ExpandBuf * /*eb*/)
 {
-	std::string preg;
-	return pmatch(sh, preglob(sh, pattern, 0, eb, eb ? nullptr : &preg),
-		      string);
+	std::string preg = preglob(pattern);
+	return pmatch(sh, preg.data(), string);
 }
 
 __attribute__((noinline)) int
@@ -1853,7 +1818,7 @@ pmatch(Context &sh, char *pattern, const char *string)
 		case '?':
 			if (*q == '\0')
 				return 0;
-			mb = mbnext(sh, q);
+			mb = mbnext(q);
 			q += (mb >> 8) + (mb & 0xff);
 			continue;
 		case '*':
@@ -1881,7 +1846,7 @@ pmatch(Context &sh, char *pattern, const char *string)
 					return 1;
 				if (!*q)
 					break;
-				mb = mbnext(sh, q);
+				mb = mbnext(q);
 				q += (mb >> 8) + (mb & 0xff);
 			}
 			return 0;
@@ -1897,7 +1862,7 @@ pmatch(Context &sh, char *pattern, const char *string)
 				p++;
 			}
 			found = 0;
-			mb = mbnext(sh, q);
+			mb = mbnext(q);
 			q += mb & 0xff;
 			mb >>= 8;
 			chr = *q;
@@ -1926,7 +1891,7 @@ pmatch(Context &sh, char *pattern, const char *string)
 				} else if (c == (char)CTLESC)
 					c = *p++;
 				else if (c == (char)CTLMBCHAR) {
-					mbp = mbnext(sh, --p);
+					mbp = mbnext(--p);
 					p += mbp & 0xff;
 					mbs = p;
 					mbp >>= 8;
@@ -1937,7 +1902,7 @@ pmatch(Context &sh, char *pattern, const char *string)
 					if (*p == (char)CTLESC)
 						p++;
 					else if (*p == (char)CTLMBCHAR) {
-						mbp = mbnext(sh, p);
+						mbp = mbnext(p);
 						p += mbp & 0xff;
 						p += mbp >> 8;
 						continue;
@@ -1955,9 +1920,9 @@ pmatch(Context &sh, char *pattern, const char *string)
 			continue;
 		}
 		case CTLMBCHAR:
-			mb = mbnext(sh, --p);
+			mb = mbnext(--p);
 			p += mb & 0xff;
-			mb = mbnext(sh, q);
+			mb = mbnext(q);
 			q += mb & 0xff;
 			mb >>= 8;
 
@@ -1969,7 +1934,7 @@ pmatch(Context &sh, char *pattern, const char *string)
 			continue;
 		}
 dft:
-		mb = mbnext(sh, q);
+		mb = mbnext(q);
 		if ((mb >> 8) > 1)
 			return 0;
 		q += mb & 0xff;
@@ -1985,56 +1950,34 @@ breakloop:
 } // namespace
 
 /*
- * Remove any CTLESC characters from a string.
+ * Remove any CTLESC characters from a string. Pure: always returns an
+ * owned copy (callers that previously mutated in place assign the result).
  */
-
-char *
-_rmescapes(Context &sh, char *str, int flag, ExpandBuf *eb, std::string *heap)
+std::string
+rmescapes(std::string_view str, int flag)
 {
-	char *p, *q, *r;
-	int notescaped;
-	int globbing;
-	int inquotes;
+	const auto special = std::string_view(cqchars);
+	const auto first = str.find_first_of(special);
+	if (first == std::string_view::npos)
+		return std::string(str);
 
-	p = strpbrk(str, cqchars);
-	if (!p) {
-		return str;
-	}
-	q = p;
-	r = str;
-	globbing = flag & RMESCAPE_GLOB;
+	const bool globbing = (flag & RMESCAPE_GLOB) != 0;
+	std::size_t fulllen = str.size() - first + 1;
+	if (FNMATCH_IS_ENABLED && globbing)
+		fulllen *= 2;
+	fulllen += first;
 
-	if (flag & RMESCAPE_ALLOC) {
-		size_t len = p - str;
-		size_t fulllen = strlen(p);
+	std::string out;
+	out.resize(fulllen);
+	char *q = out.data();
+	if (first > 0)
+		q = static_cast<char *>(mempcpy(q, str.data(), first));
 
-		if (FNMATCH_IS_ENABLED && globbing)
-			fulllen *= 2;
-
-		fulllen += len + 1;
-
-		if ((flag & RMESCAPE_GROW) && eb) {
-			int strloc = str - eb->base();
-
-			r = eb->makespace(fulllen, eb->dest);
-			str = eb->base() + strloc;
-			p = str + len;
-		} else {
-			/*
-			 * Pattern lives outside ExpandBuf; caller provides
-			 * a std::string that owns the unescaped copy.
-			 */
-			heap->assign(fulllen, '\0');
-			r = heap->data();
-		}
-		q = r;
-		if (len > 0) {
-			q = static_cast<char *>(mempcpy(q, str, len));
-		}
-	}
-	inquotes = 0;
-	notescaped = globbing;
-	while (*p) {
+	const char *p = str.data() + first;
+	const char *pend = str.data() + str.size();
+	int inquotes = 0;
+	int notescaped = globbing;
+	while (p < pend && *p) {
 		int c = (signed char)*p;
 		int newnesc = globbing;
 		unsigned mb;
@@ -2068,7 +2011,7 @@ _rmescapes(Context &sh, char *str, int flag, ExpandBuf *eb, std::string *heap)
 			if (!FNMATCH_IS_ENABLED && (globbing ^ notescaped))
 				q--;
 
-			mb = mbnext(sh, p);
+			mb = mbnext(p);
 			ml = mb >> 8;
 
 			if (!globbing || FNMATCH_IS_ENABLED) {
@@ -2079,25 +2022,26 @@ _rmescapes(Context &sh, char *str, int flag, ExpandBuf *eb, std::string *heap)
 				tail = 0;
 			}
 
-			memmove(q, p, ml);
-			q += ml;
+			q = static_cast<char *>(memmove(q, p, ml)) + ml;
 			p += ml + tail;
 			goto setnesc;
 		}
 
-		*q++ = c;
+		*q++ = static_cast<char>(c);
 		p++;
 setnesc:
 		notescaped = newnesc;
 	}
 	if (!FNMATCH_IS_ENABLED && (globbing ^ notescaped))
 		q[-1] = '\\';
-	*q = '\0';
-	if ((flag & RMESCAPE_GROW) && eb) {
-		eb->dest = r;
-		eb->dest += (q - r + 1);
-	}
-	return r;
+	out.resize(static_cast<std::size_t>(q - out.data()));
+	return out;
+}
+
+std::string
+preglob(std::string_view pattern, int flag)
+{
+	return rmescapes(pattern, flag | RMESCAPE_GLOB);
 }
 
 /*

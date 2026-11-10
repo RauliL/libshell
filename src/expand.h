@@ -195,9 +195,14 @@ Result<void> expandarg(Context &sh, Node *, ArgList *, ExpandFlags);
 Result<std::string> expandarg_to_string(Context &sh, Node *,
 					      ExpandFlags);
 struct ExpandBuf;
-#define rmescapes(p) _rmescapes(sh, (p), 0)
-char *_rmescapes(Context &sh, char *, int, ExpandBuf *eb = nullptr,
-		 std::string *heap = nullptr);
+
+/* Remove CTLESC / quote marks from a CTL-encoded word. Pure: always returns
+ * an owned string. Pass RMESCAPE_GLOB to escape metacharacters for glob(3). */
+inline constexpr int RMESCAPE_GLOB = 0x2;
+[[nodiscard]] std::string rmescapes(std::string_view str, int flag = 0);
+/* Prepare a pattern for glob/fnmatch matching. */
+[[nodiscard]] std::string preglob(std::string_view pattern, int flag = 0);
+
 Result<int> casematch(Context &sh, Node *, char *);
 void recordregion(Context &sh, int, int, int);
 Result<void> removerecordregions(Context &sh, int);

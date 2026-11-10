@@ -821,7 +821,7 @@ parsefname(Context &sh)
 	if (n->type == Node::Type::Here) {
 		if (sh.parse.quoteflag == 0)
 			n->type = Node::Type::XHere;
-		rmescapes(sh.parse.wordtext.data());
+		sh.parse.wordtext = rmescapes(sh.parse.wordtext);
 		sh.parse.pending_here->eofmark = sh.parse.wordtext;
 		sh.parse.heredoclist.push_back(
 			std::move(*sh.parse.pending_here));

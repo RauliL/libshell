@@ -96,8 +96,7 @@ readcmd_handle_line(Context &sh, ExpandBuf &eb, char *s, BuiltinArgs vars)
 		}
 
 		/* set variable to field */
-		rmescapes(fields[i].data());
-		TRY_SHV(setvar(sh, std::string(vars[vi]), fields[i]));
+		TRY_SHV(setvar(sh, std::string(vars[vi]), rmescapes(fields[i])));
 		i++;
 	}
 	return {};
