@@ -165,6 +165,8 @@ enum class Error : std::uint8_t {
 	Interrupt = 0,
 	/** A generic error. */
 	Generic = 1,
+	/** Syntax / parse error (message in ParseSession::errmsg). */
+	Parse = 2,
 	/** Exit the shell. */
 	End = 3,
 	/** Exit the shell via exit command. */
@@ -671,6 +673,8 @@ struct ParseSession {
 	std::vector<std::unique_ptr<Node>> backquotelist;
 	std::unique_ptr<Node> redirnode;
 	int quoteflag = 0;
+	/** Deferred message for Error::Parse (set by synerror). */
+	std::string errmsg;
 
 	ParseSession();
 	~ParseSession();

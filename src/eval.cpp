@@ -61,7 +61,6 @@
 #include "var.h"
 #include "error.h"
 #include "mystring.h"
-#include "parse_error.h"
 #include <cstddef>
 #include <memory>
 #include <string_view>
@@ -154,40 +153,42 @@ eval_input(Context &sh, EvalFlags flags)
 {
 	int status = 0;
 
-	try {
-		for (;;) {
-			ParseCmdResult cmd = parsecmd(sh, 0);
-			if (cmd.eof)
-				break;
-			Node *n = cmd.tree.get();
-
-			EvalFlags child = flags;
-			if (!parser_eof(sh))
-				child.reset(EvalFlag::Exit);
-			auto r = evaltree(sh, n, child);
-			if (!r) {
-				sh.exception = r.error();
-				popfile(sh);
-				flushall(sh);
-				if (r.error() == Error::Generic)
-					return sh.exitstatus;
-				return r;
-			}
-			if (n)
-				status = *r;
-
-			if (sh.evalskip)
-				break;
+	for (;;) {
+		auto cmd = parsecmd(sh, 0);
+		if (!cmd) {
+			if (cmd.error() == Error::Parse)
+				report_parse_error(sh);
+			popfile(sh);
+			flushall(sh);
+			if (cmd.error() == Error::Parse || cmd.error() == Error::Generic)
+				return sh.exitstatus;
+			return shell_fail_of(cmd);
 		}
-		popfile(sh);
-		flushall(sh);
-		return status;
-	} catch (const ParseError &e) {
-		report_parse_error(sh, e);
-		popfile(sh);
-		flushall(sh);
-		return sh.exitstatus;
+		if (cmd->eof)
+			break;
+		Node *n = cmd->tree.get();
+
+		EvalFlags child = flags;
+		if (!parser_eof(sh))
+			child.reset(EvalFlag::Exit);
+		auto r = evaltree(sh, n, child);
+		if (!r) {
+			sh.exception = r.error();
+			popfile(sh);
+			flushall(sh);
+			if (r.error() == Error::Generic)
+				return sh.exitstatus;
+			return r;
+		}
+		if (n)
+			status = *r;
+
+		if (sh.evalskip)
+			break;
 	}
+	popfile(sh);
+	flushall(sh);
+	return status;
 }
 } // namespace
 
@@ -555,7 +556,7 @@ expredir(Context &sh, Node *n)
 		case Node::Type::ToFd:
 			if (as<DupNode>(redir)->vname) {
 				TRY_SHV(expandarg(sh, as<DupNode>(redir)->vname.get(), &fn, EXP_TILDE | EXP_REDIR));
-				fixredir(sh, redir, fn[0].c_str(), 1);
+				TRY_SHV(fixredir(sh, redir, fn[0].c_str(), 1));
 			}
 			break;
 		default:

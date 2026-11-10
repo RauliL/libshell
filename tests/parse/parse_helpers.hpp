@@ -14,7 +14,6 @@
 
 #include "input.h"
 #include "nodes.h"
-#include "parse_error.h"
 #include "parser.h"
 #include "shell.h"
 
@@ -74,18 +73,19 @@ inline std::vector<Node::ptr> parse_trees(std::string_view script,
 	setinputstring(sh, copy.data());
 
 	std::vector<Node::ptr> trees;
-	try {
-		for (;;) {
-			ParseCmdResult result = parsecmd(sh, 0);
-			if (result.eof)
-				break;
-			trees.push_back(std::move(result.tree));
+	for (;;) {
+		auto result = parsecmd(sh, 0);
+		if (!result) {
+			popfile(sh);
+			throw std::runtime_error(
+				sh.parse.errmsg.empty() ? "parse failed"
+							: sh.parse.errmsg);
 		}
-		popfile(sh);
-	} catch (const ParseError &) {
-		popfile(sh);
-		throw;
+		if (result->eof)
+			break;
+		trees.push_back(std::move(result->tree));
 	}
+	popfile(sh);
 	return trees;
 }
 

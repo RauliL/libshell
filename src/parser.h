@@ -45,7 +45,6 @@
 
 #include "nodes.h"
 #include "token.h"
-#include "parse_error.h"
 
 
 
@@ -99,15 +98,15 @@ struct ParseCmdResult {
 
 bool isassignment(std::string_view p);
 bool issimplecmd(const Node *n, std::string_view name);
-ParseCmdResult parsecmd(Context &sh, int);
-void fixredir(Context &sh, Node *, const char *, int);
+Result<ParseCmdResult> parsecmd(Context &sh, int);
+Result<void> fixredir(Context &sh, Node *, const char *, int);
 std::string getprompt(Context &, void *);
 std::optional<Token> findkwd(std::string_view);
 /* Length of a leading legal variable name; 0 if none. */
 std::size_t endofname(std::string_view name);
 std::string expandstr(Context &sh, const char *);
 unsigned getmbc(Context &sh, int c, char *out, int mode);
-void report_parse_error(Context &sh, const ParseError &e);
-tl::expected<void, std::string> try_parse_string(Context &sh, std::string_view s);
+void report_parse_error(Context &sh);
+Result<void> try_parse_string(Context &sh, std::string_view s);
 
 } // namespace shell

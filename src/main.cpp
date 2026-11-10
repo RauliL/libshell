@@ -46,7 +46,6 @@
 #include "error.h"
 #include "mystring.h"
 #include "exec.h"
-#include "parse_error.h"
 #include <string_view>
 #include <utility>
 
@@ -72,24 +71,26 @@ cmdloop(Context &sh)
 	for (;;) {
 		EvalSkipFlags skip;
 
-		try {
-			ParseCmdResult cmd = parsecmd(sh, 0);
-			if (cmd.eof) {
-				break;
+		auto cmd = parsecmd(sh, 0);
+		if (!cmd) {
+			if (cmd.error() == Error::Parse) {
+				report_parse_error(sh);
+				return sh.exitstatus;
 			}
-			Node *n = cmd.tree.get();
-			auto r = evaltree(sh, n, {});
-			if (!r) {
-				sh.exception = r.error();
-				if (r.error() == Error::Generic)
-					return sh.exitstatus;
-				return r;
-			}
-			status = *r;
-		} catch (const ParseError &e) {
-			report_parse_error(sh, e);
-			return sh.exitstatus;
+			return shell_fail_of(cmd);
 		}
+		if (cmd->eof) {
+			break;
+		}
+		Node *n = cmd->tree.get();
+		auto r = evaltree(sh, n, {});
+		if (!r) {
+			sh.exception = r.error();
+			if (r.error() == Error::Generic)
+				return sh.exitstatus;
+			return r;
+		}
+		status = *r;
 
 		skip = sh.evalskip;
 		if (skip) {
@@ -115,47 +116,49 @@ Context::run_interactive()
 	for (;;) {
 		EvalSkipFlags skip;
 
-		try {
-			ParseCmdResult cmd = parsecmd(sh, 1);
-			if (cmd.eof) {
-				if (numeof >= 50)
-					break;
-				if (!sh.opts.ignoreeof()) {
-					out2c('\n');
+		auto cmd = parsecmd(sh, 1);
+		if (!cmd) {
+			if (cmd.error() == Error::Parse) {
+				report_parse_error(sh);
+				skip = sh.evalskip;
+				if (skip) {
+					sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
 					break;
 				}
-				out2str("\nUse \"exit\" to leave shell.\n");
-				numeof++;
-			} else {
-				Node *n = cmd.tree.get();
-
-				numeof = 0;
-
-				auto r = evaltree(sh, n, {});
-
-				if (!r) {
-					sh.exception = r.error();
-					if (r.error() == Error::Generic) {
-						skip = sh.evalskip;
-						if (skip) {
-							sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
-							break;
-						}
-						continue;
-					}
-					return r;
-				}
-				if (n)
-					status = *r;
+				continue;
 			}
-		} catch (const ParseError &e) {
-			report_parse_error(sh, e);
-			skip = sh.evalskip;
-			if (skip) {
-				sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
+			return shell_fail_of(cmd);
+		}
+		if (cmd->eof) {
+			if (numeof >= 50)
+				break;
+			if (!sh.opts.ignoreeof()) {
+				out2c('\n');
 				break;
 			}
-			continue;
+			out2str("\nUse \"exit\" to leave shell.\n");
+			numeof++;
+		} else {
+			Node *n = cmd->tree.get();
+
+			numeof = 0;
+
+			auto r = evaltree(sh, n, {});
+
+			if (!r) {
+				sh.exception = r.error();
+				if (r.error() == Error::Generic) {
+					skip = sh.evalskip;
+					if (skip) {
+						sh.evalskip.reset(EvalSkip::Func).reset(EvalSkip::FuncDef);
+						break;
+					}
+					continue;
+				}
+				return r;
+			}
+			if (n)
+				status = *r;
 		}
 
 		skip = sh.evalskip;

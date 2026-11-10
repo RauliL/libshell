@@ -150,7 +150,7 @@ public:
 		auto _try_sh_r = (expr); \
 		if (!_try_sh_r) \
 			return shell_fail_of(_try_sh_r); \
-		(dst) = *_try_sh_r; \
+		(dst) = std::move(*_try_sh_r); \
 	} while (0)
 #define TRY_SHV(expr) \
 	do { \
