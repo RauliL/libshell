@@ -138,9 +138,6 @@ readcmd(Context &sh, int argc, char **argv)
 	}
 	if (prompt && isatty(0)) {
 		out2str(prompt);
-#ifdef FLUSHERR
-		flushall(sh);
-#endif
 	}
 	if (!*(ap = sh.bopt.argptr))
 		return sh_error(sh, "arg count");

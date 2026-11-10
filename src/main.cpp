@@ -122,9 +122,6 @@ Context::run_interactive()
 					break;
 				if (!sh.opts.ignoreeof()) {
 					out2c('\n');
-#ifdef FLUSHERR
-					sh.out2->flush(sh);
-#endif
 					break;
 				}
 				out2str("\nUse \"exit\" to leave shell.\n");

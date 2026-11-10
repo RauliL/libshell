@@ -356,9 +356,6 @@ eof:
 
 	if (sh.opts.verbose()) {
 		out2str(in.current->nextc);
-#ifdef FLUSHERR
-		sh.out2->flush(sh);
-#endif
 	}
 
 	return (signed char)*in.current->nextc++;

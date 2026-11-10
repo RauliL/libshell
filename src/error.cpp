@@ -127,11 +127,7 @@ exwarning_msg(Context &sh, std::string_view msg)
 	else
         errs->write(sh, std::format("{}: {}: {}: ", name, sh.errlinno, sh.commandname));
 	errs->write(sh, msg);
-#if FLUSHERR
-	outc(sh, '\n', errs);
-#else
 	outcslow(sh, '\n', errs);
-#endif
 }
 } // namespace
 

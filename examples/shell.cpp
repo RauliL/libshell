@@ -62,9 +62,6 @@ handle_err:
 
 		if (ecode == Error::Interrupt) {
 			sh.out2->write(sh, "\n");
-#ifdef FLUSHERR
-			sh.out2->flush(sh);
-#endif
 		}
 		sh.suppressint = 0;
 		if (sh.intpending) {

@@ -142,9 +142,6 @@ void
 flushall(Context &sh)
 {
 	sh.output.flush(sh);
-#ifdef FLUSHERR
-	sh.errout.flush(sh);
-#endif
 }
 
 void

@@ -902,9 +902,6 @@ bail:
 			eprintlist(sh, out, xargs, sep);
 		}
 		outcslow(sh, '\n', out);
-#ifdef FLUSHERR
-		out->flush(sh);
-#endif
 	}
 
 	/* Now locate the command. */
@@ -920,9 +917,6 @@ bail:
 	switch (cmdentry.type) {
 	case TableEntry::Type::Unknown:
 		status = 127;
-#ifdef FLUSHERR
-		sh.errout.flush(sh);
-#endif
 		goto bail;
 
 	default:
