@@ -2,7 +2,7 @@
 
 /*
  * Parse-tree nodes. Tree edges use unique_ptr; function bodies in the
- * command table use shared_ptr.
+ * command table use shared_ptr. Homogeneous sibling lists use vector<ptr>.
  */
 
 #include <libshell.hpp>
@@ -47,9 +47,8 @@ constexpr T *as(const std::shared_ptr<Node> &n) noexcept
 	return static_cast<T *>(n.get());
 }
 
-/* Common prefix for redirection list nodes (nfile / ndup / nhere). */
+/* Common prefix for redirection nodes (nfile / ndup / nhere). */
 struct RedirList : Node {
-	ptr next;
 	int fd{};
 
 	explicit RedirList(Type t) : Node(t) {}
@@ -57,9 +56,9 @@ struct RedirList : Node {
 
 struct CommandNode : Node {
 	int linno{};
-	ptr assign;
-	ptr args;
-	ptr redirect;
+	std::vector<ptr> assign;
+	std::vector<ptr> args;
+	std::vector<ptr> redirect;
 
 	explicit CommandNode(Type t = Type::Cmd) : Node(t) {}
 	~CommandNode() override;
@@ -88,7 +87,7 @@ struct PipeNode : Node {
 struct RedirNode : Node {
 	int linno{};
 	ptr n;
-	ptr redirect;
+	std::vector<ptr> redirect;
 
 	explicit RedirNode(Type t = Type::Redir) : Node(t) {}
 	~RedirNode() override;
@@ -131,7 +130,7 @@ struct IfNode : Node {
 
 struct ForNode : Node {
 	int linno{};
-	ptr args;
+	std::vector<ptr> args;
 	ptr body;
 	std::string var;
 
@@ -148,7 +147,7 @@ struct ForNode : Node {
 struct CaseNode : Node {
 	int linno{};
 	ptr expr;
-	ptr cases;
+	std::vector<ptr> cases;
 
 	explicit CaseNode(Type t = Type::Case) : Node(t) {}
 	~CaseNode() override;
@@ -161,8 +160,7 @@ struct CaseNode : Node {
 };
 
 struct CaseListNode : Node {
-	ptr next;
-	ptr pattern;
+	std::vector<ptr> pattern;
 	ptr body;
 
 	explicit CaseListNode(Type t = Type::CaseList) : Node(t) {}
@@ -186,7 +184,6 @@ struct DefunNode : Node {
 };
 
 struct ArgNode : Node {
-	ptr next;
 	std::string text;
 	std::vector<ptr> backquote;
 

@@ -163,8 +163,9 @@ isassignment(std::string_view p)
 bool
 issimplecmd(const Node *n, std::string_view name)
 {
-	return n && n->type == Node::Type::Cmd && as<CommandNode>(n)->args &&
-	       as<ArgNode>(as<CommandNode>(n)->args.get())->text == name;
+	return n && n->type == Node::Type::Cmd &&
+	       !as<CommandNode>(n)->args.empty() &&
+	       as<ArgNode>(as<CommandNode>(n)->args[0])->text == name;
 }
 
 namespace {
@@ -482,16 +483,9 @@ Result<Node::ptr>
 command(Context &sh)
 {
 	Node::ptr n1, n2;
-	Node::ptr ap;
-	Node::ptr *app;
-	Node::ptr *cpp;
-	Node::ptr redir;
-	Node::ptr *rpp;
-	Node::ptr *rpp2;
+	std::vector<Node::ptr> redir;
 	Token t;
 	int savelinno;
-
-	rpp2 = &redir;
 
 	savelinno = plinno;
 
@@ -563,24 +557,22 @@ command(Context &sh)
 		sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
 		TRY_SH_SET(t, readtoken(sh));
 		if (t == Token::In) {
-			app = &ap;
 			TRY_SH_SET(t, readtoken(sh));
 			while (t == Token::Word) {
-				*app = make_node<ArgNode>();
-				(*app)->type = Node::Type::Arg;
-				as<ArgNode>(*app)->text = sh.parse.wordtext;
-				as<ArgNode>(*app)->backquote = std::move(sh.parse.backquotelist);
-				app = &as<ArgNode>(*app)->next;
+				auto arg = make_node<ArgNode>();
+				arg->type = Node::Type::Arg;
+				as<ArgNode>(arg)->text = sh.parse.wordtext;
+				as<ArgNode>(arg)->backquote = std::move(sh.parse.backquotelist);
+				as<ForNode>(n1)->args.push_back(std::move(arg));
 				TRY_SH_SET(t, readtoken(sh));
 			}
-			as<ForNode>(n1)->args = std::move(ap);
 			if (sh.parse.lasttoken != Token::Nl && sh.parse.lasttoken != Token::Semi)
 				return synexpect(sh);
 		} else {
 			n2 = make_node<ArgNode>();
 			n2->type = Node::Type::Arg;
 			as<ArgNode>(n2)->text = dolatstr;
-			as<ForNode>(n1)->args = std::move(n2);
+			as<ForNode>(n1)->args.push_back(std::move(n2));
 			/*
 			 * Newline or semicolon here is optional (but note
 			 * that the original Bourne shell only allowed NL).
@@ -614,36 +606,32 @@ command(Context &sh)
 		TRY_SH_SET(t, readtoken(sh));
 		if (t != Token::In)
 			return synexpect(sh, Token::In);
-		cpp = &as<CaseNode>(n1)->cases;
 next_case:
 		sh.parse.checkkwd = CHKNL | CHKKWD;
 		TRY_SH_SET(t, readtoken(sh));
 		while (t != Token::Esac) {
 			if (sh.parse.lasttoken == Token::Lp)
 				TRY_SHV(readtoken(sh));
-			*cpp = make_node<CaseListNode>();
-			(*cpp)->type = Node::Type::CaseList;
-			Node *cp = cpp->get();
-			app = &as<CaseListNode>(cp)->pattern;
+			auto cp = make_node<CaseListNode>();
+			cp->type = Node::Type::CaseList;
 			for (;;) {
 				if (sh.parse.lasttoken < Token::Word)
 					return synexpect(sh, Token::Word);
-				*app = make_node<ArgNode>();
-				(*app)->type = Node::Type::Arg;
-				as<ArgNode>(*app)->text = sh.parse.wordtext;
-				as<ArgNode>(*app)->backquote = std::move(sh.parse.backquotelist);
+				auto arg = make_node<ArgNode>();
+				arg->type = Node::Type::Arg;
+				as<ArgNode>(arg)->text = sh.parse.wordtext;
+				as<ArgNode>(arg)->backquote = std::move(sh.parse.backquotelist);
+				as<CaseListNode>(cp)->pattern.push_back(std::move(arg));
 				TRY_SH_SET(t, readtoken(sh));
 				if (t != Token::Pipe)
 					break;
-				app = &as<ArgNode>(*app)->next;
 				TRY_SHV(readtoken(sh));
 			}
 			if (sh.parse.lasttoken != Token::Rp)
 				return synexpect(sh, Token::Rp);
 			TRY_SH_SET(part, list(sh, 2));
 			as<CaseListNode>(cp)->body = std::move(part);
-
-			cpp = &as<CaseListNode>(cp)->next;
+			as<CaseNode>(n1)->cases.push_back(std::move(cp));
 
 			sh.parse.checkkwd = CHKNL | CHKKWD;
 			TRY_SH_SET(t, readtoken(sh));
@@ -687,16 +675,14 @@ next_case:
 redir:
 	/* Now check for redirection which may follow command */
 	sh.parse.checkkwd = CHKKWD | CHKALIAS;
-	rpp = rpp2;
 	TRY_SH_SET(t, readtoken(sh));
 	while (t == Token::Redir) {
 		TRY_SHV(parsefname(sh));
-		*rpp = std::move(sh.parse.redirnode);
-		rpp = &as<RedirList>(*rpp)->next;
+		redir.push_back(std::move(sh.parse.redirnode));
 		TRY_SH_SET(t, readtoken(sh));
 	}
 	sh.parse.tokpushback++;
-	if (redir) {
+	if (!redir.empty()) {
 		if (n1->type != Node::Type::Subshell) {
 			n2 = make_node<RedirNode>();
 			n2->type = Node::Type::Redir;
@@ -714,13 +700,10 @@ namespace {
 Result<Node::ptr>
 simplecmd(Context &sh)
 {
-	Node::ptr args;
-	Node::ptr *app = &args;
+	std::vector<Node::ptr> args;
 	Node::ptr n;
-	Node::ptr vars;
-	Node::ptr *vpp = &vars;
-	Node::ptr redir;
-	Node::ptr *rpp = &redir;
+	std::vector<Node::ptr> vars;
+	std::vector<Node::ptr> redir;
 	int savecheckkwd;
 	int savelinno;
 	Token tok;
@@ -737,26 +720,20 @@ simplecmd(Context &sh)
 			as<ArgNode>(n)->text = sh.parse.wordtext;
 			as<ArgNode>(n)->backquote = std::move(sh.parse.backquotelist);
 			if (savecheckkwd && isassignment(sh.parse.wordtext)) {
-				*vpp = std::move(n);
-				vpp = &as<ArgNode>(*vpp)->next;
+				vars.push_back(std::move(n));
 			} else {
-				*app = std::move(n);
-				app = &as<ArgNode>(*app)->next;
+				args.push_back(std::move(n));
 				savecheckkwd = 0;
 			}
 			break;
 		case Token::Redir:
 			TRY_SHV(parsefname(sh));	/* read name of redirection file */
-			*rpp = std::move(sh.parse.redirnode);
-			rpp = &as<RedirList>(*rpp)->next;
+			redir.push_back(std::move(sh.parse.redirnode));
 			break;
 		case Token::Lp:
-			if (
-				args && app == &as<ArgNode>(args)->next &&
-				!vars && !redir
-			) {
+			if (args.size() == 1 && vars.empty() && redir.empty()) {
 				const BuiltinCommand *bcmd;
-				std::string fname = std::move(as<ArgNode>(args)->text);
+				std::string fname = std::move(as<ArgNode>(args[0])->text);
 				Node::ptr body;
 
 				/* We have a function */
@@ -770,7 +747,7 @@ simplecmd(Context &sh)
 					)
 				)
 					return synerror(sh, "Bad function name");
-				args.reset();
+				args.clear();
 				n = make_node<DefunNode>();
 				n->type = Node::Type::Defun;
 				sh.parse.checkkwd = CHKNL | CHKKWD | CHKALIAS;
@@ -1950,7 +1927,6 @@ expandstr(Context &sh, const char *ps)
 		err = 1;
 	} else {
 		n.type = Node::Type::Arg;
-		n.next = nullptr;
 		n.text = sh.parse.wordtext;
 		n.backquote = std::move(sh.parse.backquotelist);
 

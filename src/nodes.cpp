@@ -32,9 +32,9 @@ CommandNode::clone() const
 	auto c = std::make_unique<CommandNode>(type);
 
 	c->linno = linno;
-	c->assign = assign ? assign->clone() : nullptr;
-	c->args = args ? args->clone() : nullptr;
-	c->redirect = redirect ? redirect->clone() : nullptr;
+	c->assign = clonelist(assign);
+	c->args = clonelist(args);
+	c->redirect = clonelist(redirect);
 
 	return c;
 }
@@ -61,7 +61,7 @@ RedirNode::clone() const
 
 	c->linno = linno;
 	c->n = n ? n->clone() : nullptr;
-	c->redirect = redirect ? redirect->clone() : nullptr;
+	c->redirect = clonelist(redirect);
 
 	return c;
 }
@@ -101,7 +101,7 @@ ForNode::clone() const
 	auto c = std::make_unique<ForNode>(type);
 
 	c->linno = linno;
-	c->args = args ? args->clone() : nullptr;
+	c->args = clonelist(args);
 	c->body = body ? body->clone() : nullptr;
 	c->var = var;
 
@@ -117,7 +117,7 @@ CaseNode::clone() const
 
 	c->linno = linno;
 	c->expr = expr ? expr->clone() : nullptr;
-	c->cases = cases ? cases->clone() : nullptr;
+	c->cases = clonelist(cases);
 
 	return c;
 }
@@ -129,8 +129,7 @@ CaseListNode::clone() const
 {
 	auto c = std::make_unique<CaseListNode>(type);
 
-	c->next = next ? next->clone() : nullptr;
-	c->pattern = pattern ? pattern->clone() : nullptr;
+	c->pattern = clonelist(pattern);
 	c->body = body ? body->clone() : nullptr;
 
 	return c;
@@ -157,7 +156,6 @@ ArgNode::clone() const
 {
 	auto c = std::make_unique<ArgNode>(type);
 
-	c->next = next ? next->clone() : nullptr;
 	c->text = text;
 	c->backquote = clonelist(backquote);
 
@@ -171,7 +169,6 @@ FileNode::clone() const
 {
 	auto c = std::make_unique<FileNode>(type);
 
-	c->next = next ? next->clone() : nullptr;
 	c->fd = fd;
 	c->fname = fname ? fname->clone() : nullptr;
 	c->expfname = expfname;
@@ -186,7 +183,6 @@ DupNode::clone() const
 {
 	auto c = std::make_unique<DupNode>(type);
 
-	c->next = next ? next->clone() : nullptr;
 	c->fd = fd;
 	c->dupfd = dupfd;
 	c->vname = vname ? vname->clone() : nullptr;
@@ -201,7 +197,6 @@ HereNode::clone() const
 {
 	auto c = std::make_unique<HereNode>(type);
 
-	c->next = next ? next->clone() : nullptr;
 	c->fd = fd;
 	c->doc = doc ? doc->clone() : nullptr;
 

@@ -145,12 +145,11 @@ inline std::string ctl_arith(std::string_view expr)
 
 /* --- AST accessors --- */
 
-inline ArgNode *nth_arg(Node *args, int n)
+inline ArgNode *nth_arg(const std::vector<Node::ptr> &args, int n)
 {
-	Node *cur = args;
-	for (int i = 0; cur && i < n; ++i)
-		cur = as<ArgNode>(cur)->next.get();
-	return cur ? as<ArgNode>(cur) : nullptr;
+	if (n < 0 || static_cast<std::size_t>(n) >= args.size())
+		return nullptr;
+	return as<ArgNode>(args[static_cast<std::size_t>(n)]);
 }
 
 inline CommandNode *as_cmd(Node *n)

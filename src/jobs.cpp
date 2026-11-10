@@ -41,6 +41,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -101,7 +102,7 @@ namespace {
 int waitproc(Context &sh, int, int *);
 std::string commandtext(Context &sh, const Node *);
 void cmdtxt(Context &sh, const Node *, std::string &);
-void cmdlist(Context &sh, Node *, int, std::string &);
+void cmdlist(Context &sh, const std::vector<Node::ptr> &, int, std::string &);
 void cmdputs(std::string &, std::string_view);
 } // namespace
 
@@ -766,7 +767,6 @@ commandtext(Context &sh, const Node *n)
 void
 cmdtxt(Context &sh, const Node *n, std::string &out)
 {
-	Node *np;
 	const char *p;
 	char s[2];
 
@@ -841,7 +841,7 @@ dotail:
 		cmdputs(out, "for ");
 		cmdputs(out, as<ForNode>(n)->var);
 		cmdputs(out, " in ");
-		cmdlist(sh, as<ForNode>(n)->args.get(), 1, out);
+		cmdlist(sh, as<ForNode>(n)->args, 1, out);
 		n = as<ForNode>(n)->body.get();
 		p = "; done";
 		goto dodo;
@@ -850,8 +850,8 @@ dotail:
 		p = "() { ... }";
 		goto dotail2;
 	case Node::Type::Cmd:
-		cmdlist(sh, as<CommandNode>(n)->args.get(), 1, out);
-		cmdlist(sh, as<CommandNode>(n)->redirect.get(), 0, out);
+		cmdlist(sh, as<CommandNode>(n)->args, 1, out);
+		cmdlist(sh, as<CommandNode>(n)->redirect, 0, out);
 		break;
 	case Node::Type::Arg:
 		cmdputs(out, as<ArgNode>(n)->text);
@@ -866,10 +866,11 @@ dotail2:
 		cmdputs(out, "case ");
 		cmdputs(out, as<ArgNode>(as<CaseNode>(n)->expr)->text);
 		cmdputs(out, " in ");
-		for (np = as<CaseNode>(n)->cases.get(); np; np = as<CaseListNode>(np)->next.get()) {
-			cmdtxt(sh, as<CaseListNode>(np)->pattern.get(), out);
+		for (const auto &cnode : as<CaseNode>(n)->cases) {
+			auto *cp = as<CaseListNode>(cnode.get());
+			cmdlist(sh, cp->pattern, 1, out);
 			cmdputs(out, ") ");
-			cmdtxt(sh, as<CaseListNode>(np)->body.get(), out);
+			cmdtxt(sh, cp->body.get(), out);
 			cmdputs(out, ";; ");
 		}
 		p = "esac";
@@ -911,13 +912,13 @@ redir:
 }
 
 void
-cmdlist(Context &sh, Node *np, int sep, std::string &out)
+cmdlist(Context &sh, const std::vector<Node::ptr> &nodes, int sep, std::string &out)
 {
-	for (; np; np = as<ArgNode>(np)->next.get()) {
+	for (std::size_t i = 0; i < nodes.size(); ++i) {
 		if (!sep)
 			cmdputs(out, " ");
-		cmdtxt(sh, np, out);
-		if (sep && as<ArgNode>(np)->next)
+		cmdtxt(sh, nodes[i].get(), out);
+		if (sep && i + 1 < nodes.size())
 			cmdputs(out, " ");
 	}
 }

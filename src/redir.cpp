@@ -102,22 +102,21 @@ update_closed_redirs(Context &sh, int fd, int nfd)
  */
 
 Result<void>
-redirect(Context &sh, Node *redir, int flags)
+redirect(Context &sh, const std::vector<Node::ptr> &redir, int flags)
 {
-	Node *n;
 	RedirFrame *sv;
 	int i;
 	int fd;
 	int newfd;
 	int *p;
-	if (!redir)
+	if (redir.empty())
 		return {};
 	sv = nullptr;
 	INTOFF(sh);
 	if (likely(flags & REDIR_PUSH))
 		sv = &sh.redirlist.back();
-	n = redir;
-	do {
+	for (const auto &rn : redir) {
+		Node *n = rn.get();
 		TRY_SH_SET(newfd, openredirect(sh, n));
 		if (newfd < -1)
 			continue;
@@ -149,7 +148,7 @@ redirect(Context &sh, Node *redir, int flags)
 			continue;
 
 		TRY_SHV(dupredirect(sh, n, newfd));
-	} while ((n = as<RedirList>(n)->next.get()));
+	}
 	INTON(sh);
 	if (flags & REDIR_SAVEFD2 && sv->renamed[2] >= 0)
 		sh.preverrout.fd = sv->renamed[2];
@@ -435,7 +434,7 @@ savefd(Context &sh, int from, int ofd)
 }
 
 Result<int>
-redirectsafe(Context &sh, Node *redir, int flags)
+redirectsafe(Context &sh, const std::vector<Node::ptr> &redir, int flags)
 {
 	int err = 0;
 	int saveint = sh.suppressint;
@@ -461,10 +460,10 @@ unwindredir(Context &sh, std::size_t stop)
 }
 
 std::size_t
-pushredir(Context &sh, Node *redir)
+pushredir(Context &sh, const std::vector<Node::ptr> &redir)
 {
 	std::size_t stop = sh.redirlist.size();
-	if (!redir)
+	if (redir.empty())
 		return stop;
 
 	RedirFrame sv;

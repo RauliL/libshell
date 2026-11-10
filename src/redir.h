@@ -37,6 +37,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <vector>
 
 #include <libshell.hpp>
 
@@ -50,12 +51,12 @@ namespace shell {
 #define REDIR_SAVEFD2 03	/* set preverrout */
 
 
-Result<void> redirect(Context &sh, Node *, int);
+Result<void> redirect(Context &sh, const std::vector<Node::ptr> &, int);
 Result<void> popredir(Context &sh, int);
 Result<int> savefd(Context &sh, int, int);
-Result<int> redirectsafe(Context &sh, Node *, int);
+Result<int> redirectsafe(Context &sh, const std::vector<Node::ptr> &, int);
 Result<void> unwindredir(Context &sh, std::size_t stop);
-std::size_t pushredir(Context &sh, Node *redir);
+std::size_t pushredir(Context &sh, const std::vector<Node::ptr> &redir);
 /** Drop saved redirection frames when entering a subshell. */
 void redir_forkreset(Context &sh);
 Result<int> sh_open(Context &sh, const std::filesystem::path &pathname, int flags, int mayfail);
